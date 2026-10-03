@@ -42,10 +42,11 @@ Use the pinned toolchain from `mise.toml`:
 ```sh
 mise exec -- mix deps.get
 make check
+make check-full
 make check-fast D=contracts
 ```
 
-`make check` runs formatting, the guard, strict compilation, xref, Credo, tests, and Dialyzer. `make check-fast D=<domain>` scopes Credo and ExUnit to one domain after compiling the app.
+`make check` runs formatting, the guard, strict compilation, xref, Credo, unit and acceptance tests, and Dialyzer. `make check-full` runs that gate plus the e2e suite; `make integration` uses `check-full` before the fixture integration check. Use `check-full` for landing and nightly gates. `make check-fast D=<domain>` scopes Credo and ExUnit to one domain after compiling the app.
 
 ## Toolchain and layout
 

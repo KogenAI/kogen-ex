@@ -184,4 +184,4 @@ reconcile: landed
 
 ## Verification
 
-On the landed self-demo checkout, `make check` finished with `Result: 150 passed, 2 excluded` and `check OK`. `make integration` finished with `Result: 1 passed`. The standalone protected-edit test finished with `Result: 1 passed`.
+At the self-demo snapshot, before the local gate was split, `make check` finished with `Result: 150 passed, 2 excluded` and `check OK`. The current full gate is `make check-full`; `make integration` uses it before the fixture check. The standalone protected-edit test finished with `Result: 1 passed`.

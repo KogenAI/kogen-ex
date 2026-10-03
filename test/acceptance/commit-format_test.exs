@@ -13,7 +13,7 @@ defmodule Kogen.Acceptance.CommitFormatTest do
   setup_all do
     root = Kogen.Testkit.Temp.create!()
     on_exit(fn -> File.rm_rf!(root) end)
-    seed = Build.prepare_seed!(Path.join(root, "seed"))
+    seed = Kogen.Testkit.BuildSeed.get!(&Build.prepare_seed!/1)
     parent = Path.join(root, "landing")
     File.mkdir_p!(parent)
 

@@ -1,7 +1,7 @@
 name: kogen
 checks:
   - name: full
-    argv: [make, check]
+    argv: [make, check-full]
     timeout_ms: 900000
 acceptance_checks:
   - name: compile

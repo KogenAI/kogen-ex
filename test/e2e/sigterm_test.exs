@@ -10,10 +10,7 @@ defmodule Kogen.E2e.SigtermTest do
   @tag timeout: 120_000
 
   setup_all do
-    shared_root = Kogen.Testkit.Temp.create!()
-    seed_project = Build.prepare_seed!(shared_root)
-    on_exit(fn -> File.rm_rf!(shared_root) end)
-
+    seed_project = Kogen.Testkit.BuildSeed.get!(&Build.prepare_seed!/1)
     {:ok, seed_project: seed_project}
   end
 

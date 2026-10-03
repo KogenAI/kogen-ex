@@ -6,3 +6,4 @@ if KogenChecks.CapabilityGuard not in tracers do
 end
 
 ExUnit.start(formatters: [ExUnit.CLIFormatter, Kogen.Testkit.BudgetFormatter])
+ExUnit.after_suite(fn _result -> Kogen.Testkit.BuildSeed.cleanup!() end)

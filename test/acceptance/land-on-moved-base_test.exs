@@ -11,7 +11,7 @@ defmodule Kogen.Acceptance.LandOnMovedBaseTest do
   setup_all do
     root = Kogen.Testkit.Temp.create!()
     on_exit(fn -> File.rm_rf!(root) end)
-    seed = Build.prepare_seed!(Path.join(root, "seed"))
+    seed = Kogen.Testkit.BuildSeed.get!(&Build.prepare_seed!/1)
 
     moved = run(root, "moved", %Options{seed_project: seed, move_base_on: :context})
     still = run(root, "still", %Options{seed_project: seed})

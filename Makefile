@@ -7,15 +7,22 @@ export KOGEN_PLT_DIR
 
 TEST_ENV = GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_AUTHOR_NAME='Kogen Test' GIT_AUTHOR_EMAIL=test@kogen.invalid GIT_COMMITTER_NAME='Kogen Test' GIT_COMMITTER_EMAIL=test@kogen.invalid TZ=Europe/Sarajevo LC_ALL=C
 
-.PHONY: check check-fast fix guard fmt compile-dev compile-test xref credo test acceptance e2e integration kogen-checks-test dialyzer install-local demo-fixture
+.PHONY: check check-full check-fast fix guard fmt compile-dev compile-test xref credo test acceptance e2e integration kogen-checks-test dialyzer install-local demo-fixture
 
 # macOS cannot nest Seatbelt sandboxes; inside Kogen's own sandbox the confinement test can't run.
 SEATBELT_EXCLUDE := $(if $(filter 1,$(KOGEN_SANDBOXED)),--exclude seatbelt,)
 KEYCHAIN_EXCLUDE := $(if $(filter 1,$(KOGEN_SANDBOXED)),--exclude keychain,)
 
+CHECK_TASKS := guard fmt compile-dev compile-test xref credo test acceptance dialyzer
+FULL_CHECK_TASKS := $(CHECK_TASKS) e2e
+
 check:
-	+$(MAKE) --no-print-directory guard fmt compile-dev compile-test xref credo test acceptance e2e dialyzer
+	+$(MAKE) --no-print-directory $(CHECK_TASKS)
 	@echo "check OK"
+
+check-full:
+	+$(MAKE) --no-print-directory $(FULL_CHECK_TASKS)
+	@echo "check-full OK"
 
 guard:
 	$(M) mix kogen.guard
@@ -54,7 +61,7 @@ acceptance: compile-test
 e2e: compile-test
 	$(TEST_ENV) MIX_ENV=test $(M) mix test --warnings-as-errors --no-compile --only e2e test/e2e
 
-integration: e2e
+integration: check-full
 	$(TEST_ENV) MIX_ENV=test $(M) mix test --warnings-as-errors --include fixture test/fixtures_test.exs
 
 install-local:
