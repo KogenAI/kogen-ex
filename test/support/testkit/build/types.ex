@@ -6,6 +6,8 @@ defmodule Kogen.E2e do
       Kogen.Engine,
       Kogen.Kernel,
       Kogen.Proc,
+      Kogen.Project,
+      Kogen.Shaper,
       Kogen.State,
       Kogen.Testkit,
       Kogen.Workspace,

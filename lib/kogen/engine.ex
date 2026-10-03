@@ -13,7 +13,7 @@ defmodule Kogen.Engine do
       Kogen.Checks,
       Kogen.Harness
     ],
-    exports: [Build.Request, Build.Result, Runtime]
+    exports: [Build.Request, Build.Result, Build.Setup, Runtime]
 
   alias Kogen.Contracts.Project
   alias Kogen.Engine.Build.Request

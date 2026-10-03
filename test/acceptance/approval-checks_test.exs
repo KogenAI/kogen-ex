@@ -66,6 +66,42 @@ defmodule Kogen.Acceptance.ApprovalChecksTest do
     assert File.read!(seen) == "test/acceptance/probe_test.exs"
   end
 
+  test "runs project setup before acceptance checks and saves setup logs", %{tmp_dir: tmp_dir} do
+    repo = project!(tmp_dir, "allowed")
+    write!(repo, ".gitignore", ".kogen/setup-ready\n")
+    write_project_yaml_with_setup!(repo, "[sh, -c, 'cp .kogen/setup-source .kogen/setup-ready']")
+    write!(repo, ".kogen/setup-source", "ready\n")
+    commit!(repo)
+
+    {_output, status} = approve(repo)
+
+    assert status == 0
+    assert File.read!(Path.join(repo, ".kogen/setup-ready")) == "ready\n"
+    assert [log] = setup_logs(tmp_dir)
+    assert File.regular?(log)
+  end
+
+  test "setup failure is an environment failure with the log tail", %{tmp_dir: tmp_dir} do
+    repo = project!(tmp_dir, "allowed")
+
+    write_project_yaml_with_setup!(
+      repo,
+      "[sh, -c, 'echo approval-setup-diagnostic; exit 7']"
+    )
+
+    commit!(repo)
+
+    {output, status} = approve(repo)
+
+    assert status == 3
+    assert output =~ "environment/setup_failed"
+    assert output =~ "approval-setup-diagnostic"
+    refute output =~ "check/acceptance_check_failed"
+    assert approval_ref(repo) == ""
+    assert [log] = setup_logs(tmp_dir)
+    assert File.read!(log) =~ "approval-setup-diagnostic"
+  end
+
   defp project!(tmp_dir, test_word) do
     repo = Kogen.Testkit.Git.create!(tmp_dir)
     write_project_yaml!(repo, [~s([sh, -c, '! grep -q FORBIDDEN "$1"', check, "{path}"])])
@@ -93,6 +129,26 @@ defmodule Kogen.Acceptance.ApprovalChecksTest do
     acceptance_checks:
       - name: no-forbidden
         argv: #{argv}
+        timeout_ms: 10000
+    domains:
+      app: [lib, test]
+    """)
+  end
+
+  defp write_project_yaml_with_setup!(repo, setup_argv) do
+    write!(repo, ".kogen/project.yaml", """
+    name: probe
+    checks:
+      - name: noop
+        argv: [true]
+        timeout_ms: 10000
+    setup:
+      - name: fixture
+        argv: #{setup_argv}
+        timeout_ms: 10000
+    acceptance_checks:
+      - name: setup-required
+        argv: [test, -s, .kogen/setup-ready]
         timeout_ms: 10000
     domains:
       app: [lib, test]
@@ -134,6 +190,8 @@ defmodule Kogen.Acceptance.ApprovalChecksTest do
     ]
 
     elixir = System.find_executable("elixir")
+    approval_tmp = Path.join(Path.dirname(repo), "approval-tmp")
+    File.mkdir_p!(approval_tmp)
 
     {:ok, result} =
       Kogen.Proc.run(
@@ -142,12 +200,19 @@ defmodule Kogen.Acceptance.ApprovalChecksTest do
         env:
           Map.merge(Map.new(@git_env), %{
             "PATH" => child_path(elixir),
-            "HOME" => Path.dirname(repo)
+            "HOME" => Path.dirname(repo),
+            "TMPDIR" => approval_tmp
           }),
         timeout_ms: 60_000
       )
 
     {result.output_tail, result.exit_status}
+  end
+
+  defp setup_logs(tmp_dir) do
+    Path.wildcard(
+      Path.join([tmp_dir, "approval-tmp", "kogen-approval", "probe", "*", "logs", "setup-*.log"])
+    )
   end
 
   defp git(repo, args) do

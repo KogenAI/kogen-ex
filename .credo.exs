@@ -178,6 +178,16 @@
                  Kogen.Checks,
                  Kogen.Harness
                ],
+               Kogen.E2e => [
+                 Kogen.Engine,
+                 Kogen.Kernel,
+                 Kogen.Proc,
+                 Kogen.Project,
+                 Kogen.Shaper,
+                 Kogen.State,
+                 Kogen.Testkit,
+                 Kogen.Workspace
+               ],
                Kogen.Shaper => [
                  Kogen.Contracts,
                  Kogen.Checks,

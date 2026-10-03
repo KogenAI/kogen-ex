@@ -30,6 +30,7 @@ defmodule Kogen.Kernel do
   alias Kogen.Engine.Build.Result
   alias Kogen.Engine.Runtime
   alias Kogen.Kernel.Approval
+  alias Kogen.Kernel.Approval.Request, as: ApprovalRequest
   alias Kogen.Kernel.RuntimeDiscovery
   alias Kogen.Kernel.StateView
   alias Kogen.Kernel.Types.ApprovalPreview
@@ -81,8 +82,18 @@ defmodule Kogen.Kernel do
           {:ok, ApprovalPreview.t()} | {:error, term()}
   def approval_preview(slug, project_root, origin, base, by) do
     with {:ok, runtime} <- runtime(),
-         {:ok, process_env} <- project_environment(project_root, runtime) do
-      Approval.prepare(slug, project_root, origin, base, by, process_env)
+         {:ok, process_env} <- project_environment(project_root, runtime),
+         {:ok, home} <- runtime_home(runtime) do
+      Approval.prepare(%ApprovalRequest{
+        slug: slug,
+        project_root: project_root,
+        origin: origin,
+        base: base,
+        by: by,
+        env: process_env,
+        runtime: runtime,
+        home: home
+      })
     end
   end
 
