@@ -48,7 +48,7 @@ defmodule Kogen.Checks.ShapeFormatter do
           missing_formatter(argv, files, log_path)
 
         {:ok, %ProcResult{} = result} ->
-          {:error, formatter_failure(argv, files, result)}
+          {:error, formatter_failure(argv, files, result, log_path)}
 
         {:error, :enoent} ->
           missing_formatter(argv, files, log_path)
@@ -96,15 +96,25 @@ defmodule Kogen.Checks.ShapeFormatter do
     end
   end
 
-  defp formatter_failure(argv, files, %ProcResult{} = result) do
+  defp formatter_failure(argv, files, %ProcResult{} = result, log_path) do
     status = if result.timed_out, do: "timed out", else: "exited #{inspect(result.exit_status)}"
 
     failure(
       :candidate,
       :format_failed,
       "#{Enum.join(argv, " ")} #{status} while formatting #{Enum.join(files, " ")}.\n" <>
-        result.output_tail
+        "Output (first 20 lines):\n" <> first_output_lines(log_path, result.output_tail)
     )
+  end
+
+  defp first_output_lines(path, fallback) do
+    output =
+      case File.read(path) do
+        {:ok, contents} -> contents
+        {:error, _reason} -> fallback
+      end
+
+    output |> String.split("\n", trim: false) |> Enum.take(20) |> Enum.join("\n")
   end
 
   defp prepare_logs(run_dir) do

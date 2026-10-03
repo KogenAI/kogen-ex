@@ -38,7 +38,15 @@ end
 defmodule Kogen.Shaper.Result do
   @moduledoc false
 
-  @enforce_keys [:slug, :intent_path, :acceptance_path, :calls, :rounds, :transcript_path]
+  @enforce_keys [
+    :slug,
+    :intent_path,
+    :acceptance_path,
+    :calls,
+    :rounds,
+    :transcript_path,
+    :warnings
+  ]
   defstruct @enforce_keys
 
   @type t :: %__MODULE__{
@@ -47,6 +55,7 @@ defmodule Kogen.Shaper.Result do
           acceptance_path: Path.t(),
           calls: [Kogen.Harness.ShapeCall.t()],
           rounds: pos_integer(),
-          transcript_path: Path.t()
+          transcript_path: Path.t(),
+          warnings: [Kogen.Contracts.ShapeWarning.t()]
         }
 end

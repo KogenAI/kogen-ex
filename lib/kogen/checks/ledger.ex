@@ -84,15 +84,72 @@ defmodule Kogen.Checks.Ledger do
           Sandbox.t() | nil
         ) :: :ok | {:error, Failure.t()}
   def red_on_base(workdir, %Intent{} = intent, run_dir, env, git_env, sandbox) do
-    with {:ok, items} <- test_items(intent),
+    with {:ok, rows} <- base_rows(workdir, intent, run_dir, env, git_env, sandbox) do
+      validate_base(intent, rows, run_dir)
+    end
+  end
+
+  @spec base_rows(
+          Path.t(),
+          Intent.t(),
+          Path.t(),
+          %{String.t() => String.t()},
+          %{String.t() => String.t()},
+          Sandbox.t() | nil
+        ) :: {:ok, [LedgerRow.t()]} | {:error, Failure.t()}
+  def base_rows(workdir, %Intent{} = intent, run_dir, env, git_env, sandbox) do
+    with {:ok, _items} <- test_items(intent),
          {:ok, before_tree} <- Workspace.tree_hash(workdir, git_env) do
       result = report(workdir, intent.slug, run_dir, env, sandbox)
 
       with {:ok, after_tree} <- Workspace.tree_hash(workdir, git_env),
            :ok <- same_tree(before_tree, after_tree),
            {:ok, rows, _exit_status} <- result do
-        Validation.base(items, rows, intent.slug)
+        {:ok, rows}
       end
+    end
+  end
+
+  @spec validate_base(Intent.t(), [LedgerRow.t()], Path.t()) :: :ok | {:error, Failure.t()}
+  def validate_base(%Intent{} = intent, rows, run_dir) do
+    with {:ok, items} <- test_items(intent) do
+      case Validation.base(items, rows, intent.slug) do
+        :ok ->
+          :ok
+
+        {:error, %Failure{} = failure} ->
+          {:error, base_feedback(failure, rows, intent.slug, run_dir)}
+      end
+    end
+  end
+
+  defp base_feedback(%Failure{} = failure, rows, slug, run_dir) do
+    row = Enum.find(rows, &String.contains?(failure.detail, &1.tag))
+    output = first_output_lines(Path.join([run_dir, "logs", "acceptance.log"]))
+
+    context =
+      if row do
+        "Acceptance test: #{row.test} [#{row.tag}]\n"
+      else
+        rows
+        |> Enum.filter(&String.starts_with?(&1.tag, slug <> "/"))
+        |> Enum.map_join("", &"Acceptance test: #{&1.test} [#{&1.tag}]\n")
+      end
+
+    %{
+      failure
+      | detail: failure.detail <> "\n" <> context <> "Output (first 20 lines):\n" <> output
+    }
+  end
+
+  defp first_output_lines(path) do
+    case File.read(path) do
+      {:ok, contents} ->
+        output = contents |> String.split("\n", trim: false) |> Enum.take(20) |> Enum.join("\n")
+        if String.trim(output) == "", do: "(no output captured)", else: output
+
+      {:error, _reason} ->
+        "(acceptance output log unavailable)"
     end
   end
 

@@ -5,6 +5,7 @@ defmodule Kogen.Shaper.Runner do
   alias Kogen.Checks.ShapeValidation
   alias Kogen.Contracts.Failure
   alias Kogen.Contracts.Project
+  alias Kogen.Contracts.ShapeWarning
   alias Kogen.Harness
   alias Kogen.Harness.Opts
   alias Kogen.Harness.ShapePass
@@ -13,15 +14,17 @@ defmodule Kogen.Shaper.Runner do
   alias Kogen.Shaper.Request
   alias Kogen.Shaper.Result
   alias Kogen.Shaper.Runner.State
+  alias Kogen.Shaper.ShapeWarnings
   alias Kogen.Shaper.Validation
 
-  @max_repairs 2
+  @max_repairs 4
 
   @spec run(Request.t()) :: {:ok, Result.t()} | {:error, term()}
   def run(%Request{} = request) do
     with :ok <- valid_request(request),
          {:ok, project} <- ProjectDomain.load(request.workdir),
          {:ok, opts} <- harness_options(request, project),
+         :ok <- ShapeWarnings.clear(request.workdir, request.slug),
          :ok <- setup_project(request, project) do
       deadline = System.monotonic_time(:millisecond) + request.limits.wall_ms
       attempt(%State{request: request, project: project, opts: opts, deadline: deadline})
@@ -137,9 +140,8 @@ defmodule Kogen.Shaper.Runner do
     validation = validate_formatted_pass(state, pass, attempt_number)
 
     case validation do
-      :ok ->
-        progress(state.request, attempt_number, "validation_passed")
-        {:ok, result(state.request, state.calls, state.repairs + 1, state.opts)}
+      {:ok, warnings} ->
+        validation_succeeded(state, attempt_number, warnings)
 
       {:error, %Failure{class: :candidate} = failure} when state.repairs < @max_repairs ->
         progress(
@@ -158,6 +160,26 @@ defmodule Kogen.Shaper.Runner do
         )
 
         validation_exhausted(failure, state.repairs)
+    end
+  end
+
+  defp validation_succeeded(state, attempt_number, warnings) do
+    case ShapeWarnings.write(state.request.workdir, state.request.slug, warnings) do
+      :ok ->
+        Enum.each(warnings, &log_warning(state.request, attempt_number, &1))
+        progress(state.request, attempt_number, "validation_passed")
+
+        {:ok,
+         result(
+           state.request,
+           state.calls,
+           state.repairs + 1,
+           state.opts,
+           warnings
+         )}
+
+      {:error, %Failure{} = failure} ->
+        {:error, failure}
     end
   end
 
@@ -292,15 +314,20 @@ defmodule Kogen.Shaper.Runner do
     end
   end
 
-  defp result(request, calls, rounds, opts) do
+  defp result(request, calls, rounds, opts, warnings) do
     %Result{
       slug: request.slug,
       intent_path: Path.join(request.workdir, intent_path(request.slug)),
       acceptance_path: Path.join(request.workdir, acceptance_path(request.slug)),
       calls: calls,
       rounds: rounds,
-      transcript_path: Path.join(opts.run_dir, "transcript.jsonl")
+      transcript_path: Path.join(opts.run_dir, "transcript.jsonl"),
+      warnings: warnings
     }
+  end
+
+  defp log_warning(request, attempt_number, %ShapeWarning{code: code, item_ids: ids}) do
+    progress(request, attempt_number, "warning #{code} items=#{Enum.join(ids, ",")}")
   end
 
   defp validation_exhausted(%Failure{} = failure, repairs) do

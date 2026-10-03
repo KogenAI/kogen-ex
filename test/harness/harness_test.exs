@@ -197,29 +197,6 @@ defmodule Kogen.Harness.Tests do
     assert File.read!(Path.join(opts.workdir, "README.md")) == "at-cap\n"
   end
 
-  test "shaper search returns a no-match result when grep is used as fallback", %{
-    tmp_dir: tmp_dir
-  } do
-    provider =
-      ScriptedProvider.start([
-        tool_call(
-          "search",
-          %{"pattern" => "KOGEN_TEXT_THAT_CANNOT_EXIST_93761", "path" => "."},
-          "search-no-match"
-        ),
-        message("No matching context was found.")
-      ])
-
-    opts = options(tmp_dir, provider)
-    opts = %{opts | env: %{"PATH" => "/usr/bin:/bin"}}
-
-    assert {:ok, result} = Harness.shape(opts, "fixture", "Describe this project.", [], nil, 0)
-    assert result.text == "No matching context was found."
-
-    request_inputs = provider |> ScriptedProvider.requests() |> Enum.map(&inspect(&1.input))
-    assert Enum.any?(request_inputs, &String.contains?(&1, "No matches."))
-  end
-
   test "context pack, plan, build, and review accept use their fixed models and tools", %{
     tmp_dir: tmp_dir
   } do

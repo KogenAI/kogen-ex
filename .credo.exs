@@ -109,6 +109,7 @@
              included_paths: ["lib/"],
              codec_modules: [
                Kogen.Contracts.Yaml,
+               Kogen.Contracts.ShapeWarningCodec,
                Kogen.Proc.Request,
                Kogen.Project.Loader,
                Kogen.Workspace.Git,

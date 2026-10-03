@@ -159,7 +159,8 @@ defmodule Kogen.Checks do
   def red_on_base(workdir, intent, run_dir, env, git_env, sandbox),
     do: Ledger.red_on_base(workdir, intent, run_dir, env, git_env, sandbox)
 
-  @spec validate_shape(ShapeValidation.t()) :: :ok | {:error, Failure.t()}
+  @spec validate_shape(ShapeValidation.t()) ::
+          {:ok, [Kogen.Contracts.ShapeWarning.t()]} | {:error, Failure.t()}
   def validate_shape(%ShapeValidation{} = request), do: Shaping.validate(request)
 
   @spec format_shape_files(ShapeFormatRequest.t()) ::

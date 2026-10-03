@@ -72,7 +72,7 @@ This file is the contract between domains. Change it only through the integrator
   - `changed?` optional controller callback; Engine supplies it using Workspace's sanitized Candidate tree scan, so Harness never runs Git against the Candidate directly.
 
 ## Kogen.Shaper
-- `shape(%Kogen.Shaper.Request{}) :: {:ok, %Kogen.Shaper.Result{}} | {:error, term()}`; the controller runs the Harness shaper, lints the generated Intent, runs the project's `acceptance_checks`, and applies red-on-base validation. Candidate validation failures return to the same model conversation for at most two repair rounds.
+- `shape(%Kogen.Shaper.Request{}) :: {:ok, %Kogen.Shaper.Result{}} | {:error, term()}`; the controller runs the Harness shaper, lints the generated Intent, runs the project's `acceptance_checks`, and applies red-on-base validation. A `test keep` item that fails on the base is reclassified as `test` and recorded as an approval warning. Candidate validation failures return to the same model conversation for at most four repair rounds, subject to the unchanged turn and wall limits.
 - Each `%Kogen.Harness.ShapeCall{}` records the shape model, effort, per-call token counts, and wall time. The transcript is stored outside the project checkout.
 
 ## Kogen.Checks
@@ -80,7 +80,7 @@ This file is the contract between domains. Change it only through the integrator
 - `run_all(workdir, Project.t(), run_dir, env, git_env, sandbox) :: {:ok, %{tree: sha, receipts: [Receipt.t()], status: :pass | {:fail, [String.t()]}}} | {:error, Failure.t()}`: checks run with `env` under the supplied sandbox; Git tree calls use `git_env`; the tree is hashed before and after, with a change reported as `:candidate`/`:tree_mutated`.
 - `acceptance(workdir, Intent.t(), run_dir, env, git_env, sandbox) :: {:ok, %{status: :pass | {:fail, [id]}, ledger: [LedgerRow.t()]}} | {:error, Failure.t()}`: the formatter source is embedded at compile time and written into run_dir, never into the Candidate. Tests run with `env` under the supplied sandbox; Git tree calls use `git_env`.
 - `red_on_base(base_workdir, Intent.t(), run_dir, env, git_env) :: :ok | {:error, Failure.t()}`
-- `validate_shape(%Kogen.Checks.ShapeValidation{}) :: :ok | {:error, Failure.t()}` stages the candidate test briefly, runs project acceptance checks, verifies that checks leave the tree unchanged, and applies red-on-base validation before restoring the checkout.
+- `validate_shape(%Kogen.Checks.ShapeValidation{}) :: {:ok, [Kogen.Contracts.ShapeWarning.t()]} | {:error, Failure.t()}` stages the candidate test briefly, runs project acceptance checks, verifies that checks leave the tree unchanged, reclassifies red `test keep` items, validates red-on-base rules, and restores the checkout.
 - `protected_violations(workdir, base_sha, manifest :: %{path => sha256}, git_env) :: {:ok, [path]}`
 - `scope_violations(workdir, base_sha, Intent.t(), Project.t(), allowed_extra :: [path], git_env) :: {:ok, [path]}`
 

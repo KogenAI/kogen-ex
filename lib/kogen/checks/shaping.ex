@@ -16,13 +16,15 @@ defmodule Kogen.Checks.Shaping do
 
   alias Kogen.Checks.Ledger
   alias Kogen.Checks.ShapeValidation
+  alias Kogen.Checks.Shaping.Reclassifier
   alias Kogen.Checks.Shaping.StageFile
   alias Kogen.Contracts.Failure
   alias Kogen.Contracts.ProcResult
   alias Kogen.Proc
   alias Kogen.Workspace
 
-  @spec validate(ShapeValidation.t()) :: :ok | {:error, Failure.t()}
+  @spec validate(ShapeValidation.t()) ::
+          {:ok, [Kogen.Contracts.ShapeWarning.t()]} | {:error, Failure.t()}
   def validate(%ShapeValidation{} = request) do
     case stage_test(request.workdir, request.intent.slug, request.acceptance_bytes) do
       {:ok, %StageFile{} = staged} ->
@@ -37,15 +39,20 @@ defmodule Kogen.Checks.Shaping do
   defp verify(%ShapeValidation{} = request) do
     env = Map.merge(request.env, request.project.env)
 
-    with :ok <- acceptance_checks(request, env) do
-      Ledger.red_on_base(
-        request.workdir,
-        request.intent,
-        request.run_dir,
-        env,
-        request.git_env,
-        request.sandbox
-      )
+    with :ok <- acceptance_checks(request, env),
+         {:ok, rows} <-
+           Ledger.base_rows(
+             request.workdir,
+             request.intent,
+             request.run_dir,
+             env,
+             request.git_env,
+             request.sandbox
+           ),
+         {:ok, intent, warnings} <-
+           Reclassifier.run(request.intent, request.workdir, rows, request.run_dir),
+         :ok <- Ledger.validate_base(intent, rows, request.run_dir) do
+      {:ok, warnings}
     end
   end
 
@@ -91,7 +98,7 @@ defmodule Kogen.Checks.Shaping do
         :ok
 
       {:ok, %ProcResult{} = result} ->
-        {:error, check_failure(spec.name, result)}
+        {:error, check_failure(spec.name, result, log_path)}
 
       {:error, :enoent} ->
         {:error,
@@ -111,10 +118,24 @@ defmodule Kogen.Checks.Shaping do
     end
   end
 
-  defp check_failure(name, %ProcResult{} = result) do
+  defp check_failure(name, %ProcResult{} = result, log_path) do
     status = if result.timed_out, do: "timed out", else: "exited #{result.exit_status}"
-    detail = "Acceptance check #{name} #{status}.\n" <> result.output_tail
+
+    detail =
+      "Acceptance check #{name} #{status}.\nOutput (first 20 lines):\n" <>
+        first_output_lines(log_path, result.output_tail)
+
     failure(:candidate, :acceptance_check_failed, detail)
+  end
+
+  defp first_output_lines(path, fallback) do
+    output =
+      case File.read(path) do
+        {:ok, contents} -> contents
+        {:error, _reason} -> fallback
+      end
+
+    output |> String.split("\n", trim: false) |> Enum.take(20) |> Enum.join("\n")
   end
 
   defp stage_test(workdir, slug, contents) do

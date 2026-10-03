@@ -2,14 +2,15 @@ defmodule Kogen.Kernel.Types.ApprovalPreview do
   @moduledoc false
 
   @enforce_keys [:approval, :intent, :project_root, :origin, :git_env]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [warnings: []]
 
   @type t :: %__MODULE__{
           approval: Kogen.State.Approval.t(),
           intent: Kogen.Contracts.Intent.t(),
           project_root: Path.t(),
           origin: Path.t(),
-          git_env: %{String.t() => String.t()}
+          git_env: %{String.t() => String.t()},
+          warnings: [Kogen.Contracts.ShapeWarning.t()]
         }
 end
 

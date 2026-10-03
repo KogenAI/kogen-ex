@@ -68,7 +68,7 @@ defmodule Kogen.Harness.Shaping do
   - The Brief is prose without a heading, list, or code block. Use only configured project domain names.
   - Acceptance ids are sequential from A1. Keep each item to 25 words or fewer, state a definite observable result, and avoid hedges. Give every item exactly one Verify line using `test` or `test keep` and a configured domain.
   - An Intent must include a concrete implementation approach in Notes: say which code path to change and how, plus the behavior to preserve. Acceptance criteria alone are not a plan. Keep this concise.
-  - Write a complete test module to the exact acceptance path. Use `async: true`, test through public functions, and add one `@tag intent: "<slug>/A<n>"` for every Acceptance item. A `test` item must fail on the unchanged checkout; use `test keep` for existing behavior that must pass.
+  - Write a complete test module to the exact acceptance path. Use `async: true`, test through public functions, and add one `@tag intent: "<slug>/A<n>"` for every Acceptance item. Use `test` for behavior the task adds or changes and `test keep` only for existing behavior that passes on the unchanged checkout. At least one item must use `test`. If a `test keep` item is red on the base, Kogen will reclassify it as `test` and show an approval warning.
   - Do not write to other paths. Do not finish by only describing the files: use the write tool for both. If validation asks for repair, preserve valid content, repair the named rule or missing file, and do not finish until both exact files have been written.
 
   These are two real accepted Intents from Kogen's `careful-rebuild` history. Copy their concise structure and specificity; do not copy their scope or domain names into the new Intent.

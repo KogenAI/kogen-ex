@@ -4,6 +4,8 @@ defmodule Kogen.Kernel.Approval do
   alias Kogen.Contracts.Intent, as: IntentData
   alias Kogen.Contracts.ProcResult
   alias Kogen.Contracts.Project, as: ProjectData
+  alias Kogen.Contracts.ShapeWarning
+  alias Kogen.Contracts.ShapeWarningCodec
   alias Kogen.Engine.Runtime
   alias Kogen.Intent
   alias Kogen.Kernel.Types.ApprovalPreview
@@ -23,6 +25,7 @@ defmodule Kogen.Kernel.Approval do
          {:ok, bytes} <- read_intent(project_root, slug),
          {:ok, intent} <- Intent.parse_binary(bytes, intent_path(slug)),
          :ok <- clean_intent(intent),
+         {:ok, warnings} <- read_shape_warnings(project_root, slug, bytes),
          {:ok, acceptance_files} <- acceptance_files(project_root, slug),
          :ok <- acceptance_checks(project_root, project, slug, acceptance_files, env),
          {:ok, base_sha} <- Workspace.ref_read(origin, "refs/heads/#{base}", git_env),
@@ -47,7 +50,8 @@ defmodule Kogen.Kernel.Approval do
          intent: intent,
          project_root: project_root,
          origin: origin,
-         git_env: git_env
+         git_env: git_env,
+         warnings: warnings
        }}
     end
   end
@@ -55,6 +59,19 @@ defmodule Kogen.Kernel.Approval do
   @spec commit(ApprovalPreview.t()) :: {:ok, String.t()} | {:error, term()}
   def commit(%ApprovalPreview{} = preview) do
     State.approve(preview.origin, preview.approval, preview.git_env)
+  end
+
+  @spec warnings_text([ShapeWarning.t()]) :: String.t()
+  def warnings_text([]), do: ""
+
+  def warnings_text(warnings) do
+    lines =
+      Enum.map_join(warnings, "", fn warning ->
+        items = Enum.join(warning.item_ids, ", ")
+        "  - #{warning.code}: #{items} — #{warning.message}\n"
+      end)
+
+    "Warnings\n" <> lines
   end
 
   defp valid_request(slug, project_root, origin, base, by) do
@@ -71,6 +88,24 @@ defmodule Kogen.Kernel.Approval do
     case Intent.lint(intent) do
       [] -> :ok
       issues -> {:error, {:lint, issues}}
+    end
+  end
+
+  defp read_shape_warnings(project_root, slug, intent_bytes) do
+    path = Path.join([project_root, ".kogen", "intents", slug, "shape-warnings.json"])
+
+    case File.read(path) do
+      {:ok, bytes} ->
+        case ShapeWarningCodec.decode(bytes, Intent.hash(intent_bytes)) do
+          {:ok, warnings} -> {:ok, warnings}
+          {:error, :invalid} -> {:error, {:shape_warnings_invalid, path}}
+        end
+
+      {:error, :enoent} ->
+        {:ok, []}
+
+      {:error, reason} ->
+        {:error, {:shape_warnings_unavailable, path, reason}}
     end
   end
 

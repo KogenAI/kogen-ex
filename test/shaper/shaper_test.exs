@@ -16,12 +16,11 @@ defmodule Kogen.Shaper.Tests do
     invalid_intent = intent("usually keeps", "A1 verifies Tiny.value/0 returns :old.")
 
     valid_intent =
-      intent(
-        "keeps",
-        "Approach: Keep Tiny.value/0 unchanged and preserve its public result by avoiding unrelated changes."
+      change_intent(
+        "Approach: Change Tiny.value/0 to return :new and preserve its public function path."
       )
 
-    test_source = acceptance_test()
+    test_source = String.replace(acceptance_test(), ":old", ":new")
 
     {:ok, server} =
       ScriptedProvider.start_link([
@@ -84,6 +83,7 @@ defmodule Kogen.Shaper.Tests do
                "`size` is exactly `small`, `medium`, or `large`"
 
       assert Enum.at(requests, 0).instructions =~ "Acceptance criteria alone are not a plan"
+      assert Enum.at(requests, 0).instructions =~ "At least one item must use `test`"
       assert Enum.at(requests, 0).instructions =~ "title: Check acceptance tests at approval"
 
       assert Enum.at(requests, 0).instructions =~
@@ -123,9 +123,8 @@ defmodule Kogen.Shaper.Tests do
     project = seed_project!(Path.join(tmp_dir, "project"))
 
     valid_intent =
-      intent(
-        "keeps",
-        "Approach: Keep Tiny.value/0 unchanged and preserve its public result by avoiding unrelated changes."
+      change_intent(
+        "Approach: Change Tiny.value/0 to return :new and preserve its public function path."
       )
 
     unformatted_test = """
@@ -133,7 +132,7 @@ defmodule Kogen.Shaper.Tests do
     use ExUnit.Case,async: true
     @tag intent: "shape-loop/A1"
     test "the existing public value remains available" do
-    assert(Tiny.value()==:old)
+    assert(Tiny.value()==:new)
     end
     end
     """
@@ -154,7 +153,9 @@ defmodule Kogen.Shaper.Tests do
       assert length(result.calls) == 2
       assert length(requests) == 2
       assert ScriptedProvider.remaining(config) == 0
-      assert File.read!(result.acceptance_path) == acceptance_test()
+
+      assert File.read!(result.acceptance_path) ==
+               String.replace(acceptance_test(), ":old", ":new")
 
       assert Enum.map_join(Enum.at(requests, 1).input, &inspect/1) =~
                "Cannot read .kogen/intents/shape-loop/intent.md"
@@ -176,16 +177,15 @@ defmodule Kogen.Shaper.Tests do
     )
 
     valid_intent =
-      intent(
-        "keeps",
-        "Approach: Keep Tiny.value/0 unchanged and preserve its public result by avoiding unrelated changes."
+      change_intent(
+        "Approach: Change Tiny.value/0 to return :new and preserve its public function path."
       )
 
     {:ok, server} =
       ScriptedProvider.start_link([
         ScriptedProvider.write_many(:shape, [
           {intent_path(), valid_intent},
-          {acceptance_path(), acceptance_test()}
+          {acceptance_path(), String.replace(acceptance_test(), ":old", ":new")}
         ])
       ])
 
@@ -222,16 +222,15 @@ defmodule Kogen.Shaper.Tests do
     )
 
     valid_intent =
-      intent(
-        "keeps",
-        "Approach: Keep Tiny.value/0 unchanged and preserve its public result by avoiding unrelated changes."
+      change_intent(
+        "Approach: Change Tiny.value/0 to return :new and preserve its public function path."
       )
 
     {:ok, server} =
       ScriptedProvider.start_link([
         ScriptedProvider.write_many(:shape, [
           {intent_path(), valid_intent},
-          {acceptance_path(), acceptance_test()}
+          {acceptance_path(), String.replace(acceptance_test(), ":old", ":new")}
         ])
       ])
 
@@ -266,7 +265,7 @@ defmodule Kogen.Shaper.Tests do
     %Request{
       workdir: project,
       slug: "shape-loop",
-      task: "Preserve the public Tiny.value/0 function's current value.",
+      task: "Change Tiny.value/0 to return :new while preserving its public function.",
       model: "scripted-model",
       effort: "low",
       provider_mod: ScriptedProvider,
@@ -358,6 +357,16 @@ defmodule Kogen.Shaper.Tests do
     - A1: test keep domain=app
     #{notes_section}
     """)
+  end
+
+  defp change_intent(notes) do
+    "keeps"
+    |> intent(notes)
+    |> String.replace(
+      "Tiny.value() keeps returning :old on the unchanged checkout.",
+      "Tiny.value() returns :new on the unchanged checkout."
+    )
+    |> String.replace("test keep domain=app", "test domain=app")
   end
 
   defp acceptance_test do

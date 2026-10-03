@@ -1,6 +1,7 @@
 defmodule Kogen.Harness.ReadSearch do
   @moduledoc false
 
+  alias Kogen.Contracts.ProcResult
   alias Kogen.Contracts.ToolCall
   alias Kogen.Harness.Codec
   alias Kogen.Harness.Command
@@ -87,6 +88,11 @@ defmodule Kogen.Harness.ReadSearch do
           {:error, %Error{reason: :command_missing}} ->
             opts |> grep(pattern, relative) |> search_result()
 
+          {:ok, %ProcResult{exit_status: 127, output_tail: output}} ->
+            if missing_rg?(output),
+              do: opts |> grep(pattern, relative) |> search_result(),
+              else: search_result(result)
+
           other ->
             search_result(other)
         end
@@ -118,6 +124,9 @@ defmodule Kogen.Harness.ReadSearch do
     argv = ["grep", "-rnI", "--exclude-dir=.git", "-e", pattern, "--", relative]
     Command.run(opts, argv, 120_000, "tool-search-grep")
   end
+
+  defp missing_rg?(output),
+    do: Regex.match?(~r/(?:^|\n)(?:env: )?rg: No such file or directory(?:\n|$)/, output)
 
   defp search_result({:ok, command}) do
     cond do

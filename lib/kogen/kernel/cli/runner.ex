@@ -5,6 +5,7 @@ defmodule Kogen.Kernel.CLI.Runner do
   alias Kogen.Contracts.ProviderError
   alias Kogen.Engine.Build.Result
   alias Kogen.Engine.Runtime
+  alias Kogen.Kernel.Approval
   alias Kogen.Kernel.CLI.Args
   alias Kogen.Kernel.CLI.ShapeJson
   alias Kogen.Kernel.Types.ApprovalPreview
@@ -85,10 +86,12 @@ defmodule Kogen.Kernel.CLI.Runner do
 
   defp render_shape(result, false) do
     calls = Enum.map_join(result.calls, "", &shape_call_text/1)
+    warnings = Approval.warnings_text(result.warnings)
 
     {0,
      "Intent: #{result.intent_path}\nAcceptance test: #{result.acceptance_path}\n" <>
        "Validated after #{result.rounds} round(s).\n" <>
+       warnings <>
        calls <>
        "Transcript: #{result.transcript_path}\n"}
   end
@@ -274,6 +277,7 @@ defmodule Kogen.Kernel.CLI.Runner do
   defp approval_screen(preview) do
     intent = preview.intent
     criteria = Enum.map_join(intent.acceptance, "", &acceptance_line/1)
+    warnings = Approval.warnings_text(preview.warnings)
 
     """
     Intent: #{intent.slug} — #{intent.title}
@@ -286,6 +290,7 @@ defmodule Kogen.Kernel.CLI.Runner do
 
     Acceptance
     #{criteria}
+    #{warnings}
     """
   end
 
