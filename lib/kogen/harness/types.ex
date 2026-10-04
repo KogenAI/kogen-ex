@@ -12,6 +12,7 @@ defmodule Kogen.Harness.Opts do
     :proc_mod,
     :base_test,
     :changed_paths,
+    builder_tools: :full,
     changed?: nil,
     env: %{},
     before_gate: nil,
@@ -37,6 +38,7 @@ defmodule Kogen.Harness.Opts do
           env: %{String.t() => String.t()},
           before_gate: (-> :ok | {:error, term()}) | nil,
           flake_excused_test_ids: [String.t()],
+          builder_tools: :full | :shell,
           models: %{
             required(:builder) => model(),
             required(:strong) => model(),

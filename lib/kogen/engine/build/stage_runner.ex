@@ -103,8 +103,8 @@ defmodule Kogen.Engine.Build.StageRunner do
     end
   end
 
-  defp develop(_args, %Session{request: %{recipe: %{name: "direct"}}} = session)
-       when not session.direct_preflight_complete? do
+  defp develop(_args, %Session{request: %{recipe: %{name: name}}} = session)
+       when name in ["direct", "direct-shell"] and not session.direct_preflight_complete? do
     case direct_preflight(session) do
       :ok -> develop_harness(%{session | direct_preflight_complete?: true})
       {:error, %Failure{} = failure} -> fail(session, :develop, failure)

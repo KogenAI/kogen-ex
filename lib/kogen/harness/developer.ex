@@ -52,7 +52,7 @@ defmodule Kogen.Harness.Developer do
   def run(%Opts{} = opts, intent_text, plan, resume) do
     with :ok <- validate_limits(opts),
          {:ok, transcript_path} <- Recording.path(opts),
-         {:ok, prompt} <- developer_prompt() do
+         {:ok, prompt} <- developer_prompt(opts) do
       initialize(opts, intent_text, plan, resume, transcript_path, prompt)
     end
   end
@@ -94,7 +94,7 @@ defmodule Kogen.Harness.Developer do
       effort: effort,
       instructions: prompt,
       items: state.items,
-      tool_names: Codec.tool_names(:developer),
+      tool_names: Codec.tool_names(:developer, opts.builder_tools),
       remaining_ms: remaining_ms
     }
 
@@ -195,7 +195,7 @@ defmodule Kogen.Harness.Developer do
 
   defp run_tool_call(opts, state, call) do
     with :ok <- Recording.append(opts, :tool_call, :develop, state.turns, call) do
-      result = Tools.run(opts, call, Codec.tool_names(:developer))
+      result = Tools.run(opts, call, Codec.tool_names(:developer, opts.builder_tools))
       append_tool_result(opts, state, call, result)
     end
   end
@@ -249,8 +249,15 @@ defmodule Kogen.Harness.Developer do
     """)
   end
 
-  defp developer_prompt do
-    {:ok, @developer_prompt}
+  defp developer_prompt(%Opts{builder_tools: :full}), do: {:ok, @developer_prompt}
+
+  defp developer_prompt(%Opts{builder_tools: :shell}) do
+    {:ok,
+     @developer_prompt <>
+       "\n\nShell-only recipe: inspect efficiently with `sed -n` and `rg -n`; edit with a " <>
+       "short `apply_patch <<'PATCH' ... PATCH` heredoc when available, or a focused " <>
+       "`python3 - <<'PY'` edit. Combine related reads and keep command output focused. " <>
+       "All file changes must stay inside the worktree."}
   end
 
   defp validate_limits(opts) do

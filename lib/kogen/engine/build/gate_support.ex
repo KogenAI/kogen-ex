@@ -162,7 +162,8 @@ defmodule Kogen.Engine.Build.GateSupport do
         reviewer: reviewer
       },
       limits: %{max_turns: 60, wall_ms: 1_800_000},
-      repairs_left: 0
+      repairs_left: 0,
+      builder_tools: session.request.recipe.builder_tools
     }
   end
 

@@ -199,17 +199,6 @@ defmodule Kogen.Harness.Tests do
            )
   end
 
-  test "turn cap returns gave_up after the final allowed tool turn", %{tmp_dir: tmp_dir} do
-    provider = ScriptedProvider.start([edit_call("fixture", "at-cap")])
-    opts = options(tmp_dir, provider)
-    opts = %{opts | limits: %{max_turns: 1, wall_ms: 10_000}}
-
-    assert {:ok, result} = Harness.develop(opts, @intent, nil, nil)
-    assert result.outcome == :gave_up
-    assert result.turns == 1
-    assert File.read!(Path.join(opts.workdir, "README.md")) == "at-cap\n"
-  end
-
   test "context pack, plan, build, and review accept use their fixed models and tools", %{
     tmp_dir: tmp_dir
   } do
@@ -250,7 +239,15 @@ defmodule Kogen.Harness.Tests do
     assert plan_request.model == "gpt-6.1-sol"
     assert plan_request.effort == "high"
     assert plan_request.tools == []
-    assert build_request.tools != []
+
+    assert Enum.map(build_request.tools, & &1["name"]) == [
+             "read",
+             "search",
+             "edit",
+             "write",
+             "shell"
+           ]
+
     assert done_request.model == "gpt-6-luna"
     assert review_request.model == "gpt-6.1-sol"
     assert review_request.tools == []

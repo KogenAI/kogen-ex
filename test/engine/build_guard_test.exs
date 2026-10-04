@@ -4,7 +4,10 @@ defmodule Kogen.Engine.BuildGuardTest do
   alias Kogen.Contracts.Failure
   alias Kogen.Contracts.Intent
   alias Kogen.Contracts.Project
+  alias Kogen.Contracts.ToolCall
   alias Kogen.Engine.Build.Guard
+  alias Kogen.Harness.Opts
+  alias Kogen.Harness.Tools
   alias Kogen.Testkit.Git
   alias Kogen.Testkit.Proc
   alias Kogen.Workspace
@@ -46,6 +49,71 @@ defmodule Kogen.Engine.BuildGuardTest do
 
     assert {:error, %Failure{class: :candidate, reason: :protected_edit, detail: detail}} =
              Guard.check(repo, base_sha, intent, project, manifest, %{})
+
+    assert detail =~ protected_path
+  end
+
+  test "rejects a protected file changed through the shell tool", %{tmp_dir: tmp_dir} do
+    repo = Git.create!(tmp_dir)
+    protected_path = "checks.yml"
+    original = "check: safe\n"
+    File.write!(Path.join(repo, protected_path), original)
+    git!(repo, ["add", protected_path])
+    git!(repo, ["commit", "--quiet", "-m", "protect checks"])
+    base_sha = repo |> git_output!(["rev-parse", "HEAD"]) |> String.trim()
+
+    project = %Project{
+      root: repo,
+      name: "guard-fixture",
+      checks: [],
+      setup: [],
+      fix: [],
+      diagnose: [],
+      protected_paths: [protected_path],
+      domains: %{"kernel" => ["lib/kogen/kernel"]}
+    }
+
+    intent = %Intent{
+      slug: "guard-fixture",
+      title: "Guard fixture",
+      size: :small,
+      brief: "Exercise the shell protected-file guard.",
+      acceptance: [],
+      domains: ["kernel"],
+      notes: nil,
+      path: "guard-fixture/intent.md",
+      sha256: String.duplicate("a", 64)
+    }
+
+    opts = %Opts{
+      workdir: repo,
+      run_dir: Path.join(tmp_dir, "run"),
+      project: project,
+      provider_mod: Kogen.Provider.Fake,
+      provider_config: nil,
+      proc_mod: Kogen.Proc,
+      protected: [protected_path]
+    }
+
+    call = %ToolCall{
+      id: "shell-protected-edit",
+      name: "shell",
+      arguments: %{"cmd" => "printf 'check: shell-edited\\n' > #{protected_path}"}
+    }
+
+    result = Tools.run(opts, call, [:shell])
+    refute result.is_error
+    assert File.read!(Path.join(repo, protected_path)) == "check: shell-edited\n"
+
+    assert {:error, %Failure{class: :candidate, reason: :protected_edit, detail: detail}} =
+             Guard.check(
+               repo,
+               base_sha,
+               intent,
+               project,
+               %{protected_path => sha256(original)},
+               %{}
+             )
 
     assert detail =~ protected_path
   end

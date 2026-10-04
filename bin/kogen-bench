@@ -9,8 +9,8 @@ usage() {
 [ "$#" -eq 3 ] || usage
 recipe=${KOGEN_BENCH_RECIPE:-staged}
 case "$recipe" in
-  staged|direct) ;;
-  *) echo "KOGEN_BENCH_RECIPE must be staged or direct" >&2; exit 2 ;;
+  staged|direct|direct-shell) ;;
+  *) echo "KOGEN_BENCH_RECIPE must be staged, direct, or direct-shell" >&2; exit 2 ;;
 esac
 task_dir=$(cd "$1" && pwd -P)
 work_dir=$(cd "$2" && pwd -P)

@@ -58,6 +58,40 @@ defmodule Kogen.E2e.BuildTest do
     assert %{"recipe" => "direct"} = :json.decode(report)
   end
 
+  test "direct-shell lands with shell edits only", context do
+    parent = scenario_parent(context, "direct-shell-recipe")
+
+    shell_edit = "cat > lib/tiny_app.ex <<'EOF'\n" <> ready_source("shell", :ready) <> "EOF"
+
+    script = [
+      ScriptedProvider.call(:develop, "shell", %{"cmd" => shell_edit}),
+      ScriptedProvider.answer(:develop, "Done.")
+    ]
+
+    result =
+      Build.run!(parent, script, %Options{
+        seed_project: context.seed_project,
+        recipe: "direct-shell"
+      })
+
+    assert %Result{build: %{status: :landed, landed_sha: landed_sha}, run_status: :landed} =
+             result
+
+    assert [started] = Enum.filter(result.events, &(&1.event == "started"))
+    assert started.recipe == "direct-shell"
+    assert [develop] = Enum.filter(result.events, &(&1.event == "model_stage"))
+    assert develop.stage == "develop"
+
+    [request, _done_request] = result.provider_requests
+    assert Enum.map(request.tools, & &1["name"]) == ["shell"]
+    assert request.instructions =~ "sed -n"
+    landed_source = Git.git!(result.fixture.origin, ["show", "#{landed_sha}:lib/tiny_app.ex"])
+    assert landed_source =~ "def value, do: :ready"
+
+    assert {:ok, report} = Build.report(result)
+    assert %{"recipe" => "direct-shell"} = :json.decode(report)
+  end
+
   defp happy_path(context) do
     parent = scenario_parent(context, "happy-path")
     result = Build.run!(parent, landing_script(), options(context.seed_project))

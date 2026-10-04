@@ -102,6 +102,19 @@ defmodule Kogen.Build.CycleTest do
     assert state.stage == :landed
   end
 
+  test "direct-shell recipe keeps the direct path and selects shell-only builder tools" do
+    recipe = Recipe.for_build("direct-shell", "scripted-model", "medium")
+
+    assert Recipe.name(recipe) == "direct-shell"
+    assert recipe.stages == [:develop, :done_gate, :fix, :check, :commit, :land]
+    assert recipe.builder_tools == :shell
+    assert recipe.roles == %{builder: {"scripted-model", "medium"}}
+
+    state = Cycle.new(%{approval: %{slug: "sample"}, repairs: 2, recipe: recipe})
+    {state, [{:run, :develop, _args}]} = Cycle.step(state, :start)
+    assert state.stage == :develop
+  end
+
   defp state_at(stage, overrides \\ []) do
     state =
       Cycle.new(%{
