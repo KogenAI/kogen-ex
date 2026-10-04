@@ -80,6 +80,60 @@ defmodule Kogen.E2e.DirectEscalationTest do
     assert escalated["tokens"]["input"] == 0
   end
 
+  test "escalate-shell keeps shell-only tools in Luna and Sol attempts", context do
+    seed_project =
+      Build.prepare_seed!(Path.join(context.tmp_dir, "shell-seed"),
+        project_config: gate_project()
+      )
+
+    parent = Path.join(context.tmp_dir, "escalate-shell")
+    File.mkdir_p!(parent)
+
+    script = [
+      shell_edit("luna", :wrong),
+      ScriptedProvider.answer(:develop, "Done."),
+      ScriptedProvider.answer(:develop, "Done."),
+      shell_edit("sol", :ready),
+      ScriptedProvider.answer(:develop, "Done.")
+    ]
+
+    result =
+      Build.run!(parent, script, %Options{
+        seed_project: seed_project,
+        recipe: "escalate-shell",
+        builder_model: "gpt-6-luna",
+        builder_effort: "max"
+      })
+
+    assert %Result{build: %{status: :landed, landed_sha: sha}, run_status: :landed} = result
+
+    assert Enum.map(result.provider_requests, & &1.model) ==
+             List.duplicate("gpt-6-luna", 3) ++ List.duplicate("gpt-6.1-sol", 2)
+
+    assert Enum.all?(
+             result.provider_requests,
+             &(Enum.map(&1.tools, fn tool -> tool["name"] end) == ["shell"])
+           )
+
+    assert [escalation] = Enum.filter(result.events, &(&1.event == "escalation_started"))
+    assert escalation.attempt == "escalation"
+
+    assert Enum.map(Enum.filter(result.events, &(&1.event == "model_stage")), & &1.attempt) == [
+             "builder",
+             "builder",
+             "escalation"
+           ]
+
+    source = Git.git!(result.fixture.origin, ["show", "#{sha}:lib/tiny_app.ex"])
+    assert source =~ "# revision: sol"
+    assert source =~ "def value, do: :ready"
+  end
+
+  defp shell_edit(marker, value) do
+    command = "cat > lib/tiny_app.ex <<'EOF'\n" <> source(marker, value) <> "EOF"
+    ScriptedProvider.call(:develop, "shell", %{"cmd" => command})
+  end
+
   defp source(marker, value) do
     """
     defmodule TinyApp do

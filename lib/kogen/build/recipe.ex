@@ -19,34 +19,29 @@ defmodule Kogen.Build.Recipe do
         }
 
   @staged_stages [:context, :plan, :develop, :done_gate, :fix, :check, :review, :commit, :land]
+  @plan_shell_stages [:plan, :develop, :done_gate, :fix, :check, :commit, :land]
   @direct_stages [:develop, :done_gate, :fix, :check, :commit, :land]
 
   @spec for_build(String.t(), String.t(), String.t()) :: t()
   def for_build(name, builder_model, builder_effort)
-      when name in ["staged", "direct", "direct-shell", "direct-escalate"] and
-             is_binary(builder_model) and is_binary(builder_effort) do
-    stages = if name == "staged", do: @staged_stages, else: @direct_stages
+      when name in [
+             "staged",
+             "plan-shell",
+             "direct",
+             "direct-shell",
+             "direct-escalate",
+             "escalate-shell"
+           ] and is_binary(builder_model) and is_binary(builder_effort) do
     builder = {builder_model, builder_effort}
 
-    roles =
-      case name do
-        "staged" ->
-          %{
-            context: {"gpt-6-luna", "low"},
-            planner: {"gpt-6.1-sol", "high"},
-            builder: builder,
-            reviewer: {"gpt-6.1-sol", "high"}
-          }
+    recipe = %{
+      name: name,
+      stages: stages_for(name),
+      roles: roles_for(name, builder),
+      builder_tools: builder_tools(name)
+    }
 
-        direct_recipe when direct_recipe in ["direct", "direct-shell", "direct-escalate"] ->
-          %{builder: builder}
-      end
-
-    builder_tools = if name == "direct-shell", do: :shell, else: :full
-
-    recipe = %{name: name, stages: stages, roles: roles, builder_tools: builder_tools}
-
-    if name == "direct-escalate" do
+    if name in ["direct-escalate", "escalate-shell"] do
       Map.put(recipe, :escalation, %{
         model: "gpt-6.1-sol",
         effort: "high",
@@ -57,9 +52,36 @@ defmodule Kogen.Build.Recipe do
     end
   end
 
+  defp stages_for("staged"), do: @staged_stages
+  defp stages_for("plan-shell"), do: @plan_shell_stages
+  defp stages_for(_direct_recipe), do: @direct_stages
+
+  defp roles_for("staged", builder) do
+    %{
+      context: {"gpt-6-luna", "low"},
+      planner: {"gpt-6.1-sol", "high"},
+      builder: builder,
+      reviewer: {"gpt-6.1-sol", "high"}
+    }
+  end
+
+  defp roles_for("plan-shell", builder), do: %{planner: {"gpt-6.1-sol", "high"}, builder: builder}
+
+  defp roles_for(_direct_recipe, builder), do: %{builder: builder}
+
+  defp builder_tools(name),
+    do: if(name in ["direct-shell", "plan-shell", "escalate-shell"], do: :shell, else: :full)
+
   @spec name(t()) :: String.t()
-  def name(%{name: name}) when name in ["staged", "direct", "direct-shell", "direct-escalate"],
-    do: name
+  def name(%{name: name})
+      when name in [
+             "staged",
+             "plan-shell",
+             "direct",
+             "direct-shell",
+             "direct-escalate",
+             "escalate-shell"
+           ], do: name
 
   @spec stages(t()) :: [stage()]
   def stages(%{stages: stages}) when is_list(stages), do: stages

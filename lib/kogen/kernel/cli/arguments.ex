@@ -134,8 +134,16 @@ defmodule Kogen.Kernel.CLI.Arguments do
     recipe = Keyword.get(options, :recipe, "staged")
 
     cond do
-      recipe not in ["staged", "direct", "direct-shell", "direct-escalate"] ->
-        {:error, "--recipe must be staged, direct, direct-shell, or direct-escalate"}
+      recipe not in [
+        "staged",
+        "plan-shell",
+        "direct",
+        "direct-shell",
+        "direct-escalate",
+        "escalate-shell"
+      ] ->
+        {:error,
+         "--recipe must be staged, plan-shell, direct, direct-shell, direct-escalate, or escalate-shell"}
 
       borrow not in [nil, "codex"] ->
         {:error, "--borrow only supports codex"}

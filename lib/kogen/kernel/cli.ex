@@ -13,7 +13,7 @@ defmodule Kogen.Kernel.CLI do
     intent check <path>   Parse and lint an Intent
     intent shape <slug>   Create and validate an Intent (--task-file)
     approve <slug>        Review and record an Intent approval (--by, --yes)
-    build <slug>          Build and land an approved Intent (--recipe staged|direct|direct-shell, --model, --effort)
+    build <slug>          Build and land an approved Intent (--recipe, --model, --effort)
     provider list         List saved ChatGPT accounts
     provider login chatgpt [--as <label>]
                           Sign in using "Continue with ChatGPT"

@@ -171,6 +171,15 @@ defmodule Kogen.Build.CycleTest do
     assert state.stage == :develop
   end
 
+  test "plan-shell and escalate-shell follow their declared Cycle stage order" do
+    for name <- ["plan-shell", "escalate-shell"] do
+      recipe = Recipe.for_build(name, "scripted-model", "medium")
+
+      assert recipe.builder_tools == :shell
+      assert successful_cycle_stages(recipe) == recipe.stages
+    end
+  end
+
   test "direct-escalate only escalates terminal builder failures once" do
     recipe = Recipe.for_build("direct-escalate", "gpt-6-luna", "max")
 
@@ -241,14 +250,45 @@ defmodule Kogen.Build.CycleTest do
   end
 
   defp state_at(stage, overrides \\ []) do
-    state =
-      Cycle.new(%{
-        approval: %{slug: "sample"},
-        repairs: 2,
-        recipe: staged_recipe()
-      })
+    state = Cycle.new(%{approval: %{slug: "sample"}, repairs: 2, recipe: staged_recipe()})
 
     struct!(state, Keyword.put(overrides, :stage, stage))
+  end
+
+  defp successful_cycle_stages(recipe) do
+    state = Cycle.new(%{approval: %{slug: "sample"}, repairs: 2, recipe: recipe})
+    {state, effects} = Cycle.step(state, :start)
+    drive_successful_cycle(state, run_stages(effects))
+  end
+
+  defp drive_successful_cycle(%{stage: :done_gate} = state, stages) do
+    {next, effects} = Cycle.step(state, {:stage_ok, :done_gate, %{outcome: :done}})
+    drive_successful_cycle(next, stages ++ [:done_gate] ++ run_stages(effects))
+  end
+
+  defp drive_successful_cycle(%{stage: :land} = state, stages) do
+    {landed, effects} = Cycle.step(state, {:landed, "candidate"})
+    assert landed.result == {:landed, "candidate"}
+    assert [{:record, %{event: :finished}}, {:finish, :landed, "candidate"}] = effects
+    stages
+  end
+
+  defp drive_successful_cycle(state, stages) do
+    {next, effects} = Cycle.step(state, cycle_success_event(state.stage))
+    drive_successful_cycle(next, stages ++ run_stages(effects))
+  end
+
+  defp cycle_success_event(:plan), do: {:stage_ok, :plan, %{}}
+  defp cycle_success_event(:develop), do: {:stage_ok, :develop, %{tree: "tree-1"}}
+  defp cycle_success_event(:fix), do: {:stage_ok, :fix, %{}}
+  defp cycle_success_event(:check), do: {:stage_ok, :check, %{status: :pass}}
+  defp cycle_success_event(:commit), do: {:stage_ok, :commit, landing_data()}
+
+  defp run_stages(effects) do
+    Enum.flat_map(effects, fn
+      {:run, stage, _args} -> [stage]
+      _effect -> []
+    end)
   end
 
   defp staged_recipe, do: Recipe.for_build("staged", "scripted-model", "medium")

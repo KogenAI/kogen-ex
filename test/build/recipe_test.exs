@@ -40,4 +40,31 @@ defmodule Kogen.Build.RecipeTest do
              on: [:repair_cap, :unchanged, :gate_red]
            }
   end
+
+  test "plan-shell and escalate-shell define shell-only builder recipes" do
+    plan_shell = Recipe.for_build("plan-shell", "gpt-6-luna", "max")
+
+    assert plan_shell.stages == [:plan, :develop, :done_gate, :fix, :check, :commit, :land]
+    assert plan_shell.builder_tools == :shell
+
+    assert plan_shell.roles == %{
+             planner: {"gpt-6.1-sol", "high"},
+             builder: {"gpt-6-luna", "max"}
+           }
+
+    refute Map.has_key?(plan_shell.roles, :context)
+    refute Map.has_key?(plan_shell.roles, :reviewer)
+
+    escalate_shell = Recipe.for_build("escalate-shell", "gpt-6-luna", "max")
+
+    assert escalate_shell.stages == [:develop, :done_gate, :fix, :check, :commit, :land]
+    assert escalate_shell.builder_tools == :shell
+    assert escalate_shell.roles == %{builder: {"gpt-6-luna", "max"}}
+
+    assert escalate_shell.escalation == %{
+             model: "gpt-6.1-sol",
+             effort: "high",
+             on: [:repair_cap, :unchanged, :gate_red]
+           }
+  end
 end

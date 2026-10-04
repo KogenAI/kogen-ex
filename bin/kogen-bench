@@ -9,8 +9,8 @@ usage() {
 [ "$#" -eq 3 ] || usage
 recipe=${KOGEN_BENCH_RECIPE:-staged}
 case "$recipe" in
-  staged|direct|direct-shell|direct-escalate) ;;
-  *) echo "KOGEN_BENCH_RECIPE must be staged, direct, direct-shell, or direct-escalate" >&2; exit 2 ;;
+  staged|plan-shell|direct|direct-shell|direct-escalate|escalate-shell) ;;
+  *) echo "KOGEN_BENCH_RECIPE must be staged, plan-shell, direct, direct-shell, direct-escalate, or escalate-shell" >&2; exit 2 ;;
 esac
 builder_model=${KOGEN_BENCH_MODEL:-gpt-6-luna}
 builder_effort=${KOGEN_BENCH_EFFORT:-max}

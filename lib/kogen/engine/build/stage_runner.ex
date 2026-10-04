@@ -7,7 +7,7 @@ defmodule Kogen.Engine.Build.StageRunner do
   alias Kogen.Engine.Build.Commit
   alias Kogen.Engine.Build.GateSupport
   alias Kogen.Engine.Build.Guard
-  alias Kogen.Engine.Build.PhaseTiming
+  alias Kogen.Engine.Build.PhaseTiming, as: Timing
   alias Kogen.Engine.Build.Reviewer
   alias Kogen.Engine.Build.Session
   alias Kogen.Harness
@@ -23,8 +23,7 @@ defmodule Kogen.Engine.Build.StageRunner do
   def run(:plan, _args, session), do: plan(session)
   def run(:develop, args, session), do: develop(args, session)
 
-  def run(:fix, _args, session),
-    do: PhaseTiming.measure(session, "build", "fix-loop", fn -> fix(session) end)
+  def run(:fix, _args, s), do: Timing.measure(s, "build", "fix-loop", fn -> fix(s) end)
 
   def run(:check, _args, session), do: checks(session)
   def run(:review, _args, session), do: Reviewer.run(session)
@@ -63,7 +62,16 @@ defmodule Kogen.Engine.Build.StageRunner do
     end
   end
 
-  defp plan(%Session{pack: pack} = session) do
+  defp plan(%Session{pack: nil} = session) do
+    case preflight(session) do
+      :ok -> plan_provider(session)
+      {:error, %Failure{} = failure} -> fail(session, :plan, failure)
+    end
+  end
+
+  defp plan(%Session{} = session), do: plan_provider(session)
+
+  defp plan_provider(%Session{pack: pack} = session) do
     started_at = System.monotonic_time(:millisecond)
     {model, effort} = Recipe.role(session.request.recipe, :planner)
 
@@ -94,9 +102,9 @@ defmodule Kogen.Engine.Build.StageRunner do
   end
 
   defp develop(args, %Session{request: %{recipe: %{name: name}}} = session)
-       when name in ["direct", "direct-shell", "direct-escalate"] and
+       when name in ["direct", "direct-shell", "direct-escalate", "escalate-shell"] and
               not session.direct_preflight_complete? do
-    case direct_preflight(session) do
+    case preflight(session) do
       :ok -> develop_harness(%{session | direct_preflight_complete?: true}, args)
       {:error, %Failure{} = failure} -> fail(session, :develop, failure)
     end
@@ -123,7 +131,7 @@ defmodule Kogen.Engine.Build.StageRunner do
     end
   end
 
-  defp direct_preflight(session) do
+  defp preflight(session) do
     case guard(session) do
       :ok ->
         case GateSupport.red_on_base(session) do

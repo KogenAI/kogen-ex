@@ -25,8 +25,9 @@ defmodule Kogen.Harness do
   @spec context_pack(Opts.t(), String.t()) :: {:ok, Pack.t()} | {:error, term()}
   def context_pack(%Opts{} = opts, intent_text), do: Stages.context_pack(opts, intent_text)
 
-  @spec plan(Opts.t(), Pack.t(), String.t()) :: {:ok, Plan.t()} | {:error, term()}
-  def plan(%Opts{} = opts, %Pack{} = pack, intent_text), do: Stages.plan(opts, pack, intent_text)
+  @spec plan(Opts.t(), Pack.t() | nil, String.t()) :: {:ok, Plan.t()} | {:error, term()}
+  def plan(%Opts{} = opts, pack, intent_text) when is_nil(pack) or is_struct(pack, Pack),
+    do: Stages.plan(opts, pack, intent_text)
 
   @spec develop(Opts.t(), String.t(), Plan.t() | nil, map() | nil) ::
           {:ok, Result.t()} | {:error, term()}

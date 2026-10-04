@@ -95,7 +95,7 @@ defmodule Kogen.Build.Cycle do
 
   def step(%State{stage: :ready} = state, :start) do
     case List.first(Recipe.stages(state.recipe)) do
-      stage when stage in [:context, :develop] ->
+      stage when stage in [:context, :plan, :develop] ->
         next = %{state | stage: stage}
         {next, [run(stage, stage_args(next))]}
 
