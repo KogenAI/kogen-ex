@@ -211,6 +211,7 @@ defmodule Kogen.E2e.Build do
 
     ## Notes
     Keep the implementation inside lib/tiny_app.ex.
+    #{request_section()}
     """
 
     acceptance = """
@@ -232,6 +233,9 @@ defmodule Kogen.E2e.Build do
     File.write!(intent_path, intent)
     File.write!(acceptance_path, acceptance)
   end
+
+  defp request_section,
+    do: "\n## Request\nPreserve this fixture wording verbatim as source context."
 
   defp write_seed!(seed, options) do
     files = %{

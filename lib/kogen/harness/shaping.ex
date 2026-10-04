@@ -42,6 +42,7 @@ defmodule Kogen.Harness.Shaping do
   - `.kogen/acceptance/<slug>_test.exs`
 
   Use this exact Intent structure. Replace every placeholder with real content; do not add a `## Brief` heading.
+  Do not write a `## Request` section. Kogen appends the original task text verbatim after shaping; it is not linted or rewritten.
 
   ```markdown
   ---

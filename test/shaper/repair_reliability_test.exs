@@ -80,6 +80,8 @@ defmodule Kogen.Shaper.RepairReliabilityTest do
     Approach: Add Tiny.new_value/0 returning :new while preserving Tiny.value/0 and its existing result.
     """
 
+    generated_intent = intent_bytes <> "\n## Request\nA model-authored substitute."
+
     acceptance_bytes = """
     defmodule Tiny.Acceptance.ShapeLoopTest do
       use ExUnit.Case, async: true
@@ -102,7 +104,7 @@ defmodule Kogen.Shaper.RepairReliabilityTest do
     {:ok, server} =
       ScriptedProvider.start_link([
         ScriptedProvider.write_many(:shape, [
-          {intent_path(), intent_bytes},
+          {intent_path(), generated_intent},
           {acceptance_path(), acceptance_bytes}
         ])
       ])
@@ -110,7 +112,10 @@ defmodule Kogen.Shaper.RepairReliabilityTest do
     config = %Config{server: server}
 
     try do
-      task = "Add Tiny.new_value/0 while preserving Tiny.value/0."
+      task =
+        "Add Tiny.new_value/0 while preserving Tiny.value/0.\r\n## Acceptance\r\n" <>
+          String.duplicate("ensure robust ", 300) <> "TODO??\r\n"
+
       assert {:ok, result} = Shaper.shape(request(project, tmp_dir, config, task))
       assert result.rounds == 1
       assert length(result.calls) == 1
@@ -122,6 +127,7 @@ defmodule Kogen.Shaper.RepairReliabilityTest do
       rewritten = File.read!(result.intent_path)
       assert rewritten =~ "- A1: test keep domain=app"
       assert rewritten =~ "- A2: test domain=app"
+      assert {:ok, %{request: ^task}} = Kogen.Intent.parse_binary(rewritten, result.intent_path)
       assert warning.message =~ "A1 changed from test to test keep"
       assert warning.message =~ "green on the base"
 

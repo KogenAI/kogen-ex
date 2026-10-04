@@ -30,6 +30,7 @@ defmodule Kogen.Intent.IntentTest do
     assert intent.title == "Strip accents"
     assert intent.size == :small
     assert intent.brief == "Slugs keep their readable form. Out of scope: other scripts."
+    assert intent.request == nil
     assert intent.domains == ["intent"]
     assert intent.notes == "Read `Kogen.Intent.parse/2` before editing the caller."
 
@@ -62,6 +63,23 @@ defmodule Kogen.Intent.IntentTest do
              :sha256 |> :crypto.hash("intent\n") |> Base.encode16(case: :lower)
 
     refute Kogen.Intent.hash("intent\n") == Kogen.Intent.hash("intent")
+  end
+
+  test "preserves the Request section verbatim, hashes it, and excludes it from lint" do
+    request =
+      "ensure robust behaviour without paraphrase\r\n## Notes\r\n```elixir\r\n" <>
+        String.duplicate("robust ", 700) <> "TODO??\r\n"
+
+    source = String.trim_trailing(@source) <> "\n\n## Request\n" <> request
+
+    assert {:ok, intent} = Kogen.Intent.parse_binary(source, "strip-accents/intent.md")
+    assert intent.request == request
+    assert intent.sha256 == Kogen.Intent.hash(source)
+    refute intent.sha256 == Kogen.Intent.hash(String.trim_trailing(@source))
+
+    refute Enum.any?(Kogen.Intent.lint(intent), fn issue ->
+             issue.rule in [:banned_phrase, :notes_too_long, :open_question]
+           end)
   end
 
   test "reports frontmatter parser errors at source line numbers" do

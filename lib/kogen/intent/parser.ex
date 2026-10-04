@@ -1,6 +1,6 @@
 defmodule Kogen.Intent.Parser.SectionLines do
   @moduledoc false
-  defstruct current: :brief, seen: [], brief: [], acceptance: [], verify: [], notes: []
+  defstruct [:current, seen: [], brief: [], acceptance: [], verify: [], notes: [], request: []]
 end
 
 defmodule Kogen.Intent.Parser.Metadata do
@@ -172,25 +172,29 @@ defmodule Kogen.Intent.Parser do
     body
     |> String.split("\n", trim: false)
     |> Enum.with_index(start_line)
-    |> Enum.reduce_while({:ok, %SectionLines{}}, &collect_section_line/2)
+    |> Enum.reduce_while({:ok, %SectionLines{current: :brief}}, &collect_section_line/2)
     |> finish_sections()
   end
 
   defp collect_section_line({text, line}, {:ok, sections}) do
-    text = strip_cr(text)
+    if sections.current == :request do
+      {:cont, {:ok, append_line(sections, {line, text})}}
+    else
+      text = strip_cr(text)
 
-    case section_heading(String.trim(text)) do
-      nil ->
-        {:cont, {:ok, append_line(sections, {line, text})}}
+      case section_heading(String.trim(text)) do
+        nil ->
+          {:cont, {:ok, append_line(sections, {line, text})}}
 
-      {:unknown, _name} when sections.current == :brief ->
-        {:cont, {:ok, append_line(sections, {line, text})}}
+        {:unknown, _name} when sections.current == :brief ->
+          {:cont, {:ok, append_line(sections, {line, text})}}
 
-      {:unknown, name} ->
-        {:halt, error(line, "unknown Intent section #{inspect(name)}")}
+        {:unknown, name} ->
+          {:halt, error(line, "unknown Intent section #{inspect(name)}")}
 
-      section ->
-        enter_section(sections, section, line)
+        section ->
+          enter_section(sections, section, line)
+      end
     end
   end
 
@@ -205,12 +209,14 @@ defmodule Kogen.Intent.Parser do
   defp section_heading("## Acceptance"), do: :acceptance
   defp section_heading("## Verify"), do: :verify
   defp section_heading("## Notes"), do: :notes
+  defp section_heading("## Request"), do: :request
   defp section_heading("## " <> name), do: {:unknown, name}
   defp section_heading(_text), do: nil
 
   defp section_name(:acceptance), do: "Acceptance"
   defp section_name(:verify), do: "Verify"
   defp section_name(:notes), do: "Notes"
+  defp section_name(:request), do: "Request"
 
   defp append_line(%SectionLines{current: :brief} = sections, line),
     do: %{sections | brief: [line | sections.brief]}
@@ -224,6 +230,9 @@ defmodule Kogen.Intent.Parser do
   defp append_line(%SectionLines{current: :notes} = sections, line),
     do: %{sections | notes: [line | sections.notes]}
 
+  defp append_line(%SectionLines{current: :request} = sections, line),
+    do: %{sections | request: [line | sections.request]}
+
   defp finish_sections({:ok, sections}) do
     {:ok,
      %{
@@ -231,7 +240,8 @@ defmodule Kogen.Intent.Parser do
        | brief: Enum.reverse(sections.brief),
          acceptance: Enum.reverse(sections.acceptance),
          verify: Enum.reverse(sections.verify),
-         notes: Enum.reverse(sections.notes)
+         notes: Enum.reverse(sections.notes),
+         request: Enum.reverse(sections.request)
      }}
   end
 
@@ -339,6 +349,7 @@ defmodule Kogen.Intent.Parser do
     acceptance = Enum.map(acceptance, &attach_verify(&1, verifies))
     notes = sections.notes |> Enum.map_join("\n", &elem(&1, 1)) |> String.trim()
     brief = sections.brief |> Enum.map_join("\n", &elem(&1, 1)) |> String.trim()
+    request = Enum.map_join(sections.request, "\n", &elem(&1, 1))
     parent = Path.basename(Path.dirname(path))
     slug = if parent == ".", do: Path.basename(path, Path.extname(path)), else: parent
 
@@ -347,6 +358,7 @@ defmodule Kogen.Intent.Parser do
       title: metadata.title,
       size: metadata.size,
       brief: brief,
+      request: if(:request in sections.seen, do: request),
       acceptance: acceptance,
       domains: metadata.domains,
       notes: if(notes == "", do: nil, else: notes),

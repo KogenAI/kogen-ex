@@ -66,6 +66,10 @@ defmodule Kogen.E2e.PlanShellTest do
         files <> "```\n"
 
     assert user_text(planner) == expected_planner_input
+
+    assert user_text(planner) =~
+             "## Request\nPreserve this fixture wording verbatim as source context."
+
     refute user_text(planner) =~ "defmodule TinyApp do"
 
     assert length(
@@ -77,6 +81,7 @@ defmodule Kogen.E2e.PlanShellTest do
 
     builder_text = user_text(builder_edit)
     assert builder_text =~ "Approved Intent:\n#{intent}"
+    assert builder_text =~ "## Request\nPreserve this fixture wording verbatim as source context."
 
     assert builder_text =~
              "## Implementation plan\n\nA senior engineer prepared the plan below by investigating a scratch copy of this repository"

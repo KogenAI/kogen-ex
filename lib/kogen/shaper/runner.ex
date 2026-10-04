@@ -246,7 +246,11 @@ defmodule Kogen.Shaper.Runner do
        ), do: {:error, failure}
 
   defp normalize_generated_intent(request, path, bytes, attempt_number) do
-    normalized = Validation.normalize_intent(bytes)
+    normalized =
+      bytes
+      |> Validation.normalize_intent()
+      |> without_generated_request()
+      |> append_request(request.task)
 
     if normalized == bytes do
       {:ok, bytes}
@@ -265,6 +269,20 @@ defmodule Kogen.Shaper.Runner do
            )}
       end
     end
+  end
+
+  defp without_generated_request(bytes) do
+    lines = String.split(bytes, "\n", trim: false)
+
+    case Enum.find_index(lines, &(String.trim(&1) == "## Request")) do
+      nil -> bytes
+      index -> lines |> Enum.take(index) |> Enum.join("\n")
+    end
+  end
+
+  defp append_request(bytes, request) do
+    separator = if String.ends_with?(bytes, "\n"), do: "\n", else: "\n\n"
+    bytes <> separator <> "## Request\n" <> request
   end
 
   defp read_generated(workdir, relative) do

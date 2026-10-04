@@ -57,7 +57,10 @@ defmodule Kogen.Shaper.Tests do
       assert run_log =~ "attempt=2 validation_failed"
       assert run_log =~ "attempt=3 started turns_used=3/60"
       assert run_log =~ "attempt=3 validation_passed"
-      assert File.read!(result.intent_path) == valid_intent
+
+      assert File.read!(result.intent_path) ==
+               valid_intent <> "\n## Request\n" <> shape_request.task
+
       assert File.read!(result.acceptance_path) == test_source
       refute File.exists?(Path.join(project, "README.md"))
       refute File.exists?(Path.join(project, "test/acceptance/shape-loop_test.exs"))

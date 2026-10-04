@@ -7,7 +7,7 @@ defmodule Kogen.Shaper.Validation do
 
   @approach_action ~r/\b(?:add|advance|calculate|change|compare|compute|count|derive|extend|filter|handle|implement|keep|limit|map|move|normalize|parse|preserve|record|replace|return|route|run|schedule|shift|skip|store|update|use|validate|wrap)\b/i
   @approach_action_at_start ~r/\A(?:add|advance|calculate|change|compare|compute|count|derive|extend|filter|handle|implement|keep|limit|map|move|normalize|parse|preserve|record|replace|return|route|run|schedule|shift|skip|store|update|use|validate|wrap)\b/i
-  @notes_section ~r/(^## Notes[ \t]*\R)(.*)\z/ms
+  @notes_section ~r/(^## Notes[ \t]*\R)(.*?)(?=^## Request[ \t]*\R|\z)/ms
   @approach_label ~r/\A(\s*)approach\s*:\s*(.*)\z/is
 
   @spec normalize_intent(binary()) :: binary()

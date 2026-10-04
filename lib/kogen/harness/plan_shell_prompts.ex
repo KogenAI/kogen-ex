@@ -14,6 +14,7 @@ defmodule Kogen.Harness.PlanShellPrompts do
   4. Pitfalls: likely mistakes, version caveats, interactions (transactions, callbacks, ordering, nesting, rollback), and anything the existing tests will not catch.
   5. Verification: the commands to run, a targeted check that exercises the changed code path directly (a new test or a one-off script whose result differs between a correct and an incorrect implementation, with the expected output), and the final full-suite command. Do not modify existing tests unless the task allows it.
   Do not say you cannot see the repository. If the material lacks something, state the assumption and tell the builder how to check it.
+  The approved Intent can end with a `## Request` section copied verbatim from the original task. Read it for source context and edge cases. Acceptance items remain the completion gate; Request is context.
   """
 
   @ls_files_suffix """
