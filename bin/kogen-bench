@@ -40,13 +40,68 @@ work_status=$(git -C "$work_dir" status --porcelain --untracked-files=all)
   exit 2
 }
 
-scratch=$(mktemp -d "/tmp/kogen-bench.XXXXXX")
+bench_tmpdir=$(python3 - "$task_json" <<'PY'
+import json
+import os
+import sys
+
+with open(sys.argv[1], encoding="utf-8") as source:
+    document = json.load(source)
+env = document.get("env", {})
+if isinstance(env, list):
+    env = dict(entry.split("=", 1) for entry in env if isinstance(entry, str) and "=" in entry)
+if not isinstance(env, dict):
+    env = {}
+print(os.path.abspath(env.get("TMPDIR") or os.environ.get("TMPDIR") or "/tmp"))
+PY
+)
+mkdir -p "$bench_tmpdir"
+scratch=$(mktemp -d "${bench_tmpdir%/}/kogen-bench.XXXXXX")
 trap 'rm -rf "$scratch"' EXIT
 project_dir="$scratch/project"
 origin="$scratch/origin.git"
+events_file="$out_dir/events.jsonl"
+timings_file="$scratch/phase-events.jsonl"
+phase_file="$scratch/phase"
+timer_script="$scratch/bench_timer.py"
+bench_started_ns=$(python3 -c 'import time; print(time.monotonic_ns())')
 mkdir -p "$out_dir"
 : > "$log_file"
 : > "$out_dir/final.diff"
+: > "$timings_file"
+: > "$events_file"
+printf 'shape\n' > "$phase_file"
+cat > "$timer_script" <<'PY'
+import json
+import subprocess
+import sys
+import time
+
+phase_path, event_path, name = sys.argv[1:4]
+argv = sys.argv[5:]
+if argv[:1] == ["--"]:
+    argv = argv[1:]
+if not argv:
+    raise SystemExit("benchmark timer requires a command")
+
+phase = open(phase_path, encoding="utf-8").read().strip()
+started_at = time.time_ns() // 1_000_000
+started = time.monotonic_ns()
+status = subprocess.run(argv, check=False).returncode
+wall_ms = max((time.monotonic_ns() - started) // 1_000_000, 0)
+finished_at = time.time_ns() // 1_000_000
+row = {
+    "event": "phase_timing",
+    "phase": phase,
+    "name": name,
+    "wall_ms": int(wall_ms),
+    "started_at": int(started_at),
+    "finished_at": int(finished_at),
+}
+with open(event_path, "a", encoding="utf-8") as target:
+    target.write(json.dumps(row, separators=(",", ":")) + "\n")
+raise SystemExit(status)
+PY
 cat > "$out_dir/usage.json" <<JSON
 {
   "recipe": "$recipe",
@@ -62,14 +117,15 @@ JSON
 git clone --quiet "$work_dir" "$project_dir"
 git -C "$project_dir" checkout --quiet -B main "$work_base"
 mkdir -p "$project_dir/.kogen"
-python3 - "$task_json" "$project_dir/.kogen/project.yaml" "$scratch/project_tmpdir" <<'PY'
+python3 - "$task_json" "$project_dir/.kogen/project.yaml" "$scratch/project_tmpdir" \
+  "$timer_script" "$phase_file" "$timings_file" <<'PY'
 import json
 import os
 import re
 import shutil
 import sys
 
-source_path, target_path, tmpdir_path = sys.argv[1:]
+source_path, target_path, tmpdir_path, timer_path, phase_path, event_path = sys.argv[1:]
 with open(source_path, encoding="utf-8") as source:
     document = json.load(source)
 
@@ -84,6 +140,9 @@ elif isinstance(raw_env, list):
             env[key] = value
 else:
     env = {}
+
+if env.get("TMPDIR"):
+    env["TMPDIR"] = os.path.abspath(env["TMPDIR"])
 
 # Kogen forwards only an allow-list of controller variables; copy named extras into the project env.
 for key in os.environ.get("KOGEN_BENCH_ENV_PASSTHROUGH", "").split():
@@ -117,23 +176,25 @@ if not prefix and not (env.get("PATH") and shutil.which("mix", path=env["PATH"])
     prefix = ["mise", "exec", "--"]
 quote = lambda value: json.dumps(str(value), ensure_ascii=False)
 array = lambda values: "[" + ", ".join(quote(value) for value in values) + "]"
+timer_prefix = [sys.executable, timer_path, phase_path, event_path]
+timed = lambda name, argv: timer_prefix + [name, "--"] + argv
 
 lines = [
     "name: kogen-bench",
-    "format: " + array(prefix + ["mix", "format"]),
+    "format: " + array(timed("format", prefix + ["mix", "format"])),
     "checks:",
     "  - name: tests",
-    "    argv: " + array(prefix + ["mix", "test"]),
+    "    argv: " + array(timed("check:tests", prefix + ["mix", "test"])),
     "    timeout_ms: 900000",
     "  - name: format",
-    "    argv: " + array(prefix + ["mix", "format", "--check-formatted"]),
+    "    argv: " + array(timed("check:format", prefix + ["mix", "format", "--check-formatted"])),
     "    timeout_ms: 300000",
     "acceptance_checks:",
     "  - name: compile-acceptance",
-    "    argv: " + array(prefix + ["mix", "test", "--dry-run", "{path}"]),
+    "    argv: " + array(timed("acceptance:compile-acceptance", prefix + ["mix", "test", "--dry-run", "{path}"])),
     "    timeout_ms: 600000",
     "  - name: format-acceptance",
-    "    argv: " + array(prefix + ["mix", "format", "--check-formatted", "{path}"]),
+    "    argv: " + array(timed("acceptance:format-acceptance", prefix + ["mix", "format", "--check-formatted", "{path}"])),
     "    timeout_ms: 300000",
 ]
 
@@ -164,6 +225,7 @@ else:
     setup_argv = []
 
 if setup_argv:
+    setup_argv = timed("setup:task-setup", setup_argv)
     lines += [
         "setup:",
         "  - name: task-setup",
@@ -197,22 +259,73 @@ else
   export MISE_TRUSTED_CONFIG_PATHS="$project_dir"
 fi
 
+log_line() {
+  python3 - "$log_file" "$1" <<'PY'
+import datetime
+import sys
+
+path, line = sys.argv[1:]
+stamp = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+with open(path, "a", encoding="utf-8") as target:
+    target.write(f"[{stamp}] {line}\n")
+PY
+}
+
+log_file_timestamped() {
+  python3 - "$1" "$log_file" <<'PY'
+import datetime
+import sys
+
+source_path, target_path = sys.argv[1:]
+with open(source_path, encoding="utf-8", errors="replace") as source:
+    with open(target_path, "a", encoding="utf-8") as target:
+        for line in source:
+            stamp = datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="milliseconds").replace("+00:00", "Z")
+            target.write(f"[{stamp}] {line.rstrip()}\n")
+PY
+}
+
 run_capture() {
   name=$1
   capture=$2
   shift 2
   capture_started=$(python3 -c 'import time; print(time.monotonic_ns())')
-  printf '\n--- %s ---\n' "$name" >> "$log_file"
-  if "$@" > "$capture" 2>> "$log_file"; then
+  capture_started_at=$(python3 -c 'import time; print(time.time_ns() // 1000000)')
+  printf '%s\n' "$name" > "$phase_file"
+  log_line "--- $name ---"
+  if "$@" > "$capture" 2>"$capture.stderr"; then
     status=0
   else
     status=$?
   fi
   capture_finished=$(python3 -c 'import time; print(time.monotonic_ns())')
+  capture_finished_at=$(python3 -c 'import time; print(time.time_ns() // 1000000)')
   CAPTURE_WALL_MS=$(((capture_finished - capture_started) / 1000000))
-  cat "$capture" >> "$log_file"
+  CAPTURE_STARTED_AT=$capture_started_at
+  CAPTURE_FINISHED_AT=$capture_finished_at
+  log_file_timestamped "$capture.stderr"
+  log_file_timestamped "$capture"
+  rm -f "$capture.stderr"
+  if [ "$name" = report ]; then
+    python3 - "$timings_file" "$CAPTURE_WALL_MS" "$CAPTURE_STARTED_AT" "$CAPTURE_FINISHED_AT" <<'PY'
+import json
+import sys
+
+path, wall_ms, started_at, finished_at = sys.argv[1:]
+row = {
+    "event": "phase_timing",
+    "phase": "report",
+    "name": "cli",
+    "wall_ms": int(wall_ms),
+    "started_at": int(started_at),
+    "finished_at": int(finished_at),
+}
+with open(path, "a", encoding="utf-8") as target:
+    target.write(json.dumps(row, separators=(",", ":")) + "\n")
+PY
+  fi
   if [ "$status" -ne 0 ]; then
-    printf '%s failed with exit %s\n' "$name" "$status" >> "$log_file"
+    log_line "$name failed with exit $status"
     return "$status"
   fi
 }
@@ -234,9 +347,11 @@ write_failed_usage() {
   failed_effort=$3
   failed_status=$4
   failed_wall_ms=$5
+  failed_finished_ns=$(python3 -c 'import time; print(time.monotonic_ns())')
   python3 - "$out_dir/shape.json" "$out_dir/report.json" "$out_dir/usage.json" \
     "$failed_stage" "$failed_model" "$failed_effort" "$failed_status" "$failed_wall_ms" \
-    "$shaper_root" "$recipe" <<'PY'
+    "$shaper_root" "$recipe" "$timings_file" "$events_file" \
+    "$bench_started_ns" "$failed_finished_ns" <<'PY'
 import json
 import os
 import sys
@@ -244,8 +359,10 @@ from pathlib import Path
 
 (
     shape_path, report_path, output_path, failed_stage, failed_model, failed_effort,
-    status, wall_ms, transcript_root, recipe,
+    status, wall_ms, transcript_root, recipe, timing_input, events_output, started_ns, finished_ns,
 ) = sys.argv[1:]
+started_ns = int(started_ns)
+finished_ns = int(finished_ns)
 token_names = ("input", "cached_input", "output", "reasoning")
 
 def load(path):
@@ -305,7 +422,7 @@ if shape_calls:
         "effort": shape_calls[0]["effort"],
         "calls": shape_calls,
         "tokens": {name: sum(call["tokens"][name] for call in shape_calls) for name in token_names},
-        "wall_ms": int(wall_ms) if failed_stage == "shape" else sum(call["wall_ms"] for call in shape_calls),
+        "wall_ms": sum(call["wall_ms"] for call in shape_calls),
         "usage_available": all(call.get("usage_available", True) for call in shape_calls),
         "usage_complete": failed_stage != "shape",
     })
@@ -314,12 +431,12 @@ elif failed_stage == "shape":
         "stage": "shape",
         "model": failed_model,
         "effort": failed_effort,
-        "calls": [{"tokens": tokens(None), "wall_ms": int(wall_ms)}],
+        "calls": [{"tokens": tokens(None), "wall_ms": 0}],
         "tokens": tokens(None),
-        "wall_ms": int(wall_ms),
+        "wall_ms": 0,
         "usage_available": False,
         "usage_complete": False,
-        "wall_time_source": "CLI stage elapsed time; no model usage response was recorded",
+        "wall_time_source": "No model usage response; elapsed time remains in the total remainder",
     })
 
 for stage in report.get("model_stages", []):
@@ -343,7 +460,60 @@ if failed_model and failed_stage != "shape":
         "tokens": tokens(None),
         "wall_ms": int(wall_ms),
         "usage_available": False,
+        "wall_time_source": "CLI stage elapsed time; model timing is unavailable",
     })
+
+try:
+    with open(timing_input, encoding="utf-8") as source:
+        event_rows = [json.loads(line) for line in source if line.strip()]
+except (FileNotFoundError, json.JSONDecodeError):
+    event_rows = []
+
+for timing in report.get("phase_timings", []):
+    event_rows.append({"event": "phase_timing", **timing})
+
+phase_events = [
+    row for row in event_rows
+    if row.get("event") == "phase_timing"
+    and isinstance(row.get("phase"), str)
+    and isinstance(row.get("name"), str)
+    and isinstance(row.get("wall_ms"), int)
+]
+phase_events.sort(key=lambda row: int(row.get("started_at", 0) or 0))
+intervals = sorted(
+    (int(row["started_at"]), int(row["finished_at"]))
+    for row in phase_events
+    if isinstance(row.get("started_at"), int)
+    and isinstance(row.get("finished_at"), int)
+    and row["finished_at"] >= row["started_at"]
+)
+union_ms = 0
+if intervals:
+    interval_start, interval_end = intervals[0]
+    for next_start, next_end in intervals[1:]:
+        if next_start <= interval_end:
+            interval_end = max(interval_end, next_end)
+        else:
+            union_ms += interval_end - interval_start
+            interval_start, interval_end = next_start, next_end
+    union_ms += interval_end - interval_start
+
+end_to_end_wall_ms = max((finished_ns - started_ns) // 1_000_000, 0)
+phase_wall_ms = min(union_ms, end_to_end_wall_ms)
+model_wall_ms = sum(
+    int(stage.get("wall_ms", 0) or 0)
+    for stage in stages
+    if stage.get("usage_available") is True
+)
+with open(events_output, "w", encoding="utf-8") as output:
+    for row in event_rows:
+        if row.get("event") == "phase_timing":
+            output.write(json.dumps(row, separators=(",", ":")) + "\n")
+
+phases = [
+    {"phase": row["phase"], "name": row["name"], "wall_ms": row["wall_ms"]}
+    for row in phase_events
+]
 
 totals = {name: sum(stage["tokens"][name] for stage in stages) for name in token_names}
 result = {
@@ -353,7 +523,14 @@ result = {
     "failed_stage": failed_stage,
     "exit_code": int(status),
     "stages": stages,
-    "total": {"tokens": totals, "wall_ms": sum(stage["wall_ms"] for stage in stages)},
+    "phases": phases,
+    "total": {
+        "tokens": totals,
+        "wall_ms": end_to_end_wall_ms,
+        "model_wall_ms": model_wall_ms,
+        "phase_wall_ms": phase_wall_ms,
+        "unaccounted_wall_ms": max(end_to_end_wall_ms - phase_wall_ms - model_wall_ms, 0),
+    },
 }
 with open(output_path, "w", encoding="utf-8") as output:
     json.dump(result, output, indent=2)
@@ -414,11 +591,20 @@ git -C "$work_dir" apply "$out_dir/final.diff"
   exit 4
 }
 
-python3 - "$out_dir/shape.json" "$out_dir/report.json" "$out_dir/usage.json" "$recipe" <<'PY'
+log_line "--- landed diff applied to work_dir ---"
+git -C "$work_dir" status --short | while IFS= read -r line; do log_line "$line"; done
+log_line "work_dir base: $work_base"
+log_line "Kogen landed: $(git --git-dir="$origin" rev-parse refs/heads/main)"
+bench_finished_ns=$(python3 -c 'import time; print(time.monotonic_ns())')
+
+python3 - "$out_dir/shape.json" "$out_dir/report.json" "$out_dir/usage.json" \
+  "$recipe" "$timings_file" "$events_file" "$bench_started_ns" "$bench_finished_ns" <<'PY'
 import json
 import sys
 
-shape_path, report_path, output_path, recipe = sys.argv[1:]
+shape_path, report_path, output_path, recipe, timing_input, events_output, started_ns, finished_ns = sys.argv[1:]
+started_ns = int(started_ns)
+finished_ns = int(finished_ns)
 with open(shape_path, encoding="utf-8") as source:
     shape = json.load(source)
 with open(report_path, encoding="utf-8") as source:
@@ -467,29 +653,77 @@ for stage in report.get("model_stages", []):
         "usage_available": True,
     })
 
+with open(timing_input, encoding="utf-8") as source:
+    event_rows = [json.loads(line) for line in source if line.strip()]
+
+for timing in report.get("phase_timings", []):
+    event_rows.append({"event": "phase_timing", **timing})
+
+phase_events = [
+    row for row in event_rows
+    if row.get("event") == "phase_timing"
+    and isinstance(row.get("phase"), str)
+    and isinstance(row.get("name"), str)
+    and isinstance(row.get("wall_ms"), int)
+]
+phase_events.sort(key=lambda row: int(row.get("started_at", 0) or 0))
+
+intervals = sorted(
+    (int(row["started_at"]), int(row["finished_at"]))
+    for row in phase_events
+    if isinstance(row.get("started_at"), int)
+    and isinstance(row.get("finished_at"), int)
+    and row["finished_at"] >= row["started_at"]
+)
+union_ms = 0
+if intervals:
+    interval_start, interval_end = intervals[0]
+    for next_start, next_end in intervals[1:]:
+        if next_start <= interval_end:
+            interval_end = max(interval_end, next_end)
+        else:
+            union_ms += interval_end - interval_start
+            interval_start, interval_end = next_start, next_end
+    union_ms += interval_end - interval_start
+
+end_to_end_wall_ms = max((finished_ns - started_ns) // 1_000_000, 0)
+phase_wall_ms = min(union_ms, end_to_end_wall_ms)
+model_wall_ms = sum(
+    int(stage.get("wall_ms", 0) or 0)
+    for stage in stages
+    if stage.get("usage_available") is True
+)
+with open(events_output, "w", encoding="utf-8") as output:
+    for row in event_rows:
+        if row.get("event") == "phase_timing":
+            output.write(json.dumps(row, separators=(",", ":")) + "\n")
+
+phases = [
+    {"phase": row["phase"], "name": row["name"], "wall_ms": row["wall_ms"]}
+    for row in phase_events
+]
+
 totals = {name: sum(stage["tokens"][name] for stage in stages) for name in token_names}
 result = {
     "recipe": recipe,
     "slug": shape.get("slug"),
     "run_status": "complete",
     "status": report.get("status"),
+    "roles": report.get("roles", {}),
     "stages": stages,
+    "phases": phases,
     "total": {
         "tokens": totals,
-        "wall_ms": sum(stage["wall_ms"] for stage in stages),
+        "wall_ms": end_to_end_wall_ms,
+        "model_wall_ms": model_wall_ms,
+        "phase_wall_ms": phase_wall_ms,
+        "unaccounted_wall_ms": max(end_to_end_wall_ms - phase_wall_ms - model_wall_ms, 0),
     },
 }
 with open(output_path, "w", encoding="utf-8") as output:
     json.dump(result, output, indent=2)
     output.write("\n")
 PY
-
-{
-  printf '\n--- landed diff applied to work_dir ---\n'
-  git -C "$work_dir" status --short
-  printf '\nwork_dir base: %s\n' "$work_base"
-  printf 'Kogen landed: %s\n' "$(git --git-dir="$origin" rev-parse refs/heads/main)"
-} >> "$log_file"
 
 printf 'benchmark complete\nwork_dir: %s\nusage: %s\nlog: %s\ndiff: %s\n' \
   "$work_dir" "$out_dir/usage.json" "$log_file" "$out_dir/final.diff"

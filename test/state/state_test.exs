@@ -289,6 +289,21 @@ defmodule Kogen.State.StateTest do
              State.decode_event(~s({"event":"started","recipe":"direct"}))
   end
 
+  test "journal decoding preserves phase timing event fields" do
+    assert {:ok,
+            %Event{
+              event: "phase_timing",
+              phase: "build",
+              name: "gate_run",
+              wall_ms: 37,
+              started_at: 1_700,
+              finished_at: 1_737
+            }} =
+             State.decode_event(
+               ~s({"event":"phase_timing","phase":"build","name":"gate_run","wall_ms":37,"started_at":1700,"finished_at":1737})
+             )
+  end
+
   test "journal decoding preserves scope warnings and excused test seeds" do
     assert {:ok,
             %Event{

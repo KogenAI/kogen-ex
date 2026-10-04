@@ -24,7 +24,12 @@ defmodule Kogen.Build.Recipe do
     roles =
       case name do
         "staged" ->
-          %{context: {"gpt-6-luna", "low"}, planner: builder, builder: builder, reviewer: builder}
+          %{
+            context: {"gpt-6-luna", "low"},
+            planner: {"gpt-6.1-sol", "high"},
+            builder: builder,
+            reviewer: {"gpt-6.1-sol", "high"}
+          }
 
         direct_recipe when direct_recipe in ["direct", "direct-shell"] ->
           %{builder: builder}
@@ -43,4 +48,11 @@ defmodule Kogen.Build.Recipe do
 
   @spec role(t(), role()) :: {String.t(), String.t()}
   def role(%{roles: roles}, role), do: Map.fetch!(roles, role)
+
+  @spec role_settings(t()) :: %{role() => %{model: String.t(), effort: String.t()}}
+  def role_settings(%{roles: roles}) do
+    Map.new(roles, fn {role, {model, effort}} ->
+      {role, %{model: model, effort: effort}}
+    end)
+  end
 end

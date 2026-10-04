@@ -3,6 +3,7 @@ defmodule Kogen.Engine.Build.Commit do
 
   alias Kogen.Contracts.Failure
   alias Kogen.Engine.Build.Guard
+  alias Kogen.Engine.Build.PhaseTiming
   alias Kogen.Engine.Build.Session
   alias Kogen.State
   alias Kogen.Workspace
@@ -12,6 +13,10 @@ defmodule Kogen.Engine.Build.Commit do
           | {:error, Session.t(), Failure.t()}
           | {:base_moved, Session.t()}
   def run(%Session{} = session) do
+    PhaseTiming.measure(session, "build", "commit", fn -> do_run(session) end)
+  end
+
+  defp do_run(%Session{} = session) do
     with {:ok, tree} <- tag(:tree_hash, Guard.tree_hash(session.workdir, session.git_env)),
          :ok <- tag(:squash, squash_to_base(session)),
          {:ok, commit} <- tag(:candidate_commit, commit_tree(session, tree)),
@@ -44,6 +49,10 @@ defmodule Kogen.Engine.Build.Commit do
           | {:error, Session.t(), Failure.t()}
           | {:base_moved, Session.t()}
   def land(args, %Session{} = session) do
+    PhaseTiming.measure(session, "build", "land", fn -> do_land(args, session) end)
+  end
+
+  defp do_land(args, %Session{} = session) do
     expected = Map.fetch!(args, :expected_parent)
     candidate = Map.fetch!(args, :candidate_commit)
 

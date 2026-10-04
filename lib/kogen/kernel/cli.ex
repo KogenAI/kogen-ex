@@ -30,8 +30,8 @@ defmodule Kogen.Kernel.CLI do
     --base <branch>       Target branch (default: main)
   Intent shaping options:
     --task-file <path>    Task statement text file
-    --model <name>        Provider model (default: gpt-6-luna)
-    --effort <level>      Model effort (default: max)
+    --model <name>        Builder model (default: gpt-6-luna)
+    --effort <level>      Builder effort (default: max)
     --recipe <name>       Build recipe (default: staged)
     --json                Emit shaping result and call usage as JSON
     --as <label>          ChatGPT account label (default: default)

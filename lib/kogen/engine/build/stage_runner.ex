@@ -7,6 +7,7 @@ defmodule Kogen.Engine.Build.StageRunner do
   alias Kogen.Engine.Build.Commit
   alias Kogen.Engine.Build.GateSupport
   alias Kogen.Engine.Build.Guard
+  alias Kogen.Engine.Build.PhaseTiming
   alias Kogen.Engine.Build.Reviewer
   alias Kogen.Engine.Build.Session
   alias Kogen.Harness
@@ -21,7 +22,10 @@ defmodule Kogen.Engine.Build.StageRunner do
   def run(:context, _args, session), do: context(session)
   def run(:plan, _args, session), do: plan(session)
   def run(:develop, args, session), do: develop(args, session)
-  def run(:fix, _args, session), do: fix(session)
+
+  def run(:fix, _args, session),
+    do: PhaseTiming.measure(session, "build", "fix-loop", fn -> fix(session) end)
+
   def run(:check, _args, session), do: checks(session)
   def run(:review, _args, session), do: Reviewer.run(session)
   def run(:commit, _args, session), do: Commit.run(session)
@@ -41,7 +45,7 @@ defmodule Kogen.Engine.Build.StageRunner do
     started_at = System.monotonic_time(:millisecond)
     {model, effort} = Recipe.role(session.request.recipe, :context)
 
-    with :ok <- red_on_base(session),
+    with :ok <- GateSupport.red_on_base(session),
          {:ok, pack} <- Harness.context_pack(harness_options(session), session.intent_text),
          :ok <-
            record_model(session, :context, model, effort, pack.usage, elapsed(started_at)) do
@@ -56,20 +60,6 @@ defmodule Kogen.Engine.Build.StageRunner do
 
       {:error, reason} ->
         fail(session, :context, harness_failure(reason))
-    end
-  end
-
-  defp red_on_base(session) do
-    case Kogen.Checks.red_on_base(
-           session.workdir,
-           session.intent,
-           session.run_dir,
-           session.process_env,
-           session.git_env,
-           session.sandbox
-         ) do
-      :ok -> :ok
-      {:error, %Failure{} = failure} -> {:error, failure}
     end
   end
 
@@ -135,7 +125,7 @@ defmodule Kogen.Engine.Build.StageRunner do
   defp direct_preflight(session) do
     case guard(session) do
       :ok ->
-        case red_on_base(session) do
+        case GateSupport.red_on_base(session) do
           :ok -> :ok
           {:error, %Failure{} = failure} -> {:error, base_check_failure(failure)}
         end

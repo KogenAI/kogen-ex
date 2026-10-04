@@ -116,7 +116,29 @@ defmodule Kogen.E2e.BuildTest do
 
     model_stages = Enum.filter(result.events, &(&1.event == "model_stage"))
     assert Enum.all?(model_stages, &is_integer(&1.wall_ms))
+    assert_staged_roles_and_timing(result)
     :ok
+  end
+
+  defp assert_staged_roles_and_timing(result) do
+    started = Enum.find(result.events, &(&1.event == "started"))
+
+    assert started.roles == %{
+             "context" => %{"model" => "gpt-6-luna", "effort" => "low"},
+             "planner" => %{"model" => "gpt-6.1-sol", "effort" => "high"},
+             "builder" => %{"model" => "scripted-model", "effort" => "medium"},
+             "reviewer" => %{"model" => "gpt-6.1-sol", "effort" => "high"}
+           }
+
+    timings = Enum.filter(result.events, &(&1.event == "phase_timing"))
+    assert Enum.any?(timings, &(&1.name == "fix-loop" and is_integer(&1.wall_ms)))
+    assert Enum.any?(timings, &(&1.name == "commit" and is_integer(&1.wall_ms)))
+    assert Enum.any?(timings, &(&1.name == "land" and is_integer(&1.wall_ms)))
+
+    assert {:ok, report} = Build.report(result)
+    decoded_report = :json.decode(report)
+    assert decoded_report["roles"] == started.roles
+    assert Enum.any?(decoded_report["phase_timings"], &(&1["name"] == "commit"))
   end
 
   defp review_revision(context) do

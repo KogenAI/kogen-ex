@@ -5,6 +5,7 @@ defmodule Kogen.Engine.Build.GateSupport do
   alias Kogen.Contracts.Failure
   alias Kogen.Contracts.ProcResult
   alias Kogen.Engine.Build.Guard
+  alias Kogen.Engine.Build.PhaseTiming
   alias Kogen.Engine.Build.Session
   alias Kogen.Harness.Opts
   alias Kogen.Harness.Result, as: HarnessResult
@@ -35,6 +36,7 @@ defmodule Kogen.Engine.Build.GateSupport do
     previously_excused = Enum.flat_map(session.flake_excused, & &1.test_ids)
 
     opts
+    |> Map.put(:phase_recorder, opts.phase_recorder || phase_recorder(session))
     |> Map.put(:changed?, opts.changed? || changed_detector(session))
     |> Map.put(:protected, Enum.uniq(opts.protected ++ protected))
     |> Map.put(:base_test, base_test)
@@ -42,9 +44,28 @@ defmodule Kogen.Engine.Build.GateSupport do
     |> Map.put(:flake_excused_test_ids, previously_excused)
   end
 
+  defp phase_recorder(session) do
+    fn phase, name, wall_ms, started_at, finished_at ->
+      State.record(session.run, %{
+        event: :phase_timing,
+        phase: phase,
+        name: name,
+        wall_ms: wall_ms,
+        started_at: started_at,
+        finished_at: finished_at
+      })
+    end
+  end
+
   @spec base_test(Session.t(), [String.t()], pos_integer()) ::
           {:ok, ProcResult.t()} | {:error, term()}
   def base_test(%Session{} = session, argv, timeout_ms) do
+    PhaseTiming.measure(session, "build", "gate_base_check", fn ->
+      run_base_test(session, argv, timeout_ms)
+    end)
+  end
+
+  defp run_base_test(%Session{} = session, argv, timeout_ms) do
     build_id = "flake-#{session.run.id}-#{System.unique_integer([:positive, :monotonic])}"
     root = Path.join([session.request.home, ".kogen", "workspaces", "flake-probes"])
 
@@ -75,6 +96,20 @@ defmodule Kogen.Engine.Build.GateSupport do
       session.project,
       session.git_env
     )
+  end
+
+  @spec red_on_base(Session.t()) :: :ok | {:error, Failure.t()}
+  def red_on_base(%Session{} = session) do
+    PhaseTiming.measure(session, "build", "red-on-base", fn ->
+      Kogen.Checks.red_on_base(
+        session.workdir,
+        session.intent,
+        session.run_dir,
+        session.process_env,
+        session.git_env,
+        session.sandbox
+      )
+    end)
   end
 
   @spec record_scope_warnings(Session.t(), [map()]) :: :ok | {:error, term()}

@@ -9,7 +9,7 @@ defmodule Kogen.Harness do
       Kogen.Project,
       Kogen.Tooling
     ],
-    exports: [Opts, Pack, Plan, Review, Result, ShapePass, ShapeCall]
+    exports: [Opts, Pack, Plan, Review, Result, ShapePass, ShapeCall, PhaseTiming]
 
   alias Kogen.Harness.Developer
   alias Kogen.Harness.Opts

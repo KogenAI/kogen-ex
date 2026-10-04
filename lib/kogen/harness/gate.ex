@@ -4,12 +4,10 @@ defmodule Kogen.Harness.Gate do
   alias Kogen.Checks.Feedback
   alias Kogen.Contracts.CheckSpec
   alias Kogen.Contracts.ProcResult
+  alias Kogen.Harness.Gate.CommandRunner
   alias Kogen.Harness.GateCommand
   alias Kogen.Harness.GateResult
   alias Kogen.Harness.Opts
-  alias Kogen.Harness.ToolingContext
-  alias Kogen.Tooling.Command
-  alias Kogen.Tooling.Error
 
   @max_excused_tests 2
   @module_reference ~r/\b[A-Z][A-Za-z0-9_]*(?:\.[A-Z][A-Za-z0-9_]*)*\b/
@@ -362,37 +360,9 @@ defmodule Kogen.Harness.Gate do
   end
 
   defp run_argv(opts, spec, argv, timeout_ms, kind, suffix) do
-    case Command.run(
-           ToolingContext.from_opts(opts),
-           argv,
-           timeout_ms,
-           "gate-#{kind}-#{spec.name}#{suffix}"
-         ) do
-      {:ok, result} ->
-        %GateCommand{
-          name: spec.name,
-          exit_status: result.exit_status,
-          timed_out: result.timed_out,
-          output: clip_tail(result.output_tail),
-          log_path: result.log_path
-        }
-
-      {:error, %Error{} = error} ->
-        %GateCommand{name: spec.name, exit_status: nil, timed_out: false, output: error.detail}
-    end
+    CommandRunner.run(opts, spec, argv, timeout_ms, kind, suffix)
   end
 
   defp command_passed?(%GateCommand{exit_status: 0, timed_out: false}), do: true
   defp command_passed?(_command), do: false
-
-  defp clip_tail(output) do
-    if String.valid?(output) do
-      if String.length(output) > 10_000,
-        do: String.slice(output, String.length(output) - 10_000, 10_000),
-        else: output
-    else
-      tail = binary_part(output, max(byte_size(output) - 7_400, 0), min(byte_size(output), 7_400))
-      "[non-UTF-8 output tail, base64 encoded]\n" <> Base.encode64(tail)
-    end
-  end
 end

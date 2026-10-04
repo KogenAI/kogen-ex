@@ -18,6 +18,9 @@ defmodule Kogen.State.Json do
   @event_fields [
     event: "event",
     recipe: "recipe",
+    roles: "roles",
+    phase: "phase",
+    name: "name",
     stage: "stage",
     class: "class",
     reason: "reason",
@@ -34,6 +37,8 @@ defmodule Kogen.State.Json do
     receipts: "receipts",
     model: "model",
     effort: "effort",
+    started_at: "started_at",
+    finished_at: "finished_at",
     tokens: "tokens",
     wall_ms: "wall_ms",
     credential_source: "credential_source",

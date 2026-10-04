@@ -8,6 +8,7 @@ defmodule Kogen.Engine.Build.Engine do
   alias Kogen.Engine.Build.Prepared
   alias Kogen.Engine.Build.Request
   alias Kogen.Engine.Build.Result
+  alias Kogen.Engine.Build.RunEvents
   alias Kogen.Engine.Build.Session
   alias Kogen.Engine.Build.Setup
   alias Kogen.Engine.Build.StageRunner
@@ -41,7 +42,7 @@ defmodule Kogen.Engine.Build.Engine do
   defp begin_run(%Prepared{} = prepared) do
     case claim(prepared.request, prepared.run) do
       :ok ->
-        case record_started(
+        case RunEvents.started(
                prepared.run,
                prepared.request,
                prepared.approval_commit,
@@ -124,19 +125,6 @@ defmodule Kogen.Engine.Build.Engine do
 
   defp claim(request, %Run{id: run_id}) do
     State.claim(request.origin, run_id, request.runtime.git_env)
-  end
-
-  defp record_started(run, request, approval_commit, base_sha) do
-    State.record(run, %{
-      event: :started,
-      approval_commit: approval_commit,
-      base_sha: base_sha,
-      model: request.model,
-      effort: request.effort,
-      credential_source: request.credential_source,
-      credential_label: request.credential_label,
-      recipe: Kogen.Build.Recipe.name(request.recipe)
-    })
   end
 
   defp setup_workspace(%Prepared{} = prepared) do

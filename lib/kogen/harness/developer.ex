@@ -34,6 +34,7 @@ defmodule Kogen.Harness.Developer do
   alias Kogen.Harness.Exchange.Request, as: ExchangeRequest
   alias Kogen.Harness.Gate
   alias Kogen.Harness.Opts
+  alias Kogen.Harness.PhaseTiming
   alias Kogen.Harness.Plan
   alias Kogen.Harness.Recording
   alias Kogen.Harness.Result
@@ -153,7 +154,10 @@ defmodule Kogen.Harness.Developer do
   end
 
   defp run_gate(opts, state) do
-    case Gate.run(opts, state.deadline) do
+    result =
+      PhaseTiming.measure(opts, "build", "gate_run", fn -> Gate.run(opts, state.deadline) end)
+
+    case result do
       {:ok, gate} ->
         with :ok <- Recording.append(opts, :gate, :develop, state.turns, gate) do
           outcome =
