@@ -2,6 +2,7 @@ defmodule Kogen.Build.CycleTest do
   use Kogen.Testkit.Case
 
   alias Kogen.Build.Cycle
+  alias Kogen.Build.Recipe
   alias Kogen.Contracts.Failure
 
   test "transition table covers every stage and failure transition" do
@@ -19,7 +20,7 @@ defmodule Kogen.Build.CycleTest do
   end
 
   test "landing identity is recorded before the land effect" do
-    state = state_at(:land)
+    state = state_at(:commit)
     {next, effects} = Cycle.step(state, {:stage_ok, :commit, landing_data()})
 
     assert next.pending_land
@@ -31,14 +32,14 @@ defmodule Kogen.Build.CycleTest do
     assert identity.candidate_commit == "candidate"
   end
 
-  test "provider failures during commit and land retry commit in the land phase" do
+  test "provider failures during commit and land retry the commit stage" do
     for {stage, pending_land} <- [{:commit, false}, {:land, true}] do
-      state = state_at(:land, pending_land: pending_land)
+      state = state_at(stage, pending_land: pending_land)
 
       {retry, effects} =
         Cycle.step(state, {:stage_failed, stage, failure(:provider, :overload)})
 
-      assert retry.stage == :land
+      assert retry.stage == :commit
       refute retry.pending_land
       assert retry.provider_retries == 1
       assert [{:record, %{event: :provider_retry}}, {:run, :commit, args}] = effects
@@ -55,7 +56,8 @@ defmodule Kogen.Build.CycleTest do
   end
 
   test "the cycle stays pure across a complete successful path" do
-    state = Cycle.new(%{approval: %{slug: "sample"}, repairs: 2})
+    state = Cycle.new(%{approval: %{slug: "sample"}, repairs: 2, recipe: staged_recipe()})
+    {state, [{:run, :context, _args}]} = Cycle.step(state, :start)
 
     {state, _} = Cycle.step(state, {:stage_ok, :context, %{}})
     {state, _} = Cycle.step(state, {:stage_ok, :plan, %{}})
@@ -63,8 +65,11 @@ defmodule Kogen.Build.CycleTest do
     {state, _} = Cycle.step(state, {:stage_ok, :done_gate, %{outcome: :done}})
     {state, _} = Cycle.step(state, {:stage_ok, :fix, %{}})
     {state, _} = Cycle.step(state, {:stage_ok, :check, %{status: :pass}})
-    {state, _} = Cycle.step(state, {:review, :accept, []})
-    {state, _} = Cycle.step(state, {:stage_ok, :commit, landing_data()})
+    {state, [{:record, _}, {:run, :commit, _args}]} = Cycle.step(state, {:review, :accept, []})
+
+    {state, [{:record, %{event: :landing_prepared}}, {:run, :land, _landing}]} =
+      Cycle.step(state, {:stage_ok, :commit, landing_data()})
+
     {state, effects} = Cycle.step(state, {:landed, "candidate"})
 
     assert state.stage == :landed
@@ -72,10 +77,43 @@ defmodule Kogen.Build.CycleTest do
     assert [{:record, %{event: :finished}}, {:finish, :landed, "candidate"}] = effects
   end
 
+  test "direct recipe runs its ordered path without plan or review effects" do
+    recipe = Recipe.for_build("direct", "scripted-model", "medium")
+    assert recipe.stages == [:develop, :done_gate, :fix, :check, :commit, :land]
+
+    state = Cycle.new(%{approval: %{slug: "sample"}, repairs: 2, recipe: recipe})
+    {state, [{:run, :develop, _args}]} = Cycle.step(state, :start)
+    {state, _} = Cycle.step(state, {:stage_ok, :develop, %{tree: "tree-1"}})
+
+    {state, [{:record, %{event: :stage_ok}}, {:run, :fix, _args}]} =
+      Cycle.step(state, {:stage_ok, :done_gate, %{outcome: :done}})
+
+    {state, [{:record, _}, {:run, :check, _args}]} = Cycle.step(state, {:stage_ok, :fix, %{}})
+
+    {state, [{:record, _}, {:run, :commit, _args}]} =
+      Cycle.step(state, {:stage_ok, :check, %{status: :pass}})
+
+    {state, [{:record, %{event: :landing_prepared}}, {:run, :land, _args}]} =
+      Cycle.step(state, {:stage_ok, :commit, landing_data()})
+
+    {state, [{:record, %{event: :finished}}, {:finish, :landed, "candidate"}]} =
+      Cycle.step(state, {:landed, "candidate"})
+
+    assert state.stage == :landed
+  end
+
   defp state_at(stage, overrides \\ []) do
-    state = Cycle.new(%{approval: %{slug: "sample"}, repairs: 2})
+    state =
+      Cycle.new(%{
+        approval: %{slug: "sample"},
+        repairs: 2,
+        recipe: staged_recipe()
+      })
+
     struct!(state, Keyword.put(overrides, :stage, stage))
   end
+
+  defp staged_recipe, do: Recipe.for_build("staged", "scripted-model", "medium")
 
   defp failure(class, reason), do: %Failure{class: class, reason: reason, detail: "tail"}
 
@@ -102,9 +140,9 @@ defmodule Kogen.Build.CycleTest do
       {"fix succeeds", state_at(:fix), {:stage_ok, :fix, %{}}, :check, 2, :check_run},
       {"checks pass", state_at(:check), {:stage_ok, :check, %{status: :pass}}, :review, 2,
        :review_run},
-      {"review accepts", state_at(:review), {:review, :accept, []}, :land, 2, :commit_run},
-      {"commit records identity", state_at(:land), {:stage_ok, :commit, landing_data()}, :land, 2,
-       :land_run},
+      {"review accepts", state_at(:review), {:review, :accept, []}, :commit, 2, :commit_run},
+      {"commit records identity", state_at(:commit), {:stage_ok, :commit, landing_data()}, :land,
+       2, :land_run},
       {"landing succeeds", state_at(:land, pending_land: true), {:landed, "candidate"}, :landed,
        2, :finish_landed}
     ]
@@ -137,7 +175,7 @@ defmodule Kogen.Build.CycleTest do
 
   defp terminal_rows do
     [
-      {"missing commit identity fails", state_at(:land), {:stage_ok, :commit, %{}}, :failed, 2,
+      {"missing commit identity fails", state_at(:commit), {:stage_ok, :commit, %{}}, :failed, 2,
        :finish_failed},
       {"land stage cannot skip identity", state_at(:land),
        {:stage_ok, :land, %{sha: "candidate"}}, :failed, 2, :finish_failed},

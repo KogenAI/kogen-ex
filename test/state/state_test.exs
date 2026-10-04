@@ -284,6 +284,11 @@ defmodule Kogen.State.StateTest do
              )
   end
 
+  test "journal decoding retains the selected build recipe" do
+    assert {:ok, %Event{event: "started", recipe: "direct"}} =
+             State.decode_event(~s({"event":"started","recipe":"direct"}))
+  end
+
   test "journal decoding preserves scope warnings and excused test seeds" do
     assert {:ok,
             %Event{

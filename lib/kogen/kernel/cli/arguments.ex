@@ -9,6 +9,7 @@ defmodule Kogen.Kernel.CLI.Arguments do
     base: :string,
     model: :string,
     effort: :string,
+    recipe: :string,
     by: :string,
     task_file: :string,
     as: :string,
@@ -56,6 +57,7 @@ defmodule Kogen.Kernel.CLI.Arguments do
          base: base,
          model: Keyword.get(options, :model, "gpt-6-luna"),
          effort: Keyword.get(options, :effort, "max"),
+         recipe: Keyword.get(options, :recipe, "staged"),
          by: Keyword.get(options, :by),
          task_file: Keyword.get(options, :task_file),
          account_label: Keyword.get(options, :as),
@@ -101,7 +103,10 @@ defmodule Kogen.Kernel.CLI.Arguments do
 
   defp allowed_flags(:version), do: [:project, :origin, :base]
   defp allowed_flags(:approve), do: [:project, :origin, :base, :by, :yes]
-  defp allowed_flags(:build), do: [:project, :origin, :base, :model, :effort, :as, :borrow]
+
+  defp allowed_flags(:build),
+    do: [:project, :origin, :base, :model, :effort, :recipe, :as, :borrow]
+
   defp allowed_flags(:provider_list), do: []
   defp allowed_flags(:provider_login), do: [:as]
   defp allowed_flags(:provider_logout), do: [:as]
@@ -126,8 +131,12 @@ defmodule Kogen.Kernel.CLI.Arguments do
 
   defp required_flags(:build, options) do
     borrow = Keyword.get(options, :borrow)
+    recipe = Keyword.get(options, :recipe, "staged")
 
     cond do
+      recipe not in ["staged", "direct"] ->
+        {:error, "--recipe must be staged or direct"}
+
       borrow not in [nil, "codex"] ->
         {:error, "--borrow only supports codex"}
 

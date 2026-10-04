@@ -131,6 +131,7 @@ defmodule Kogen.Kernel do
         base: options.base,
         model: options.model,
         effort: options.effort,
+        recipe: Engine.build_recipe(options.recipe, options.model, options.effort),
         runtime: runtime,
         provider_mod: ChatGPT,
         provider_config: provider_config,

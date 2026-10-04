@@ -13,7 +13,7 @@ defmodule Kogen.Kernel.CLI do
     intent check <path>   Parse and lint an Intent
     intent shape <slug>   Create and validate an Intent (--task-file)
     approve <slug>        Review and record an Intent approval (--by, --yes)
-    build <slug>          Build and land an approved Intent (--model, --effort, --as, --borrow codex)
+    build <slug>          Build and land an approved Intent (--recipe staged|direct, --model, --effort)
     provider list         List saved ChatGPT accounts
     provider login chatgpt [--as <label>]
                           Sign in using "Continue with ChatGPT"
@@ -32,6 +32,7 @@ defmodule Kogen.Kernel.CLI do
     --task-file <path>    Task statement text file
     --model <name>        Provider model (default: gpt-6-luna)
     --effort <level>      Model effort (default: max)
+    --recipe <name>       Build recipe (default: staged)
     --json                Emit shaping result and call usage as JSON
     --as <label>          ChatGPT account label (default: default)
     --borrow codex        Explicitly use the read-only Codex login for this Build

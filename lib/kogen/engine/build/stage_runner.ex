@@ -1,6 +1,7 @@
 defmodule Kogen.Engine.Build.StageRunner do
   @moduledoc false
 
+  alias Kogen.Build.Recipe
   alias Kogen.Contracts.Failure
   alias Kogen.Contracts.ProviderError
   alias Kogen.Engine.Build.Commit
@@ -38,11 +39,12 @@ defmodule Kogen.Engine.Build.StageRunner do
 
   defp context_after_guard(session) do
     started_at = System.monotonic_time(:millisecond)
+    {model, effort} = Recipe.role(session.request.recipe, :context)
 
     with :ok <- red_on_base(session),
          {:ok, pack} <- Harness.context_pack(harness_options(session), session.intent_text),
          :ok <-
-           record_model(session, :context, "gpt-6-luna", "low", pack.usage, elapsed(started_at)) do
+           record_model(session, :context, model, effort, pack.usage, elapsed(started_at)) do
       {:ok, %{session | pack: pack, failure: nil, failure_text: nil},
        [{:stage_ok, :context, %{}}]}
     else
@@ -73,14 +75,15 @@ defmodule Kogen.Engine.Build.StageRunner do
 
   defp plan(%Session{pack: pack} = session) do
     started_at = System.monotonic_time(:millisecond)
+    {model, effort} = Recipe.role(session.request.recipe, :planner)
 
     case Harness.plan(harness_options(session), pack, session.intent_text) do
       {:ok, plan} ->
         case record_model(
                session,
                :plan,
-               session.request.model,
-               session.request.effort,
+               model,
+               effort,
                plan.usage,
                elapsed(started_at)
              ) do
@@ -100,7 +103,17 @@ defmodule Kogen.Engine.Build.StageRunner do
     end
   end
 
-  defp develop(_args, %Session{} = session) do
+  defp develop(_args, %Session{request: %{recipe: %{name: "direct"}}} = session)
+       when not session.direct_preflight_complete? do
+    case direct_preflight(session) do
+      :ok -> develop_harness(%{session | direct_preflight_complete?: true})
+      {:error, %Failure{} = failure} -> fail(session, :develop, failure)
+    end
+  end
+
+  defp develop(_args, %Session{} = session), do: develop_harness(session)
+
+  defp develop_harness(%Session{} = session) do
     resume = resume_data(session)
     started_at = System.monotonic_time(:millisecond)
 
@@ -116,6 +129,19 @@ defmodule Kogen.Engine.Build.StageRunner do
 
       {:error, reason} ->
         fail(session, :develop, harness_failure(reason))
+    end
+  end
+
+  defp direct_preflight(session) do
+    case guard(session) do
+      :ok ->
+        case red_on_base(session) do
+          :ok -> :ok
+          {:error, %Failure{} = failure} -> {:error, base_check_failure(failure)}
+        end
+
+      {:error, %Failure{} = failure} ->
+        {:error, failure}
     end
   end
 

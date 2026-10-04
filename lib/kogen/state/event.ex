@@ -4,6 +4,7 @@ defmodule Kogen.State.Event do
   @enforce_keys [:event]
   defstruct [
     :event,
+    :recipe,
     :stage,
     :class,
     :reason,
@@ -28,6 +29,7 @@ defmodule Kogen.State.Event do
 
   @type t :: %__MODULE__{
           event: String.t(),
+          recipe: String.t() | nil,
           stage: String.t() | nil,
           class: String.t() | nil,
           reason: String.t() | nil,

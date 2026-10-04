@@ -18,6 +18,7 @@ This repository is the single Mix application that forms Kogen's core. Current w
 | `lib/kogen/` | Contracts, domain facades, and the future core modules |
 | `test/` | ExUnit tests and the `Kogen.Testkit` support boundary |
 | `tools/kogen_checks/` | The local Credo check package and its tests |
+| `bin/kogen-bench` | Held-out benchmark runner for approved Build tasks |
 
 ## Domains
 

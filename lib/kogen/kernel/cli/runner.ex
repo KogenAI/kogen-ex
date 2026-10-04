@@ -155,6 +155,7 @@ defmodule Kogen.Kernel.CLI.Runner do
              base: args.base,
              model: args.model,
              effort: args.effort,
+             recipe: args.recipe,
              borrow: if(args.borrow == "codex", do: :codex),
              label: args.account_label || "default"
            }) do

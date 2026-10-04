@@ -25,7 +25,7 @@ defmodule Kogen.Harness.Stages do
 
   @spec plan(Opts.t(), Pack.t(), String.t()) :: {:ok, Plan.t()} | {:error, term()}
   def plan(%Opts{} = opts, %Pack{} = pack, intent_text) do
-    {model, effort} = opts.models.strong
+    {model, effort} = Map.get(opts.models, :planner, opts.models.strong)
     request_text = planner_input(pack, intent_text)
     items = [Codec.user_item(request_text)]
 
@@ -55,7 +55,7 @@ defmodule Kogen.Harness.Stages do
 
   @spec review(Opts.t(), String.t(), String.t(), map()) :: {:ok, Review.t()} | {:error, term()}
   def review(%Opts{} = opts, intent_text, diff, check_summary) do
-    {model, effort} = opts.models.strong
+    {model, effort} = Map.get(opts.models, :reviewer, opts.models.strong)
     review_input = reviewer_input(intent_text, diff, check_summary)
     items = [Codec.user_item(review_input)]
 

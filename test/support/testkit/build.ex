@@ -37,7 +37,7 @@ defmodule Kogen.E2e.Build do
       ScriptedProvider.start_link(steps, provider_hook(fixture, options.move_base_on))
 
     try do
-      result = run_build!(fixture, server)
+      result = run_build!(fixture, server, options.recipe)
       %{result | provider_requests: ScriptedProvider.requests(%Config{server: server})}
     after
       GenServer.stop(server, :normal)
@@ -62,8 +62,9 @@ defmodule Kogen.E2e.Build do
   @doc false
   def workspace_root(project_root, home), do: Kogen.Kernel.workspace_root(project_root, home)
 
-  defp run_build!(%Fixture{} = fixture, server) do
-    request = build_request!(fixture, server)
+  defp run_build!(%Fixture{} = fixture, server, recipe_name) do
+    runtime = Environment.runtime!(fixture.project_root, fixture.home)
+    request = build_request!(fixture, server, runtime, recipe_name)
 
     case Kogen.Kernel.build(request) do
       {:ok, build} -> started_result(fixture, build)
@@ -74,10 +75,10 @@ defmodule Kogen.E2e.Build do
   defp build_request!(%Fixture{} = fixture, server) do
     runtime = Environment.runtime!(fixture.project_root, fixture.home)
 
-    build_request!(fixture, server, runtime)
+    build_request!(fixture, server, runtime, "staged")
   end
 
-  defp build_request!(%Fixture{} = fixture, server, runtime) do
+  defp build_request!(%Fixture{} = fixture, server, runtime, recipe_name) do
     %Request{
       slug: @slug,
       home: fixture.home,
@@ -87,6 +88,7 @@ defmodule Kogen.E2e.Build do
       base: "main",
       model: "scripted-model",
       effort: "medium",
+      recipe: Kogen.Engine.build_recipe(recipe_name, "scripted-model", "medium"),
       runtime: runtime,
       provider_mod: ScriptedProvider,
       provider_config: %Config{server: server},

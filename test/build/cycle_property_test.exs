@@ -11,6 +11,7 @@ defmodule Kogen.Build.CyclePropertyTest do
   use ExUnit.Case, async: true
 
   alias Kogen.Build.Cycle
+  alias Kogen.Build.Recipe
   alias Kogen.Contracts.Failure
 
   @run_stages [:context, :plan, :develop, :fix, :check, :review, :commit, :land]
@@ -51,7 +52,17 @@ defmodule Kogen.Build.CyclePropertyTest do
     for seed <- 1..@property_runs do
       repairs = rem(seed, 4)
       prefix = choices(seed + 20_000, 25)
-      {state, _trace} = drive(Cycle.new(%{approval: %{slug: "p"}, repairs: repairs}), prefix)
+
+      {state, _trace} =
+        drive(
+          Cycle.new(%{
+            approval: %{slug: "p"},
+            repairs: repairs,
+            recipe: Recipe.for_build("staged", "scripted-model", "medium")
+          }),
+          prefix
+        )
+
       event = garbage_event(seed + 30_000)
       {next, effects} = Cycle.step(state, event)
       check_step!(state, event, next, effects, [])
@@ -61,7 +72,13 @@ defmodule Kogen.Build.CyclePropertyTest do
   # --- simulator -----------------------------------------------------------
 
   defp simulate(seed, repairs, mode) do
-    state = Cycle.new(%{approval: %{slug: "p"}, repairs: repairs})
+    state =
+      Cycle.new(%{
+        approval: %{slug: "p"},
+        repairs: repairs,
+        recipe: Recipe.for_build("staged", "scripted-model", "medium")
+      })
+
     {state, pending} = start(state)
     loop(state, pending, choices(seed, @max_events), mode, [], 0)
   end
@@ -76,7 +93,10 @@ defmodule Kogen.Build.CyclePropertyTest do
     values
   end
 
-  defp start(state), do: {state, {:run, :context}}
+  defp start(state) do
+    {state, effects} = Cycle.step(state, :start)
+    {state, pending_after(state, effects)}
+  end
 
   defp loop(%Cycle.State{result: result} = state, _pending, _choices, _mode, trace, _n)
        when not is_nil(result) do
@@ -109,8 +129,10 @@ defmodule Kogen.Build.CyclePropertyTest do
   end
 
   defp drive(state, choices) do
+    {state, pending} = start(state)
+
     choices
-    |> Enum.reduce_while({state, {:run, :context}, []}, fn choice, {s, pending, trace} ->
+    |> Enum.reduce_while({state, pending, []}, fn choice, {s, pending, trace} ->
       if s.result do
         {:halt, {s, pending, trace}}
       else
@@ -272,7 +294,6 @@ defmodule Kogen.Build.CyclePropertyTest do
   defp well_formed?({:finish, s, _}) when s in @terminal, do: true
   defp well_formed?(_), do: false
 
-  defp run_matches_stage?(:commit, :land), do: true
   defp run_matches_stage?(stage, stage), do: true
   defp run_matches_stage?(_, _), do: false
 

@@ -7,6 +7,11 @@ usage() {
 }
 
 [ "$#" -eq 3 ] || usage
+recipe=${KOGEN_BENCH_RECIPE:-staged}
+case "$recipe" in
+  staged|direct) ;;
+  *) echo "KOGEN_BENCH_RECIPE must be staged or direct" >&2; exit 2 ;;
+esac
 task_dir=$(cd "$1" && pwd -P)
 work_dir=$(cd "$2" && pwd -P)
 mkdir -p "$3"
@@ -42,8 +47,9 @@ origin="$scratch/origin.git"
 mkdir -p "$out_dir"
 : > "$log_file"
 : > "$out_dir/final.diff"
-cat > "$out_dir/usage.json" <<'JSON'
+cat > "$out_dir/usage.json" <<JSON
 {
+  "recipe": "$recipe",
   "status": "not_started",
   "stages": [],
   "total": {
@@ -225,13 +231,16 @@ write_failed_usage() {
   failed_wall_ms=$5
   python3 - "$out_dir/shape.json" "$out_dir/report.json" "$out_dir/usage.json" \
     "$failed_stage" "$failed_model" "$failed_effort" "$failed_status" "$failed_wall_ms" \
-    "$shaper_root" <<'PY'
+    "$shaper_root" "$recipe" <<'PY'
 import json
 import os
 import sys
 from pathlib import Path
 
-shape_path, report_path, output_path, failed_stage, failed_model, failed_effort, status, wall_ms, transcript_root = sys.argv[1:]
+(
+    shape_path, report_path, output_path, failed_stage, failed_model, failed_effort,
+    status, wall_ms, transcript_root, recipe,
+) = sys.argv[1:]
 token_names = ("input", "cached_input", "output", "reasoning")
 
 def load(path):
@@ -333,6 +342,7 @@ if failed_model and failed_stage != "shape":
 
 totals = {name: sum(stage["tokens"][name] for stage in stages) for name in token_names}
 result = {
+    "recipe": recipe,
     "run_status": "failed",
     "status": "failed",
     "failed_stage": failed_stage,
@@ -374,7 +384,7 @@ fi
 
 if run_capture build "$scratch/build.txt" "$KOGEN_BIN" build "$slug" \
   --project "$project_dir" --origin "$origin" --base main \
-  --model gpt-6-luna --effort max; then
+  --model gpt-6-luna --effort max --recipe "$recipe"; then
   :
 else
   stage_status=$?
@@ -399,11 +409,11 @@ git -C "$work_dir" apply "$out_dir/final.diff"
   exit 4
 }
 
-python3 - "$out_dir/shape.json" "$out_dir/report.json" "$out_dir/usage.json" <<'PY'
+python3 - "$out_dir/shape.json" "$out_dir/report.json" "$out_dir/usage.json" "$recipe" <<'PY'
 import json
 import sys
 
-shape_path, report_path, output_path = sys.argv[1:]
+shape_path, report_path, output_path, recipe = sys.argv[1:]
 with open(shape_path, encoding="utf-8") as source:
     shape = json.load(source)
 with open(report_path, encoding="utf-8") as source:
@@ -454,6 +464,7 @@ for stage in report.get("model_stages", []):
 
 totals = {name: sum(stage["tokens"][name] for stage in stages) for name in token_names}
 result = {
+    "recipe": recipe,
     "slug": shape.get("slug"),
     "run_status": "complete",
     "status": report.get("status"),

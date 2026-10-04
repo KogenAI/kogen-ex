@@ -28,9 +28,13 @@ defmodule Kogen.E2e.Build.Options do
   @moduledoc false
 
   @enforce_keys [:seed_project]
-  defstruct [:seed_project, :move_base_on]
+  defstruct [:seed_project, :move_base_on, recipe: "staged"]
 
-  @type t :: %__MODULE__{seed_project: Path.t(), move_base_on: atom() | nil}
+  @type t :: %__MODULE__{
+          seed_project: Path.t(),
+          move_base_on: atom() | nil,
+          recipe: String.t()
+        }
 end
 
 defmodule Kogen.E2e.Build.Fixture do

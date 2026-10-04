@@ -1,6 +1,7 @@
 defmodule Kogen.Engine.Build.GateSupport do
   @moduledoc false
 
+  alias Kogen.Build.Recipe
   alias Kogen.Contracts.Failure
   alias Kogen.Contracts.ProcResult
   alias Kogen.Engine.Build.Guard
@@ -115,6 +116,11 @@ defmodule Kogen.Engine.Build.GateSupport do
   def record_gate_flakes(_session, _gate), do: {:ok, []}
 
   defp default_harness_options(session, guard) do
+    context = Map.get(session.request.recipe.roles, :context)
+    builder = Recipe.role(session.request.recipe, :builder)
+    planner = Map.get(session.request.recipe.roles, :planner, builder)
+    reviewer = Map.get(session.request.recipe.roles, :reviewer, builder)
+
     %Opts{
       workdir: session.workdir,
       run_dir: session.run_dir,
@@ -126,8 +132,11 @@ defmodule Kogen.Engine.Build.GateSupport do
       env: session.process_env,
       before_gate: guard,
       models: %{
-        builder: {session.request.model, session.request.effort},
-        strong: {session.request.model, session.request.effort}
+        builder: builder,
+        strong: planner,
+        context: context || {"gpt-6-luna", "low"},
+        planner: planner,
+        reviewer: reviewer
       },
       limits: %{max_turns: 60, wall_ms: 1_800_000},
       repairs_left: 0

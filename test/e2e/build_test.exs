@@ -36,6 +36,28 @@ defmodule Kogen.E2e.BuildTest do
     assert results == List.duplicate({:ok, :ok}, 4)
   end
 
+  test "direct recipe lands without context, plan, or review calls", context do
+    parent = scenario_parent(context, "direct-recipe")
+
+    script = [
+      ScriptedProvider.write(:develop, "lib/tiny_app.ex", ready_source("direct", :ready)),
+      ScriptedProvider.answer(:develop, "Done.")
+    ]
+
+    result =
+      Build.run!(parent, script, %Options{seed_project: context.seed_project, recipe: "direct"})
+
+    assert %Result{build: %{status: :landed}, run_status: :landed} = result
+    assert result.provider_requests != []
+    assert [started] = Enum.filter(result.events, &(&1.event == "started"))
+    assert started.recipe == "direct"
+    assert [develop] = Enum.filter(result.events, &(&1.event == "model_stage"))
+    assert develop.stage == "develop"
+
+    assert {:ok, report} = Build.report(result)
+    assert %{"recipe" => "direct"} = :json.decode(report)
+  end
+
   defp happy_path(context) do
     parent = scenario_parent(context, "happy-path")
     result = Build.run!(parent, landing_script(), options(context.seed_project))

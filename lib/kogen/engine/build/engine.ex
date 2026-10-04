@@ -134,7 +134,8 @@ defmodule Kogen.Engine.Build.Engine do
       model: request.model,
       effort: request.effort,
       credential_source: request.credential_source,
-      credential_label: request.credential_label
+      credential_label: request.credential_label,
+      recipe: Kogen.Build.Recipe.name(request.recipe)
     })
   end
 
@@ -193,7 +194,7 @@ defmodule Kogen.Engine.Build.Engine do
            session.sandbox
          ) do
       :ok ->
-        run_stage(session, :context, %{})
+        start_cycle(session)
 
       {:error, %Failure{} = failure} ->
         fail_candidate_setup(prepared.request, prepared.run, path, failure)
@@ -222,7 +223,12 @@ defmodule Kogen.Engine.Build.Engine do
         run_dir: prepared.run.dir,
         tmp_dir: Runtime.temporary_directory(process_env)
       },
-      cycle: Cycle.new(%{approval: prepared.approval, repairs: 2}),
+      cycle:
+        Cycle.new(%{
+          approval: prepared.approval,
+          repairs: 2,
+          recipe: request.recipe
+        }),
       state_root: state_root(request),
       run_dir: prepared.run.dir,
       base_sha: prepared.base_sha,
@@ -252,19 +258,9 @@ defmodule Kogen.Engine.Build.Engine do
     }
   end
 
-  defp run_stage(session, stage, args) do
-    case StageRunner.run(stage, args, session) do
-      {:ok, updated, events} ->
-        updated = add_stage_line(updated, stage, events)
-        finish_drive(run_events(updated, events))
-
-      {:error, updated, %Failure{} = failure} ->
-        updated = add_stage_line(updated, stage, [{:stage_failed, stage, failure}])
-        finish_drive(apply_event(updated, {:stage_failed, stage, failure}))
-
-      {:base_moved, updated} ->
-        finish_drive(apply_event(updated, {:base_moved}))
-    end
+  defp start_cycle(session) do
+    {cycle, effects} = Cycle.step(session.cycle, :start)
+    finish_drive(run_effects(%{session | cycle: cycle}, effects))
   end
 
   defp finish_drive({:done, result}), do: result

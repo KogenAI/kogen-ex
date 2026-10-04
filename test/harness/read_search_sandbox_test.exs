@@ -7,8 +7,8 @@ defmodule Kogen.Harness.ReadSearchSandboxTests do
   alias Kogen.Contracts.ToolCall
   alias Kogen.Harness
   alias Kogen.Harness.Opts
-  alias Kogen.Harness.ScriptedProvider
   alias Kogen.Proc.Sandbox
+  alias Kogen.Testkit.HarnessScriptedProvider, as: ScriptedProvider
 
   test "shaper search falls back to grep when sandboxed rg is unavailable", %{
     tmp_dir: tmp_dir

@@ -1,6 +1,7 @@
 defmodule Kogen.Engine.Build.Reviewer do
   @moduledoc false
 
+  alias Kogen.Build.Recipe
   alias Kogen.Contracts.Failure
   alias Kogen.Contracts.ProviderError
   alias Kogen.Engine.Build.Session
@@ -48,11 +49,13 @@ defmodule Kogen.Engine.Build.Reviewer do
   defp harness_opts(session), do: StageRunner.harness_options(session)
 
   defp record_model(session, usage, wall_ms) do
+    {model, effort} = Recipe.role(session.request.recipe, :reviewer)
+
     State.record(session.run, %{
       event: :model_stage,
       stage: :review,
-      model: session.request.model,
-      effort: session.request.effort,
+      model: model,
+      effort: effort,
       tokens: usage,
       wall_ms: wall_ms
     })

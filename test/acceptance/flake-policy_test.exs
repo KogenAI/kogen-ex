@@ -2,6 +2,7 @@ defmodule Kogen.Acceptance.FlakePolicyTest do
   use Kogen.Testkit.Case
 
   alias Kogen.Build.Cycle
+  alias Kogen.Build.Recipe
   alias Kogen.Contracts.Failure
 
   @moduletag :acceptance
@@ -46,7 +47,14 @@ defmodule Kogen.Acceptance.FlakePolicyTest do
   end
 
   defp started do
-    state = Cycle.new(%{approval: %{slug: "probe"}, repairs: 2})
+    state =
+      Cycle.new(%{
+        approval: %{slug: "probe"},
+        repairs: 2,
+        recipe: Recipe.for_build("staged", "scripted-model", "medium")
+      })
+
+    {state, _effects} = Cycle.step(state, :start)
     {state, _effects} = Cycle.step(state, {:stage_ok, :context, %{}})
     {state, _effects} = Cycle.step(state, {:stage_ok, :plan, %{}})
     state

@@ -17,6 +17,17 @@ defmodule Kogen.Kernel.CLITest do
     assert args.origin == args.project
   end
 
+  test "build accepts only the built-in recipes and defaults to staged" do
+    assert {:ok, default} = Arguments.parse(["build", "greet"])
+    assert default.recipe == "staged"
+
+    assert {:ok, direct} = Arguments.parse(["build", "greet", "--recipe", "direct"])
+    assert direct.recipe == "direct"
+
+    assert {:error, "--recipe must be staged or direct"} =
+             Arguments.parse(["build", "greet", "--recipe", "unknown"])
+  end
+
   test "provider commands parse account labels without requiring a project" do
     assert {:ok, login} = Arguments.parse(["provider", "login", "chatgpt", "--as", "personal"])
     assert login.command == :provider_login

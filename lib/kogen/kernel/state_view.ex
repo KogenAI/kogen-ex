@@ -308,6 +308,7 @@ defmodule Kogen.Kernel.Report do
       json_object([
         {"slug", run.slug},
         {"status", Atom.to_string(run.status)},
+        {"recipe", nullable(event_value(events, :recipe))},
         {"approval", nullable(run.approval_commit)},
         {"base",
          nullable(event_value(events, :base_sha) || landing_value(run, :expected_parent))},

@@ -15,11 +15,15 @@ defmodule Kogen.Engine do
     ],
     exports: [Build.Request, Build.Result, Build.Setup, Runtime]
 
+  alias Kogen.Build.Recipe
   alias Kogen.Contracts.Project
   alias Kogen.Engine.Build.Request
   alias Kogen.Engine.Build.Result
   alias Kogen.Engine.Environment
   alias Kogen.Engine.Runtime
+
+  @spec build_recipe(String.t(), String.t(), String.t()) :: Recipe.t()
+  def build_recipe(name, model, effort), do: Recipe.for_build(name, model, effort)
 
   @spec run(Request.t()) :: {:ok, Result.t()} | {:error, term()}
   def run(%Request{} = request), do: Kogen.Engine.Build.Engine.run(request)

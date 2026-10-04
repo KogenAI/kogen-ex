@@ -72,7 +72,7 @@ defmodule Kogen.Harness.Context do
   end
 
   defp context_turn(opts, instructions, state, remaining) do
-    {model, effort} = {"gpt-6-luna", "low"}
+    {model, effort} = Map.get(opts.models, :context, {"gpt-6-luna", "low"})
     turn = state.turns + 1
 
     exchange_request = %ExchangeRequest{

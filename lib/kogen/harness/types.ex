@@ -37,7 +37,13 @@ defmodule Kogen.Harness.Opts do
           env: %{String.t() => String.t()},
           before_gate: (-> :ok | {:error, term()}) | nil,
           flake_excused_test_ids: [String.t()],
-          models: %{builder: model(), strong: model()},
+          models: %{
+            required(:builder) => model(),
+            required(:strong) => model(),
+            optional(:context) => model(),
+            optional(:planner) => model(),
+            optional(:reviewer) => model()
+          },
           limits: %{max_turns: pos_integer(), wall_ms: pos_integer()},
           repairs_left: non_neg_integer(),
           protected: [String.t()]

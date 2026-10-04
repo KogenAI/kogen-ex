@@ -17,6 +17,7 @@ defmodule Kogen.State.Json do
 
   @event_fields [
     event: "event",
+    recipe: "recipe",
     stage: "stage",
     class: "class",
     reason: "reason",

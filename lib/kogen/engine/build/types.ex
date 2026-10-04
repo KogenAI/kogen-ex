@@ -27,6 +27,7 @@ defmodule Kogen.Engine.Build.Request do
     :base,
     :model,
     :effort,
+    :recipe,
     :runtime,
     :provider_mod,
     :provider_config,
@@ -44,6 +45,7 @@ defmodule Kogen.Engine.Build.Request do
           base: String.t(),
           model: String.t(),
           effort: String.t(),
+          recipe: Kogen.Build.Recipe.t(),
           runtime: Kogen.Engine.Runtime.t(),
           provider_mod: module(),
           provider_config: term(),
@@ -114,6 +116,7 @@ defmodule Kogen.Engine.Build.Session do
     :landed_sha,
     :acceptance,
     :receipts,
+    direct_preflight_complete?: false,
     flake_excused: [],
     scope_warnings: [],
     lines: []
@@ -144,6 +147,7 @@ defmodule Kogen.Engine.Build.Session do
           landed_sha: String.t() | nil,
           acceptance: [Kogen.Checks.LedgerRow.t()] | nil,
           receipts: [Kogen.Contracts.Receipt.t()] | nil,
+          direct_preflight_complete?: boolean(),
           flake_excused: [%{test_ids: [String.t()], seed: non_neg_integer()}],
           scope_warnings: [map()],
           lines: [String.t()]
