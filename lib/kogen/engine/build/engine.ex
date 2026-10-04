@@ -87,19 +87,20 @@ defmodule Kogen.Engine.Build.Engine do
         {:ok, approved_sha}
 
       {:ok, current} ->
-        if Workspace.ancestor?(request.origin, approved_sha, current, request.runtime.git_env) do
-          with :ok <-
-                 ApprovalManifest.unchanged_between(
-                   request.origin,
-                   approved_sha,
-                   current,
-                   approval.protected_manifest,
-                   request.runtime.git_env
-                 ) do
-            {:ok, current}
-          end
+        with true <-
+               Workspace.ancestor?(request.origin, approved_sha, current, request.runtime.git_env),
+             :ok <-
+               ApprovalManifest.unchanged_between(
+                 request.origin,
+                 approved_sha,
+                 current,
+                 approval.protected_manifest,
+                 request.runtime.git_env
+               ) do
+          {:ok, current}
         else
-          {:error, {:base_moved, approved_sha, current}}
+          false -> {:error, {:base_moved, approved_sha, current}}
+          {:error, reason} -> {:error, reason}
         end
 
       {:error, :missing} ->

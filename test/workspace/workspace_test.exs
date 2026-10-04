@@ -119,6 +119,14 @@ defmodule Kogen.Workspace.WorkspaceTest do
     assert {:ok, ^clean_tree} = Workspace.tree_hash(source, @git_env)
   end
 
+  test "ancestor returns process errors instead of treating them as a negative answer",
+       %{tmp_dir: tmp_dir} do
+    %{source: source, base_sha: base_sha} = fixture(tmp_dir)
+    git_env = Map.put(@git_env, "PATH", Path.join(tmp_dir, "missing-bin"))
+
+    assert {:error, :enoent} = Workspace.ancestor?(source, base_sha, base_sha, git_env)
+  end
+
   test "soft reset moves candidate commits onto the approved base", %{tmp_dir: tmp_dir} do
     %{source: source, base_sha: base_sha} = fixture(tmp_dir)
 

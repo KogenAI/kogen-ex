@@ -119,18 +119,23 @@ defmodule Kogen.State.Lifecycle do
   defp reconcile_landing(repo, run, landing, branch, git_env, workspace) do
     case workspace_call(workspace, :rev_parse, [repo, branch_ref(branch), git_env]) do
       {:ok, branch_sha} ->
-        if workspace_call(workspace, :ancestor?, [
-             repo,
-             landing.candidate_commit,
-             branch_sha,
-             git_env
-           ]) do
-          with :ok <- RunStore.record(run, %{event: :reconciled, status: :landed}),
-               :ok <- release_after_landing(repo, run.id, git_env, workspace) do
-            {:ok, :landed}
-          end
-        else
-          {:ok, :unchanged}
+        case workspace_call(workspace, :ancestor?, [
+               repo,
+               landing.candidate_commit,
+               branch_sha,
+               git_env
+             ]) do
+          true ->
+            with :ok <- RunStore.record(run, %{event: :reconciled, status: :landed}),
+                 :ok <- release_after_landing(repo, run.id, git_env, workspace) do
+              {:ok, :landed}
+            end
+
+          false ->
+            {:ok, :unchanged}
+
+          {:error, reason} ->
+            {:error, reason}
         end
 
       {:error, :missing} ->

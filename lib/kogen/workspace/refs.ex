@@ -169,12 +169,13 @@ defmodule Kogen.Workspace.Refs do
     end)
   end
 
-  @spec ancestor?(Path.t(), String.t(), String.t(), %{String.t() => String.t()}) :: boolean()
+  @spec ancestor?(Path.t(), String.t(), String.t(), %{String.t() => String.t()}) ::
+          boolean() | {:error, term()}
   def ancestor?(repo, a, b, git_env) do
     case Git.run(repo, ["merge-base", "--is-ancestor", a, b], git_env) do
       {:ok, 0, _output} -> true
       {:ok, _status, _output} -> false
-      {:error, _reason} -> false
+      {:error, reason} -> {:error, reason}
     end
   end
 

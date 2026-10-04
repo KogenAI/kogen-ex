@@ -105,7 +105,7 @@ defmodule Kogen.Workspace do
     end
   end
 
-  @spec ancestor?(Path.t(), String.t(), String.t(), git_env()) :: boolean()
+  @spec ancestor?(Path.t(), String.t(), String.t(), git_env()) :: boolean() | {:error, term()}
   def ancestor?(repo, a, b, git_env), do: Refs.ancestor?(repo, a, b, git_env)
 end
 

@@ -1,12 +1,27 @@
 defmodule KogenChecks.Check.FailOpenWith do
-  @moduledoc "Flags `with ... else` branches that turn unrecognized errors into success-shaped values."
+  @moduledoc "Flags error branches that turn failures into success-shaped values."
   use Credo.Check,
     category: :warning,
-    base_priority: :high,
+    base_priority: :low,
+    # This advisory should remain visible under --strict without failing the gate.
+    exit_status: 0,
     param_defaults: [included_paths: ["lib/"]],
     explanations: [
-      check: "Match the errors a `with` can produce or let the unmatched value propagate."
+      check: "Log, propagate, or re-raise an error instead of returning a success default."
     ]
+
+  @log_functions [
+    :alert,
+    :critical,
+    :debug,
+    :emergency,
+    :error,
+    :info,
+    :log,
+    :notice,
+    :warn,
+    :warning
+  ]
 
   @impl Credo.Check
   @spec run(Credo.SourceFile.t(), Keyword.t()) :: [Credo.Issue.t()]
@@ -35,6 +50,11 @@ defmodule KogenChecks.Check.FailOpenWith do
     end
   end
 
+  defp walk({:case, meta, args} = node, issues, issue_meta) when is_list(args) do
+    clauses = args |> List.last() |> Keyword.get(:do)
+    {node, check_case(clauses, meta, issue_meta) ++ issues}
+  end
+
   defp walk(node, issues, _issue_meta), do: {node, issues}
 
   defp check_else(nil, _meta, _issue_meta), do: []
@@ -43,14 +63,7 @@ defmodule KogenChecks.Check.FailOpenWith do
     arrows = for {:->, _, [[pattern], body]} <- clauses, do: {pattern, body}
 
     if Enum.any?(arrows, &fail_open?/1) do
-      [
-        format_issue(issue_meta,
-          message:
-            "with/else maps an unexpected failure to a success-shaped value. Match real error shapes or drop `else`.",
-          trigger: "with",
-          line_no: meta[:line]
-        )
-      ]
+      [issue(issue_meta, "with", meta[:line])]
     else
       []
     end
@@ -58,26 +71,54 @@ defmodule KogenChecks.Check.FailOpenWith do
 
   defp check_else(_clauses, _meta, _issue_meta), do: []
 
+  defp check_case(clauses, meta, issue_meta) when is_list(clauses) do
+    arrows = for {:->, _, [[pattern], body]} <- clauses, do: {pattern, body}
+
+    if Enum.any?(arrows, &error_to_default?/1) do
+      [issue(issue_meta, "case", meta[:line])]
+    else
+      []
+    end
+  end
+
+  defp check_case(_clauses, _meta, _issue_meta), do: []
+
+  defp issue(issue_meta, trigger, line_no) do
+    format_issue(issue_meta,
+      message:
+        "An error branch drops its reason and returns a success default. Log, propagate, or re-raise the error.",
+      trigger: trigger,
+      line_no: line_no
+    )
+  end
+
   defp fail_open?({pattern, body}) do
-    catch_all_failure?(pattern, last(body)) or error_to_literal?(pattern, last(body))
+    not logs?(body) and
+      (catch_all_failure?(pattern, last(body)) or error_to_default?(pattern, body))
   end
 
   defp catch_all_failure?(pattern, result) do
     catch_all?(pattern) and not same_value?(pattern, result) and not error_result?(result)
   end
 
-  defp error_to_literal?(pattern, result) do
-    error_pattern?(pattern) and literal?(result)
+  defp error_to_default?({pattern, body}) do
+    error_to_default?(pattern, body)
+  end
+
+  defp error_to_default?(pattern, body) do
+    error_pattern?(pattern) and not logs?(body) and default_value?(last(body))
   end
 
   defp catch_all?({name, _, context}) when is_atom(name) and is_atom(context), do: true
 
   defp catch_all?(_pattern), do: false
 
-  defp error_pattern?({:error, _}), do: true
-  defp error_pattern?({:{}, _, [:error | _]}), do: true
-  defp error_pattern?([{:error, _} | _]), do: true
+  defp error_pattern?({:error, reason}), do: variable?(reason)
+  defp error_pattern?({:{}, _, [:error, reason]}), do: variable?(reason)
   defp error_pattern?(_pattern), do: false
+
+  defp variable?({name, _, context}) when is_atom(name) and is_atom(context), do: true
+  defp variable?(_pattern), do: false
 
   defp same_value?({name, _, context}, {name, _, result_context})
        when is_atom(name) and is_atom(context) and is_atom(result_context), do: true
@@ -94,10 +135,46 @@ defmodule KogenChecks.Check.FailOpenWith do
 
   defp error_result?(_result), do: false
 
-  defp literal?(value) when value in [nil, true, false, :ok, [], ""] or is_number(value), do: true
-  defp literal?({:ok, value}), do: literal?(value)
-  defp literal?({:%{}, _, []}), do: true
+  defp default_value?(:ok), do: true
+  defp default_value?({:ok, value}), do: literal?(value)
+  defp default_value?({:{}, _, [:ok, value]}), do: literal?(value)
+  defp default_value?(value) when value in [nil, false, []], do: true
+  defp default_value?({:%{}, _, []}), do: true
+  defp default_value?(_value), do: false
+
+  defp literal?(value) when is_atom(value) or is_binary(value) or is_number(value), do: true
+  defp literal?([]), do: true
+  defp literal?([head | tail]), do: literal?(head) and literal?(tail)
+  defp literal?({:{}, _, values}), do: Enum.all?(values, &literal?/1)
+
+  defp literal?({:%{}, _, entries}) do
+    Enum.all?(entries, fn
+      {key, value} -> literal?(key) and literal?(value)
+      _entry -> false
+    end)
+  end
+
   defp literal?(_value), do: false
+
+  defp logs?(body) do
+    {_body, found?} = Macro.prewalk(body, false, &find_log/2)
+    found?
+  end
+
+  defp find_log(node, found?) do
+    {node, found? or log_call?(node)}
+  end
+
+  defp log_call?({{:., _, [module, function]}, _, _}) when function in @log_functions do
+    module == :logger or logger_alias?(module)
+  end
+
+  defp log_call?(_node), do: false
+
+  defp logger_alias?({:__aliases__, _, parts}) when is_list(parts),
+    do: List.last(parts) == :Logger
+
+  defp logger_alias?(_module), do: false
 
   defp last({:__block__, _, expressions}) when expressions != [], do: List.last(expressions)
   defp last(expression), do: expression

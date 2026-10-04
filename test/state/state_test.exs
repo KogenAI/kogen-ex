@@ -106,7 +106,7 @@ defmodule StateFakeWorkspace do
     Agent.update(repo, &put_in(&1.intent_commits[slug], sha))
   end
 
-  @spec ancestor?(Agent.agent(), String.t(), String.t(), map()) :: boolean()
+  @spec ancestor?(Agent.agent(), String.t(), String.t(), map()) :: boolean() | {:error, term()}
   def ancestor?(repo, ancestor, descendant, _git_env) do
     Agent.get(repo, fn state ->
       ancestor == descendant or MapSet.member?(state.ancestors, {ancestor, descendant})
