@@ -156,7 +156,13 @@ defmodule Kogen.Harness.Developer do
     case Gate.run(opts, state.deadline) do
       {:ok, gate} ->
         with :ok <- Recording.append(opts, :gate, :develop, state.turns, gate) do
-          outcome = if gate.status == :pass, do: :done, else: :gate_red
+          outcome =
+            case gate.status do
+              :pass -> :done
+              :fail -> :gate_red
+              :environment -> :gate_environment
+            end
+
           {:ok, result(outcome, gate, state)}
         end
 

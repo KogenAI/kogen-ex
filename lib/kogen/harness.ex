@@ -1,7 +1,7 @@
 defmodule Kogen.Harness do
   @moduledoc "Runs Kogen's provider-backed shaping, Developer, context, plan, and review stages."
   use Boundary,
-    deps: [Kogen.Contracts, Kogen.Proc, Kogen.Provider, Kogen.Project],
+    deps: [Kogen.Checks, Kogen.Contracts, Kogen.Proc, Kogen.Provider, Kogen.Project],
     exports: [Opts, Pack, Plan, Review, Result, ShapePass, ShapeCall]
 
   alias Kogen.Harness.Developer

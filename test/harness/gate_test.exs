@@ -77,6 +77,21 @@ defmodule Kogen.Harness.GateTest do
     assert result.flake_excused == []
   end
 
+  test "an unavailable check is an environment result without model feedback", %{
+    tmp_dir: tmp_dir
+  } do
+    Process.put(:gate_script_results, [{1, "mix: command not found\n"}])
+    opts = options(tmp_dir, fn _argv, _timeout -> {:ok, process_result([], 0, "")} end, nil)
+
+    assert {:ok, result} = Gate.run(opts, deadline())
+    assert result.status == :environment
+    assert [%{exit_level: 3, reason: reason}] = result.checks
+    assert reason == "a required tool or file was unavailable"
+    assert [detail] = result.failures
+    assert detail =~ "exit 3"
+    refute detail =~ "[exunit/"
+  end
+
   defp options(tmp_dir, base_test, changed_paths) do
     workdir = Path.join(tmp_dir, "project")
     File.mkdir_p!(workdir)

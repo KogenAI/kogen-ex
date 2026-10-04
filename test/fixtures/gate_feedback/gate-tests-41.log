@@ -1,0 +1,39 @@
+==> stream_data
+Compiling 3 files (.ex)
+Generated stream_data app
+==> beltway
+===> Failed to restore $WORKDIR/deps/telemetry/_build/prod/lib/.rebar3/rebar_compiler_erl/source.dag file. Discarding it.
+
+===> Analyzing applications...
+===> Compiling telemetry
+Compiling 21 files (.ex)
+Generated beltway app
+Running ExUnit with seed: 565754, max_cases: 24
+
+.....................
+
+  1) test high-priority Friday deadline continues on Monday (Syn14BugSlaBusinessHoursAcceptanceTest)
+     test/acceptance/syn-14-bug-sla-business-hours_test.exs:7
+     Assertion with == failed
+     code:  assert SLA.due_at(:high, ~U[2025-04-04 16:00:00Z]) == ~U[2025-04-07 12:00:00Z]
+     left:  ~U[2025-04-07 12:00:00.000000Z]
+     right: ~U[2025-04-07 12:00:00Z]
+     stacktrace:
+       test/acceptance/syn-14-bug-sla-business-hours_test.exs:8: (test)
+
+..
+
+  2) test after-hours and weekend normal tickets start Monday morning (Syn14BugSlaBusinessHoursAcceptanceTest)
+     test/acceptance/syn-14-bug-sla-business-hours_test.exs:12
+     Assertion with == failed
+     code:  assert SLA.due_at(:normal, ~U[2025-04-04 18:30:00Z]) == monday_deadline
+     left:  ~U[2025-04-07 17:00:00.000000Z]
+     right: ~U[2025-04-07 17:00:00Z]
+     stacktrace:
+       test/acceptance/syn-14-bug-sla-business-hours_test.exs:15: (test)
+
+............
+Finished in 0.03 seconds (0.03s async, 0.00s sync)
+
+Result: 35/37 passed
+Failed: 2 tests

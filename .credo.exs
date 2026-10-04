@@ -155,7 +155,7 @@
                Kogen.Provider => [Kogen.Proc],
                Kogen.State => [Kogen.Workspace],
                Kogen.Checks => [Kogen.Proc, Kogen.Workspace, Kogen.Project],
-               Kogen.Harness => [Kogen.Proc, Kogen.Provider, Kogen.Project],
+               Kogen.Harness => [Kogen.Checks, Kogen.Proc, Kogen.Provider, Kogen.Project],
                Kogen.Engine => [
                  Kogen.Proc,
                  Kogen.Project,

@@ -1,0 +1,99 @@
+/Library/Developer/CommandLineTools/usr/bin/make --no-print-directory guard fmt compile-dev compile-test xref credo test acceptance e2e dialyzer
+mise exec -- mix kogen.guard
+mise exec -- mix format --check-formatted
+mise exec -- mix compile --force --warnings-as-errors
+mise exec -- mix compile --force --warnings-as-errors
+[0mWaiting for lock on the build directory (held by process <PID>)
+[0mWaiting for lock on the build directory (held by process <PID>)
+[0mWaiting for lock on the build directory (held by process <PID>)
+[0mWaiting for lock on the build directory (held by process <PID>)
+[0mWaiting for lock on the build directory (held by process <PID>)
+Compiling 110 files (.ex)
+Compiling 100 files (.ex)
+guard OK
+Generated kogen app
+GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_AUTHOR_NAME='Kogen Test' GIT_AUTHOR_EMAIL=test@kogen.invalid GIT_COMMITTER_NAME='Kogen Test' GIT_COMMITTER_EMAIL=test@kogen.invalid TZ=Europe/Sarajevo LC_ALL=C MIX_ENV=test mise exec -- mix test --warnings-as-errors --no-compile tools/kogen_checks/test
+GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_AUTHOR_NAME='Kogen Test' GIT_AUTHOR_EMAIL=test@kogen.invalid GIT_COMMITTER_NAME='Kogen Test' GIT_COMMITTER_EMAIL=test@kogen.invalid TZ=Europe/Sarajevo LC_ALL=C MIX_ENV=test mise exec -- mix test --warnings-as-errors --no-compile --only acceptance test/acceptance
+GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_AUTHOR_NAME='Kogen Test' GIT_AUTHOR_EMAIL=test@kogen.invalid GIT_COMMITTER_NAME='Kogen Test' GIT_COMMITTER_EMAIL=test@kogen.invalid TZ=Europe/Sarajevo LC_ALL=C MIX_ENV=test mise exec -- mix test --warnings-as-errors --no-compile --only e2e test/e2e
+Generated kogen app
+mise exec -- mix xref graph --format cycles --label compile-connected --fail-above 0
+mise exec -- mix credo --strict
+mkdir -p "$KOGEN_HOME/plt"
+mise exec -- mix dialyzer --quiet-with-result
+[0mWaiting for lock on the build directory (held by process <PID>)
+[0mWaiting for lock on the build directory (held by process <PID>)
+Running ExUnit with seed: 179217, max_cases: 24
+Excluding tags: [:test]
+Including tags: [:e2e]
+
+Running ExUnit with seed: 193155, max_cases: 24
+Excluding tags: [:test]
+Including tags: [:acceptance]
+
+Running ExUnit with seed: 233734, max_cases: 24
+
+warning: redefining module Kogen.Proc.Runner (current version loaded from _build/test/lib/kogen/ebin/Elixir.Kogen.Proc.Runner.beam)
+\x{2514}\x{2500} test/planted_capability.exs:1: Kogen.Proc.Runner (module)
+
+warning: redefining module Kogen.Testkit.Proc (current version loaded from _build/test/lib/kogen/ebin/Elixir.Kogen.Testkit.Proc.beam)
+\x{2514}\x{2500} test/planted_capability.exs:1: Kogen.Testkit.Proc (module)
+
+............................................[0mWaiting for lock on the build directory (held by process <PID>)
+[0mWaiting for lock on the build directory (held by process <PID>)
+[0mWaiting for lock on the build directory (held by process <PID>)
+[0mWaiting for lock on the build directory (held by process <PID>)
+.[0mWaiting for lock on the build directory (held by process <PID>)
+..
+Finished in 0.5 seconds (0.5s async, 0.00s sync)
+
+Result: 36 passed
+GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_AUTHOR_NAME='Kogen Test' GIT_AUTHOR_EMAIL=test@kogen.invalid GIT_COMMITTER_NAME='Kogen Test' GIT_COMMITTER_EMAIL=test@kogen.invalid TZ=Europe/Sarajevo LC_ALL=C MIX_ENV=test mise exec -- mix test --warnings-as-errors --no-compile --exclude fixture --exclude acceptance --exclude e2e --exclude seatbelt
+.[0mWaiting for lock on the build directory (held by process <PID>)
+....Checking 154 source files (this might take a while) ...
+
+Please report incorrect results: https://github.com/rrrene/credo/issues
+
+Analysis took 0.7 seconds (0.4s to load, 0.2s running 44 checks on 154 files)
+1963 mods/funs, found no issues.
+
+Use `mix credo explain` to explain issues, `mix credo --help` for options.
+Running ExUnit with seed: 961575, max_cases: 24
+Excluding tags: [:fixture, :acceptance, :e2e, :seatbelt]
+
+...Live Harness smoke is opt-in; run mix test --only live test/harness/live_smoke_test.exs.
+..Live provider smoke is opt-in; run mix test --only live to execute it.
+..........[0mWaiting for lock on the build directory (held by process <PID>)
+......................No cycles found
+.....................................................................................................................Total errors: 0, Skipped: 0, Unnecessary Skips: 0
+done (passed successfully)
+.....................
+
+  1) test status still reports the landing (Kogen.Acceptance.CommitFormatTest)
+     test/acceptance/commit-format_test.exs:44
+     ** (ErlangError) Erlang error: {:invalid_byte, 109}: invalid byte 16#6D 'm' at byte position 0
+     code: {:ok, statuses} = Kogen.Kernel.status(fixture.project_root, fixture.origin, "main")
+     stacktrace:
+       (stdlib 8.1) json.erl:543: :json.invalid_byte/2
+       (stdlib 8.1) json.erl:882: :json.decode/1
+       (kogen 0.0.0) lib/kogen/engine/environment.ex:35: Kogen.Engine.Environment.decode_environment/2
+       (kogen 0.0.0) lib/kogen/kernel.ex:117: Kogen.Kernel.status/3
+       test/acceptance/commit-format_test.exs:46: (test)
+
+........WARNING: ExUnit suite took 16195 ms (10 s warning threshold)
+
+Finished in 16.1 seconds (16.1s async, 0.00s sync)
+
+Result: 1 passed
+..WARNING: ExUnit suite took 16625 ms (10 s warning threshold)
+
+Finished in 16.6 seconds (16.6s async, 0.00s sync)
+
+Result: 162 passed, 45 excluded
+...WARNING: ExUnit suite took 21579 ms (10 s warning threshold)
+
+Finished in 21.5 seconds (21.5s async, 0.00s sync)
+
+Result: 41/42 passed
+Failed: 1 test
+make[1]: *** [acceptance] Error 2
+make: *** [check] Error 2

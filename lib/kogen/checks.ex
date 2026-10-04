@@ -37,7 +37,7 @@ defmodule Kogen.Checks do
   @moduledoc "Runs deterministic project verification and records its results."
   use Boundary,
     deps: [Kogen.Contracts, Kogen.Proc, Kogen.Workspace, Kogen.Project],
-    exports: [LedgerRow, ShapeValidation, ShapeFormatRequest]
+    exports: [Feedback, LedgerRow, ShapeValidation, ShapeFormatRequest]
 
   alias Kogen.Checks.Fixer
   alias Kogen.Checks.Ledger
@@ -58,7 +58,9 @@ defmodule Kogen.Checks do
            %{
              tree: String.t(),
              receipts: [Kogen.Contracts.Receipt.t()],
-             status: :pass | {:fail, [String.t()]}
+             status: :pass | {:fail, [String.t()]},
+             feedback: String.t(),
+             exit_levels: [{String.t(), 0..3}]
            }}
           | {:error, Failure.t()}
 

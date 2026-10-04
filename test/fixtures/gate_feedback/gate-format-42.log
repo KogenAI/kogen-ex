@@ -1,0 +1,77 @@
+** (Mix) mix format failed due to --check-formatted.
+The following files are not formatted:
+
+[1m[31m$WORKDIR/lib/trackline/support/sla.ex
+[0m
+         |
+ 29  29  |
+ 30  30  |    case DateTime.compare(from, to) do
+ 31     -|      :eq -> 0.0
+ 32     -|      :gt -> -business_minutes_between(to, from)
+     31 +|      :eq ->
+     32 +|        0.0
+     33 +|
+     34 +|      :gt ->
+     35 +|        -business_minutes_between(to, from)
+     36 +|
+ 33  37  |      :lt ->
+ 34  38  |        from_date = DateTime.to_date(from)
+         |
+
+[1m[31m$WORKDIR/test/beltway/rate_limiter_test.exs
+[0m
+       |
+ 7  7  |  setup do
+ 8  8  |    clock = Clock.start(0)
+ 9    -|    {:ok, pid} = start_supervised({RateLimiter, capacity: 3, refill_per_sec: 1, clock: Clock.fun(clock)})
+    9 +|
+   10 +|    {:ok, pid} =
+   11 +|      start_supervised({RateLimiter, capacity: 3, refill_per_sec: 1, clock: Clock.fun(clock)})
+   12 +|
+10 13  |    %{limiter: pid, clock: clock}
+11 14  |  end
+       |
+
+[1m[31m$WORKDIR/test/beltway/fetcher_test.exs
+[0m
+       |
+ 5  5  |
+ 6  6  |  test "returns the body" do
+ 7    -|    assert {:ok, "body"} = Fetcher.fetch("http://x", http: fn _ -> {:ok, "body"} end, retry_delay: 0)
+    7 +|    assert {:ok, "body"} =
+    8 +|             Fetcher.fetch("http://x", http: fn _ -> {:ok, "body"} end, retry_delay: 0)
+ 8  9  |  end
+ 9 10  |
+       |
+
+[1m[31m$WORKDIR/test/beltway/cache_test.exs
+[0m
+       |
+14 14  |  test "caches successful results until the ttl passes", %{cache: c, clock: clock} do
+15 15  |    counter = :counters.new(1, [])
+16    -|    fun = fn -> {:ok, :counters.add(counter, 1, 1) |> then(fn _ -> :counters.get(counter, 1) end)} end
+17 16  |
+   17 +|    fun = fn ->
+   18 +|      {:ok, :counters.add(counter, 1, 1) |> then(fn _ -> :counters.get(counter, 1) end)}
+   19 +|    end
+   20 +|
+18 21  |    assert {:ok, 1} = Cache.fetch(c, :k, fun)
+19 22  |    assert {:ok, 1} = Cache.fetch(c, :k, fun)
+       |
+
+[1m[31m$WORKDIR/test/beltway/report_test.exs
+[0m
+       |
+17 17  |  test "json" do
+18 18  |    assert JSON.decode!(Report.render(@report, :json)) ==
+19    -|             %{"title" => "Errors", "rows" => [%{"service" => "api", "count" => 3}, %{"service" => "web", "count" => nil}]}
+   19 +|             %{
+   20 +|               "title" => "Errors",
+   21 +|               "rows" => [
+   22 +|                 %{"service" => "api", "count" => 3},
+   23 +|                 %{"service" => "web", "count" => nil}
+   24 +|               ]
+   25 +|             }
+20 26  |  end
+21 27  |
+       |

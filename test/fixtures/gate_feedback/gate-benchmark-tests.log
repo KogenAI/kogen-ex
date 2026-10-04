@@ -1,0 +1,8 @@
+Waiting for lock on the build directory (held by process <PID>)
+Waiting for lock on the build directory (held by process <PID>)
+Running ExUnit with seed: 2, max_cases: 24
+
+............................................................................................................................................
+Finished in 0.7 seconds (0.2s async, 0.4s sync)
+
+Result: 140 passed

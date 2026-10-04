@@ -168,11 +168,16 @@ defmodule Kogen.Engine.Build.Commit do
   defp check_passed(%{status: :pass}, %{status: :pass}), do: :ok
 
   defp check_passed(checks, acceptance) do
-    {:error,
-     candidate_failure(
-       :verification_failed,
-       "checks=#{inspect(checks.status)} acceptance=#{inspect(acceptance.status)}"
-     )}
+    feedback = Map.get(checks, :feedback, "")
+
+    detail =
+      if feedback == "" do
+        "checks=#{inspect(checks.status)} acceptance=#{inspect(acceptance.status)}"
+      else
+        feedback <> "\nacceptance=#{inspect(acceptance.status)}"
+      end
+
+    {:error, candidate_failure(:verification_failed, detail)}
   end
 
   defp record_check_results(session, checks, acceptance) do

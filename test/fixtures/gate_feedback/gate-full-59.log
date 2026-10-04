@@ -1,0 +1,396 @@
+/Library/Developer/CommandLineTools/usr/bin/make --no-print-directory guard fmt compile-dev compile-test xref credo test acceptance e2e dialyzer
+mise exec -- mix kogen.guard
+mise exec -- mix format --check-formatted
+mise exec -- mix compile --force --warnings-as-errors
+mise exec -- mix compile --force --warnings-as-errors
+[0mWaiting for lock on the build directory (held by process <PID>)
+[0mWaiting for lock on the build directory (held by process <PID>)
+[0mWaiting for lock on the build directory (held by process <PID>)
+[0mWaiting for lock on the build directory (held by process <PID>)
+Compiling 109 files (.ex)
+[0mWaiting for lock on the build directory (held by process <PID>)
+Compiling 99 files (.ex)
+Generated kogen app
+Generated kogen app
+GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_AUTHOR_NAME='Kogen Test' GIT_AUTHOR_EMAIL=test@kogen.invalid GIT_COMMITTER_NAME='Kogen Test' GIT_COMMITTER_EMAIL=test@kogen.invalid TZ=Europe/Sarajevo LC_ALL=C MIX_ENV=test mise exec -- mix test --warnings-as-errors --no-compile tools/kogen_checks/test
+GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_AUTHOR_NAME='Kogen Test' GIT_AUTHOR_EMAIL=test@kogen.invalid GIT_COMMITTER_NAME='Kogen Test' GIT_COMMITTER_EMAIL=test@kogen.invalid TZ=Europe/Sarajevo LC_ALL=C MIX_ENV=test mise exec -- mix test --warnings-as-errors --no-compile --only acceptance test/acceptance
+GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_AUTHOR_NAME='Kogen Test' GIT_AUTHOR_EMAIL=test@kogen.invalid GIT_COMMITTER_NAME='Kogen Test' GIT_COMMITTER_EMAIL=test@kogen.invalid TZ=Europe/Sarajevo LC_ALL=C MIX_ENV=test mise exec -- mix test --warnings-as-errors --no-compile --only e2e test/e2e
+mise exec -- mix xref graph --format cycles --label compile-connected --fail-above 0
+mise exec -- mix credo --strict
+mkdir -p "$KOGEN_HOME/plt"
+mise exec -- mix dialyzer --quiet-with-result
+guard OK
+[0mWaiting for lock on the build directory (held by process <PID>)
+[0mWaiting for lock on the build directory (held by process <PID>)
+[0mWaiting for lock on the build directory (held by process <PID>)
+[0mWaiting for lock on the build directory (held by process <PID>)
+[0mWaiting for lock on the build directory (held by process <PID>)
+Running ExUnit with seed: 25599, max_cases: 24
+
+Running ExUnit with seed: 21017, max_cases: 24
+Excluding tags: [:test]
+Including tags: [:acceptance]
+
+Running ExUnit with seed: 54512, max_cases: 24
+Excluding tags: [:test]
+Including tags: [:e2e]
+
+[0mWaiting for lock on the build directory (held by process <PID>)
+.[0mWaiting for lock on the build directory (held by process <PID>)
+..................................warning: redefining module Kogen.Proc.Runner (current version loaded from _build/test/lib/kogen/ebin/Elixir.Kogen.Proc.Runner.beam)
+\x{2514}\x{2500} test/planted_capability.exs:1: Kogen.Proc.Runner (module)
+
+warning: redefining module Kogen.Testkit.Proc (current version loaded from _build/test/lib/kogen/ebin/Elixir.Kogen.Testkit.Proc.beam)
+\x{2514}\x{2500} test/planted_capability.exs:1: Kogen.Testkit.Proc (module)
+
+.....[0mWaiting for lock on the build directory (held by process <PID>)
+...[0mWaiting for lock on the build directory (held by process <PID>)
+..
+Finished in 0.3 seconds (0.3s async, 0.00s sync)
+
+Result: 36 passed
+GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_AUTHOR_NAME='Kogen Test' GIT_AUTHOR_EMAIL=test@kogen.invalid GIT_COMMITTER_NAME='Kogen Test' GIT_COMMITTER_EMAIL=test@kogen.invalid TZ=Europe/Sarajevo LC_ALL=C MIX_ENV=test mise exec -- mix test --warnings-as-errors --no-compile --exclude fixture --exclude acceptance --exclude e2e
+.......Running ExUnit with seed: 233929, max_cases: 24
+Excluding tags: [:fixture, :acceptance, :e2e]
+
+[0mWaiting for lock on the build directory (held by process <PID>)
+No cycles found
+.Live provider smoke is opt-in; run mix test --only live to execute it.
+.Live Harness smoke is opt-in; run mix test --only live test/harness/live_smoke_test.exs.
+..............[0mWaiting for lock on the build directory (held by process <PID>)
+....................................................................................Checking 153 source files (this might take a while) ...
+.................
+Please report incorrect results: https://github.com/rrrene/credo/issues
+
+Analysis took 1.1 seconds (0.6s to load, 0.5s running 44 checks on 153 files)
+.1959 mods/funs, found no issues.
+
+Use `mix credo explain` to explain issues, `mix credo --help` for options.
+......................
+
+  1) test Seatbelt confines writes and denies credential access (Kogen.Proc.SandboxTest)
+     test/proc/sandbox_test.exs:8
+     match (=) failed
+     code:  assert {:ok, %ProcResult{exit_status: 0, timed_out: false}} =
+              Proc.run(["/bin/sh", "-c", "printf allowed > workspace-write.txt"],
+                cd: workspace,
+                env: env,
+                sandbox: sandbox
+              )
+     left:  {:ok, %Kogen.Contracts.ProcResult{exit_status: 0, timed_out: false}}
+     right: {:ok,
+             %Kogen.Contracts.ProcResult{
+               argv: ["/bin/sh", "-c",
+                "printf allowed > workspace-write.txt"],
+               exit_status: 71,
+               timed_out: false,
+               output_tail: "sandbox-exec: sandbox_apply: Operation not permitted\n",
+               log_path: nil,
+               duration_ms: 213
+             }}
+     stacktrace:
+       test/proc/sandbox_test.exs:78: (test)
+
+...........Total errors: 0, Skipped: 0, Unnecessary Skips: 0
+done (passed successfully)
+.........
+13:46:36.265 [error] Task #PID<0.288.0> started from #PID<0.286.0> terminating
+** (ExUnit.AssertionError)
+
+match (=) failed
+code:  assert %Result{build: %{status: :landed, landed_sha: sha}, run_status: :landed} = result
+left:  %Kogen.E2e.Build.Result{build: %{status: :landed, landed_sha: sha}, run_status: :landed}
+right: %Kogen.E2e.Build.Result{build: %Kogen.Engine.Build.Result{status: :failed, reason: {:environment, :base_acceptance_failed}, failure: %Kogen.Contracts.Failure{class: :environment, reason: :base_acceptance_failed, detail: "acceptance formatter report is empty"}, run_id: "$RUN", run_dir: "$TMPDIR/kogen-tests/68604-8/happy-path/test-home/.kogen/workspaces/test-project/runs/$RUN", landed_sha: nil, lines: ["context: complete", "build: failed ({:environment, :base_acceptance_failed})"]}, events: [%Kogen.State.Event{event: "started", stage: nil, class: nil, reason: nil, detail: nil, status: nil, result: nil, approval_commit: "ccb75427d7c6231ebb6c8b916239d5799c2973af", base_sha: "afbe7ac7364499cd162bbdd77da9c1d1463ab620", ledger: nil, receipts: nil, model: "scripted-model", effort: "medium", tokens: nil}, %Kogen.State.Event{event: "stage_failure", stage: "context", class: "environment", reason: "base_acceptance_failed", detail: "acceptance formatter report is empty", status: nil, result: nil, approval_commit: nil, base_sha: nil, ledger: nil, receipts: nil, model: nil, effort: nil, tokens: nil}, %Kogen.State.Event{event: "finished", stage: nil, class: nil, reason: %{"tuple" => ["environment", "base_acceptance_failed"]}, detail: nil, status: "failed", result: nil, approval_commit: nil, base_sha: nil, ledger: nil, receipts: nil, model: nil, effort: nil, tokens: nil}], fixture: %Kogen.E2e.Build.Fixture{project_root: "$TMPDIR/kogen-tests/68604-8/happy-path/project", workspace_root: "$TMPDIR/kogen-tests/68604-8/happy-path/test-home/.kogen/workspaces/test-project", home: "$TMPDIR/kogen-tests/68604-8/happy-path/test-home", origin: "$TMPDIR/kogen-tests/68604-8/happy-path/origin.git", approved_base: "afbe7ac7364499cd162bbdd77da9c1d1463ab620", approval_commit: "ccb75427d7c6231ebb6c8b916239d5799c2973af", git_env: %{"GIT_AUTHOR_DATE" => "2026-10-02T00:00:00+00:00", "GIT_AUTHOR_EMAIL" => "test@kogen.invalid", "GIT_AUTHOR_NAME" => "Kogen Test", "GIT_COMMITTER_DATE" => "2026-10-02T00:00:00+00:00", "GIT_COMMITTER_EMAIL" => "test@kogen.invalid", "GIT_COMMITTER_NAME" => "Kogen Test", "GIT_CONFIG_COUNT" => "1", "GIT_CONFIG_GLOBAL" => "/dev/null", "GIT_CONFIG_KEY_0" => "commit.gpgsign", "GIT_CONFIG_NOSYSTEM" => "1", "GIT_CONFIG_VALUE_0" => "false"}}, run_status: :failed, claim_released: true}
+
+    test/e2e/build_test.exs:45: Kogen.E2e.BuildTest.happy_path/1
+    (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+    (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+Function: &:erlang.apply/2
+    Args: [#Function<10.65179008/1 in Kogen.E2e.BuildTest."test all four Build scenarios pass concurrently"/1>, [#Function<6.65179008/0 in Kogen.E2e.BuildTest."test all four Build scenarios pass concurrently"/1>]]
+...
+
+  1) test all four Build scenarios pass concurrently (Kogen.E2e.BuildTest)
+     test/e2e/build_test.exs:23
+     ** (EXIT from #PID<0.286.0>) an exception was raised:
+
+          match (=) failed
+          code:  assert %Result{build: %{status: :landed, landed_sha: sha}, run_status: :landed} = result
+          left:  %Kogen.E2e.Build.Result{build: %{status: :landed, landed_sha: sha}, run_status: :landed}
+          right: %Kogen.E2e.Build.Result{
+                   build: %Kogen.Engine.Build.Result{
+                     status: :failed,
+                     reason: {:environment, :base_acceptance_failed},
+                     failure: %Kogen.Contracts.Failure{
+                       class: :environment,
+                       reason: :base_acceptance_failed,
+                       detail: "acceptance formatter report is empty"
+                     },
+                     run_id: "$RUN",
+                     run_dir: "$TMPDIR/kogen-tests/68604-8/happy-path/test-home/.kogen/workspaces/test-project/runs/$RUN",
+                     landed_sha: nil,
+                     lines: ["context: complete",
+                      "build: failed ({:environment, :base_acceptance_failed})"]
+                   },
+                   events: [
+                     %Kogen.State.Event{
+                       event: "started",
+                       stage: nil,
+                       class: nil,
+                       reason: nil,
+                       detail: nil,
+                       status: nil,
+                       result: nil,
+                       approval_commit: "ccb75427d7c6231ebb6c8b916239d5799c2973af",
+                       base_sha: "afbe7ac7364499cd162bbdd77da9c1d1463ab620",
+                       ledger: nil,
+                       receipts: nil,
+                       model: "scripted-model",
+                       effort: "medium",
+                       tokens: nil
+                     },
+                     %Kogen.State.Event{
+                       event: "stage_failure",
+                       stage: "context",
+                       class: "environment",
+                       reason: "base_acceptance_failed",
+                       detail: "acceptance formatter report is empty",
+                       status: nil,
+                       result: nil,
+                       approval_commit: nil,
+                       base_sha: nil,
+                       ledger: nil,
+                       receipts: nil,
+                       model: nil,
+                       effort: nil,
+                       tokens: nil
+                     },
+                     %Kogen.State.Event{
+                       event: "finished",
+                       stage: nil,
+                       class: nil,
+                       reason: %{
+                         "tuple" => ["environment",
+                          "base_acceptance_failed"]
+                       },
+                       detail: nil,
+                       status: "failed",
+                       result: nil,
+                       approval_commit: nil,
+                       base_sha: nil,
+                       ledger: nil,
+                       receipts: nil,
+                       model: nil,
+                       effort: nil,
+                       tokens: nil
+                     }
+                   ],
+                   fixture: %Kogen.E2e.Build.Fixture{
+                     project_root: "$TMPDIR/kogen-tests/68604-8/happy-path/project",
+                     workspace_root: "$TMPDIR/kogen-tests/68604-8/happy-path/test-home/.kogen/workspaces/test-project",
+                     home: "$TMPDIR/kogen-tests/68604-8/happy-path/test-home",
+                     origin: "$TMPDIR/kogen-tests/68604-8/happy-path/origin.git",
+                     approved_base: "afbe7ac7364499cd162bbdd77da9c1d1463ab620",
+                     approval_commit: "ccb75427d7c6231ebb6c8b916239d5799c2973af",
+                     git_env: %{
+                       "GIT_AUTHOR_DATE" => "2026-10-02T00:00:00+00:00",
+                       "GIT_AUTHOR_EMAIL" => "test@kogen.invalid",
+                       "GIT_AUTHOR_NAME" => "Kogen Test",
+                       "GIT_COMMITTER_DATE" => "2026-10-02T00:00:00+00:00",
+                       "GIT_COMMITTER_EMAIL" => "test@kogen.invalid",
+                       "GIT_COMMITTER_NAME" => "Kogen Test",
+                       "GIT_CONFIG_COUNT" => "1",
+                       "GIT_CONFIG_GLOBAL" => "/dev/null",
+                       "GIT_CONFIG_KEY_0" => "commit.gpgsign",
+                       "GIT_CONFIG_NOSYSTEM" => "1",
+                       "GIT_CONFIG_VALUE_0" => "false"
+                     }
+                   },
+                   run_status: :failed,
+                   claim_released: true
+                 }
+          stacktrace:
+            test/e2e/build_test.exs:45: Kogen.E2e.BuildTest.happy_path/1
+            (elixir 1.20.4) lib/task/supervised.ex:105: Task.Supervised.invoke_mfa/2
+            (elixir 1.20.4) lib/task/supervised.ex:40: Task.Supervised.reply/4
+
+
+
+Finished in 7.4 seconds (7.4s async, 0.00s sync)
+
+Result: 0/1 passed
+Failed: 1 test
+make[1]: *** [e2e] Error 2
+make[1]: *** Waiting for unfinished jobs....
+.???
+
+  0) Kogen.Acceptance.CommitFormatTest: failure on setup_all callback, all tests have been invalidated
+     ** (MatchError) no match of right hand side value:
+
+         %Kogen.E2e.Build.Result{
+           build: %Kogen.Engine.Build.Result{
+             status: :failed,
+             reason: {:environment, :base_acceptance_failed},
+             failure: %Kogen.Contracts.Failure{
+               class: :environment,
+               reason: :base_acceptance_failed,
+               detail: "acceptance formatter report is empty"
+             },
+             run_id: "$RUN",
+             run_dir: "$TMPDIR/kogen-tests/68603-2/landing/test-home/.kogen/workspaces/test-project/runs/$RUN",
+             landed_sha: nil,
+             lines: ["context: complete",
+              "build: failed ({:environment, :base_acceptance_failed})"]
+           },
+           events: [
+             %Kogen.State.Event{
+               event: "started",
+               stage: nil,
+               class: nil,
+               reason: nil,
+               detail: nil,
+               status: nil,
+               result: nil,
+               approval_commit: "02cbbe1aa809c48818a8952951807952ef8fd686",
+               base_sha: "afbe7ac7364499cd162bbdd77da9c1d1463ab620",
+               ledger: nil,
+               receipts: nil,
+               model: "scripted-model",
+               effort: "medium",
+               tokens: nil
+             },
+             %Kogen.State.Event{
+               event: "stage_failure",
+               stage: "context",
+               class: "environment",
+               reason: "base_acceptance_failed",
+               detail: "acceptance formatter report is empty",
+               status: nil,
+               result: nil,
+               approval_commit: nil,
+               base_sha: nil,
+               ledger: nil,
+               receipts: nil,
+               model: nil,
+               effort: nil,
+               tokens: nil
+             },
+             %Kogen.State.Event{
+               event: "finished",
+               stage: nil,
+               class: nil,
+               reason: %{"tuple" => ["environment", "base_acceptance_failed"]},
+               detail: nil,
+               status: "failed",
+               result: nil,
+               approval_commit: nil,
+               base_sha: nil,
+               ledger: nil,
+               receipts: nil,
+               model: nil,
+               effort: nil,
+               tokens: nil
+             }
+           ],
+           fixture: %Kogen.E2e.Build.Fixture{
+             project_root: "$TMPDIR/kogen-tests/68603-2/landing/project",
+             workspace_root: "$TMPDIR/kogen-tests/68603-2/landing/test-home/.kogen/workspaces/test-project",
+             home: "$TMPDIR/kogen-tests/68603-2/landing/test-home",
+             origin: "$TMPDIR/kogen-tests/68603-2/landing/origin.git",
+             approved_base: "afbe7ac7364499cd162bbdd77da9c1d1463ab620",
+             approval_commit: "02cbbe1aa809c48818a8952951807952ef8fd686",
+             git_env: %{
+               "GIT_AUTHOR_DATE" => "2026-10-02T00:00:00+00:00",
+               "GIT_AUTHOR_EMAIL" => "test@kogen.invalid",
+               "GIT_AUTHOR_NAME" => "Kogen Test",
+               "GIT_COMMITTER_DATE" => "2026-10-02T00:00:00+00:00",
+               "GIT_COMMITTER_EMAIL" => "test@kogen.invalid",
+               "GIT_COMMITTER_NAME" => "Kogen Test",
+               "GIT_CONFIG_COUNT" => "1",
+               "GIT_CONFIG_GLOBAL" => "/dev/null",
+               "GIT_CONFIG_KEY_0" => "commit.gpgsign",
+               "GIT_CONFIG_NOSYSTEM" => "1",
+               "GIT_CONFIG_VALUE_0" => "false"
+             }
+           },
+           run_status: :failed,
+           claim_released: true
+         }
+
+     stacktrace:
+       test/acceptance/commit-format_test.exs:21: Kogen.Acceptance.CommitFormatTest.__ex_unit_setup_all_0/1
+       test/acceptance/commit-format_test.exs:1: Kogen.Acceptance.CommitFormatTest.__ex_unit__/2
+
+.???
+
+  0) Kogen.Acceptance.ReviewFullDiffTest: failure on setup_all callback, all tests have been invalidated
+     ** (File.Error) could not read file "$TMPDIR/kogen-tests/68603-13/review/test-home/.kogen/workspaces/test-project/runs/$RUN/transcript.jsonl": no such file or directory
+     stacktrace:
+       (elixir 1.20.4) lib/file.ex:451: File.read!/2
+       test/acceptance/review-full-diff_test.exs:62: Kogen.Acceptance.ReviewFullDiffTest.review_request/1
+       test/acceptance/review-full-diff_test.exs:22: Kogen.Acceptance.ReviewFullDiffTest.__ex_unit_setup_all_0/1
+       test/acceptance/review-full-diff_test.exs:1: Kogen.Acceptance.ReviewFullDiffTest.__ex_unit__/2
+
+.........
+
+  1) test an unmoved base lands after a single check run (Kogen.Acceptance.LandOnMovedBaseTest)
+     test/acceptance/land-on-moved-base_test.exs:44
+     Assertion with == failed
+     code:  assert result.build.status == :landed
+     left:  :failed
+     right: :landed
+     stacktrace:
+       test/acceptance/land-on-moved-base_test.exs:45: (test)
+
+
+
+  2) test a moved base is rebased onto and landed (Kogen.Acceptance.LandOnMovedBaseTest)
+     test/acceptance/land-on-moved-base_test.exs:23
+     match (=) failed
+     code:  assert %{status: :landed, landed_sha: sha} = result.build
+     left:  %{status: :landed, landed_sha: sha}
+     right: %Kogen.Engine.Build.Result{
+              status: :failed,
+              reason: {:environment, :base_acceptance_failed},
+              failure: %Kogen.Contracts.Failure{
+                class: :environment,
+                reason: :base_acceptance_failed,
+                detail: "acceptance formatter report is empty"
+              },
+              run_id: "$RUN",
+              run_dir: "$TMPDIR/kogen-tests/68603-10/moved/test-home/.kogen/workspaces/test-project/runs/$RUN",
+              landed_sha: nil,
+              lines: ["context: complete",
+               "build: failed ({:environment, :base_acceptance_failed})"]
+            }
+     stacktrace:
+       test/acceptance/land-on-moved-base_test.exs:24: (test)
+
+
+
+  3) test the landed tree is the one the last checks ran on (Kogen.Acceptance.LandOnMovedBaseTest)
+     test/acceptance/land-on-moved-base_test.exs:32
+     Expected truthy, got false
+     code: assert is_binary(sha)
+     arguments:
+
+         # 1
+         nil
+
+     stacktrace:
+       test/acceptance/land-on-moved-base_test.exs:34: (test)
+
+WARNING: ExUnit suite took 11493 ms (10 s warning threshold)
+
+Finished in 11.4 seconds (11.4s async, 0.00s sync)
+
+Result: 33/36 passed, 6 invalid
+Failed: 3 tests
+make[1]: *** [acceptance] Error 2
+...WARNING: ExUnit suite took 15821 ms (10 s warning threshold)
+
+Finished in 15.8 seconds (15.8s async, 0.00s sync)
+
+Result: 160/161 passed, 44 excluded
+Failed: 1 test
+make[1]: *** [test] Error 2
+make: *** [check] Error 2

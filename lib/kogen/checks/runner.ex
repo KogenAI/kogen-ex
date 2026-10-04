@@ -1,6 +1,7 @@
 defmodule Kogen.Checks.Runner do
   @moduledoc false
 
+  alias Kogen.Checks.Feedback
   alias Kogen.Checks.ReceiptBuilder
   alias Kogen.Checks.RunState
   alias Kogen.Contracts.CheckSpec
@@ -22,7 +23,9 @@ defmodule Kogen.Checks.Runner do
            %{
              tree: String.t(),
              receipts: [Receipt.t()],
-             status: :pass | {:fail, [String.t()]}
+             status: :pass | {:fail, [String.t()]},
+             feedback: String.t(),
+             exit_levels: [{String.t(), 0..3}]
            }}
           | {:error, Failure.t()}
   def run_all(workdir, project, run_dir, env, git_env),
@@ -39,7 +42,9 @@ defmodule Kogen.Checks.Runner do
            %{
              tree: String.t(),
              receipts: [Receipt.t()],
-             status: :pass | {:fail, [String.t()]}
+             status: :pass | {:fail, [String.t()]},
+             feedback: String.t(),
+             exit_levels: [{String.t(), 0..3}]
            }}
           | {:error, Failure.t()}
   @spec run_all(
@@ -54,7 +59,9 @@ defmodule Kogen.Checks.Runner do
            %{
              tree: String.t(),
              receipts: [Receipt.t()],
-             status: :pass | {:fail, [String.t()]}
+             status: :pass | {:fail, [String.t()]},
+             feedback: String.t(),
+             exit_levels: [{String.t(), 0..3}]
            }}
           | {:error, Failure.t()}
   def run_all(workdir, %Project{} = project, run_dir, env, git_env, sandbox),
@@ -75,9 +82,22 @@ defmodule Kogen.Checks.Runner do
 
       with {:ok, after_tree} <- Workspace.tree_hash(workdir, git_env),
            :ok <- same_tree(before_tree, after_tree),
-           {:ok, receipts, failures} <- results do
+           {:ok, receipts, failures, feedbacks} <- results do
         status = if failures == [], do: :pass, else: {:fail, failures}
-        {:ok, %{tree: before_tree, receipts: receipts, status: status}}
+
+        feedback =
+          if failures == [], do: "", else: Feedback.render_model_feedback(feedbacks)
+
+        exit_levels = Enum.map(feedbacks, &{&1.name, &1.exit_level})
+
+        {:ok,
+         %{
+           tree: before_tree,
+           receipts: receipts,
+           status: status,
+           feedback: feedback,
+           exit_levels: exit_levels
+         }}
       end
     else
       {:error, %Failure{} = failure} -> {:error, failure}
@@ -121,7 +141,8 @@ defmodule Kogen.Checks.Runner do
   defp run_specs(specs, %RunState{} = initial) do
     case Enum.reduce_while(specs, {:ok, initial}, &reduce_spec/2) do
       {:ok, %RunState{} = state} ->
-        {:ok, Enum.reverse(state.receipts), Enum.reverse(state.failures)}
+        {:ok, Enum.reverse(state.receipts), Enum.reverse(state.failures),
+         Enum.reverse(state.feedbacks)}
 
       error ->
         error
@@ -142,18 +163,41 @@ defmodule Kogen.Checks.Runner do
     update_from_process(Proc.run(spec.argv, options), spec, log_path, state)
   end
 
-  defp update_from_process({:ok, %ProcResult{timed_out: true}}, spec, _log, state) do
-    {:ok, %{state | index: state.index + 1, failures: [spec.name | state.failures]}}
+  defp update_from_process({:ok, %ProcResult{timed_out: true} = result}, spec, log_path, state) do
+    assessment = analyze_result(spec, result, log_path, state.workdir)
+
+    {:error,
+     failure(
+       :environment,
+       :check_unavailable,
+       Feedback.render_environment_detail(prior_assessments(state, assessment))
+     )}
   end
 
-  defp update_from_process({:ok, %ProcResult{exit_status: status}}, spec, log_path, state)
+  defp update_from_process(
+         {:ok, %ProcResult{exit_status: status} = result},
+         spec,
+         log_path,
+         state
+       )
        when is_integer(status) do
-    case ReceiptBuilder.build(state.tree, spec, status, log_path) do
-      {:ok, receipt} ->
-        record_result(state, spec, status, receipt)
+    assessment = analyze_result(spec, result, log_path, state.workdir)
 
-      {:error, reason} ->
-        {:error, failure(:environment, reason, "check log unavailable for #{spec.name}")}
+    if assessment.exit_level == 3 do
+      {:error,
+       failure(
+         :environment,
+         :check_unavailable,
+         Feedback.render_environment_detail(prior_assessments(state, assessment))
+       )}
+    else
+      case ReceiptBuilder.build(state.tree, spec, status, log_path) do
+        {:ok, receipt} ->
+          record_result(state, spec, assessment, receipt)
+
+        {:error, reason} ->
+          {:error, failure(:environment, reason, "check log unavailable for #{spec.name}")}
+      end
     end
   end
 
@@ -170,12 +214,33 @@ defmodule Kogen.Checks.Runner do
     {:error, failure(:environment, :process_failed, "check #{spec.name}: #{inspect(reason)}")}
   end
 
-  defp record_result(state, spec, status, receipt) do
-    failures = if status == 0, do: state.failures, else: [spec.name | state.failures]
+  defp record_result(state, spec, assessment, receipt) do
+    failures =
+      if assessment.exit_level == 0, do: state.failures, else: [spec.name | state.failures]
 
     {:ok,
-     %{state | index: state.index + 1, receipts: [receipt | state.receipts], failures: failures}}
+     %{
+       state
+       | index: state.index + 1,
+         receipts: [receipt | state.receipts],
+         failures: failures,
+         feedbacks: [assessment | state.feedbacks]
+     }}
   end
+
+  defp analyze_result(spec, result, log_path, workdir) do
+    Feedback.analyze(%{
+      name: spec.name,
+      argv: spec.argv,
+      exit_status: result.exit_status,
+      timed_out: result.timed_out,
+      output: result.output_tail,
+      log_path: log_path,
+      workdir: workdir
+    })
+  end
+
+  defp prior_assessments(state, assessment), do: Enum.reverse([assessment | state.feedbacks])
 
   defp prepare_logs(run_dir) do
     if Path.type(run_dir) == :absolute do

@@ -1,6 +1,7 @@
 defmodule Kogen.Harness.Gate do
   @moduledoc false
 
+  alias Kogen.Checks.Feedback
   alias Kogen.Contracts.CheckSpec
   alias Kogen.Contracts.ProcResult
   alias Kogen.Harness.Command
@@ -10,7 +11,6 @@ defmodule Kogen.Harness.Gate do
   alias Kogen.Harness.Opts
 
   @max_excused_tests 2
-  @failed_test_location ~r/\n\s*\d+\)\s+test\b[^\n]*\n\s*([^\s]+\.exs:\d+)/
   @module_reference ~r/\b[A-Z][A-Za-z0-9_]*(?:\.[A-Z][A-Za-z0-9_]*)*\b/
   @environment_paths ["mix.exs", "mix.lock", ".mise.toml", ".kogen/project.yaml"]
 
@@ -20,8 +20,21 @@ defmodule Kogen.Harness.Gate do
          {:ok, fixes, _fix_flakes} <- run_specs(opts, opts.project.fix, deadline, :fix),
          {:ok, checks, flake_excused} <- run_specs(opts, opts.project.checks, deadline, :check) do
       commands = fixes ++ checks
-      failures = Enum.flat_map(commands, &failure_text/1)
-      status = if failures == [], do: :pass, else: :fail
+      exit_level = Feedback.overall_exit_level(commands)
+
+      status =
+        case exit_level do
+          0 -> :pass
+          3 -> :environment
+          _level -> :fail
+        end
+
+      failures =
+        case status do
+          :pass -> []
+          :environment -> [Feedback.render_environment_detail(commands)]
+          :fail -> [Feedback.render_model_feedback(commands)]
+        end
 
       {:ok,
        %GateResult{
@@ -46,6 +59,8 @@ defmodule Kogen.Harness.Gate do
       {result, excused} =
         run_spec(%{opts | flake_excused_test_ids: current_flakes}, spec, deadline, kind)
 
+      result = assess_result(result, spec, opts.workdir)
+
       {:cont, {:ok, [result | results], excused ++ flakes}}
     end)
     |> case do
@@ -59,7 +74,7 @@ defmodule Kogen.Harness.Gate do
       {argv, seed} = seeded_argv(spec.argv)
       command = run_command(opts, spec, argv, deadline, :check, "")
 
-      case {seed, failed_test_ids(command.output, opts.workdir), command} do
+      case {seed, Feedback.failed_test_ids(command.output, opts.workdir), command} do
         {seed, test_ids, %GateCommand{exit_status: status, timed_out: false}}
         when is_integer(seed) and status != 0 and test_ids != [] ->
           classify_test_failure(opts, spec, %{
@@ -157,7 +172,7 @@ defmodule Kogen.Harness.Gate do
          {:ok, %ProcResult{output_tail: output, exit_status: status, timed_out: timed_out}},
          workdir
        )
-       when timed_out or status != 0, do: failed_test_ids(output, workdir)
+       when timed_out or status != 0, do: Feedback.failed_test_ids(output, workdir)
 
   defp base_failure_ids(_result, _workdir), do: []
 
@@ -235,33 +250,6 @@ defmodule Kogen.Harness.Gate do
     repeat ++ Enum.take(new, available)
   end
 
-  defp failed_test_ids(output, workdir) do
-    @failed_test_location
-    |> Regex.scan(output, capture: :all_but_first)
-    |> Enum.map(fn [location] -> normalize_test_id(location, workdir) end)
-    |> Enum.reject(&is_nil/1)
-    |> Enum.uniq()
-  end
-
-  defp normalize_test_id(location, workdir) do
-    case String.split(location, ":", parts: 2) do
-      [path, line] ->
-        case Integer.parse(line) do
-          {line_number, ""} when line_number > 0 ->
-            case test_path("#{path}:#{line_number}", workdir) do
-              {:ok, relative} -> "#{relative}:#{line_number}"
-              :error -> nil
-            end
-
-          _error ->
-            nil
-        end
-
-      _other ->
-        nil
-    end
-  end
-
   defp mix_test?([executable, "test" | _args]), do: Path.basename(executable) == "mix"
   defp mix_test?(_argv), do: false
 
@@ -325,6 +313,28 @@ defmodule Kogen.Harness.Gate do
     end
   end
 
+  defp assess_result(%GateCommand{} = command, %CheckSpec{} = spec, workdir) do
+    assessment =
+      Feedback.analyze(%{
+        name: spec.name,
+        argv: spec.argv,
+        exit_status: command.exit_status,
+        timed_out: command.timed_out,
+        output: command.output,
+        log_path: command.log_path,
+        workdir: workdir
+      })
+
+    %{
+      command
+      | tool: assessment.tool,
+        exit_level: assessment.exit_level,
+        findings: assessment.findings,
+        dialyzer_summaries: assessment.dialyzer_summaries,
+        reason: assessment.reason
+    }
+  end
+
   defp run_argv(opts, spec, argv, timeout_ms, kind, suffix) do
     case Command.run(opts, argv, timeout_ms, "gate-#{kind}-#{spec.name}#{suffix}") do
       {:ok, result} ->
@@ -332,7 +342,8 @@ defmodule Kogen.Harness.Gate do
           name: spec.name,
           exit_status: result.exit_status,
           timed_out: result.timed_out,
-          output: clip_tail(result.output_tail)
+          output: clip_tail(result.output_tail),
+          log_path: result.log_path
         }
 
       {:error, %Error{} = error} ->
@@ -342,14 +353,6 @@ defmodule Kogen.Harness.Gate do
 
   defp command_passed?(%GateCommand{exit_status: 0, timed_out: false}), do: true
   defp command_passed?(_command), do: false
-
-  defp failure_text(%GateCommand{timed_out: true} = command),
-    do: ["#{command.name} timed out.\n#{command.output}"]
-
-  defp failure_text(%GateCommand{exit_status: status} = command) when status != 0,
-    do: ["#{command.name} exited #{inspect(status)}.\n#{command.output}"]
-
-  defp failure_text(_command), do: []
 
   defp clip_tail(output) do
     if String.valid?(output) do

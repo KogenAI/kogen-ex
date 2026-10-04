@@ -157,22 +157,7 @@ defmodule Kogen.Engine.Build.StageRunner do
              elapsed(started_at)
            ),
          {:ok, gate_flakes} <- GateSupport.record_gate_flakes(session, result.gate) do
-      {failure, detail} = gate_failure(result)
-
-      session = %{
-        session
-        | last_harness: result,
-          flake_excused: session.flake_excused ++ gate_flakes,
-          failure: failure,
-          failure_text: detail
-      }
-
-      events = [
-        {:stage_ok, :develop, %{tree: tree}},
-        {:stage_ok, :done_gate, %{outcome: result.outcome}}
-      ]
-
-      {:ok, session, events}
+      finish_develop_result(session, result, tree, gate_flakes)
     else
       {:error, %Failure{} = failure} ->
         fail(session, :develop, failure)
@@ -182,21 +167,35 @@ defmodule Kogen.Engine.Build.StageRunner do
     end
   end
 
-  defp gate_failure(%HarnessResult{outcome: :done}), do: {nil, nil}
+  defp finish_develop_result(session, result, tree, gate_flakes) do
+    {failure, detail} = GateSupport.gate_failure(result)
 
-  defp gate_failure(%HarnessResult{outcome: :gave_up}),
-    do:
-      {candidate_failure(:developer_gave_up, "Developer exhausted its turn or wall limit."),
-       "Developer exhausted its turn or wall limit."}
+    session = %{
+      session
+      | last_harness: result,
+        flake_excused: session.flake_excused ++ gate_flakes,
+        failure: failure,
+        failure_text: detail
+    }
 
-  defp gate_failure(%HarnessResult{outcome: :gate_red, gate: gate}) do
-    details = gate_failures(gate)
-    detail = if details == [], do: "Harness done gate failed.", else: Enum.join(details, "\n")
-    {candidate_failure(:done_gate_red, detail), detail}
+    if result.outcome == :gate_environment do
+      fail(session, :develop, failure || environment_failure())
+    else
+      {:ok, session,
+       [
+         {:stage_ok, :develop, %{tree: tree}},
+         {:stage_ok, :done_gate, %{outcome: result.outcome}}
+       ]}
+    end
   end
 
-  defp gate_failures(%{failures: failures}) when is_list(failures), do: failures
-  defp gate_failures(_gate), do: []
+  defp environment_failure do
+    %Failure{
+      class: :environment,
+      reason: :check_unavailable,
+      detail: "The done gate could not complete its checks."
+    }
+  end
 
   defp resume_data(%Session{last_harness: %HarnessResult{items: items}, failure_text: text})
        when is_binary(text), do: %{previous_items: items, failure_text: text}
@@ -290,8 +289,14 @@ defmodule Kogen.Engine.Build.StageRunner do
   defp check_passed(%{status: :pass}, %{status: :pass}), do: :ok
 
   defp check_passed(check_result, acceptance_result) do
+    check_feedback = Map.get(check_result, :feedback, "")
+
     detail =
-      "checks=#{inspect(check_result.status)} acceptance=#{inspect(acceptance_result.status)}"
+      if check_feedback == "" do
+        "checks=#{inspect(check_result.status)} acceptance=#{inspect(acceptance_result.status)}"
+      else
+        check_feedback <> "\nacceptance=#{inspect(acceptance_result.status)}"
+      end
 
     {:error, candidate_failure(:verification_failed, detail)}
   end

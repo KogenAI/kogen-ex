@@ -1,0 +1,88 @@
+Compiling 1 file (.ex)
+     warning: function same_tree/2 is unused
+     │
+ 146 │   defp same_tree(tree, tree), do: :ok
+     │        ~
+     │
+     └─ lib/kogen/engine/build/commit.ex:146:8: Kogen.Engine.Build.Commit (module)
+
+     warning: function record_check_results/3 is unused
+     │
+ 128 │   defp record_check_results(session, checks, acceptance) do
+     │        ~
+     │
+     └─ lib/kogen/engine/build/commit.ex:128:8: Kogen.Engine.Build.Commit (module)
+
+    warning: function recheck/2 is unused
+    │
+ 79 │   defp recheck(session, expected_tree) do
+    │        ~
+    │
+    └─ lib/kogen/engine/build/commit.ex:79:8: Kogen.Engine.Build.Commit (module)
+
+    warning: function rebase/1 is unused
+    │
+ 77 │   defp rebase(session), do: Workspace.rebase(session.workdir, session.base_sha, session.git_env)
+    │        ~
+    │
+    └─ lib/kogen/engine/build/commit.ex:77:8: Kogen.Engine.Build.Commit (module)
+
+     warning: function guard/1 is unused
+     │
+ 107 │   defp guard(session) do
+     │        ~
+     │
+     └─ lib/kogen/engine/build/commit.ex:107:8: Kogen.Engine.Build.Commit (module)
+
+     warning: function check_passed/2 is unused
+     │
+ 118 │   defp check_passed(%{status: :pass}, %{status: :pass}), do: :ok
+     │        ~
+     │
+     └─ lib/kogen/engine/build/commit.ex:118:8: Kogen.Engine.Build.Commit (module)
+
+     warning: function branch_unchanged/1 is unused
+     │
+ 149 │   defp branch_unchanged(session) do
+     │        ~
+     │
+     └─ lib/kogen/engine/build/commit.ex:149:8: Kogen.Engine.Build.Commit (module)
+
+     warning: function acceptance_status/1 is unused
+     │
+ 143 │   defp acceptance_status(:pass), do: :pass
+     │        ~
+     │
+     └─ lib/kogen/engine/build/commit.ex:143:8: Kogen.Engine.Build.Commit (module)
+
+    error: undefined function prepare_candidate/4 (expected Kogen.Engine.Build.Commit to define such a function or for it to be imported, but none are available)
+    │
+ 19 │          {:ok, session, commit, tree} <- prepare_candidate(session, base_sha, commit, tree),
+    │                                          ^^^^^^^^^^^^^^^^^
+    │
+    └─ lib/kogen/engine/build/commit.ex:19:42: Kogen.Engine.Build.Commit.run/1
+
+    error: undefined function prepare_candidate/4 (expected Kogen.Engine.Build.Commit to define such a function or for it to be imported, but none are available)
+    │
+ 19 │          {:ok, session, commit, tree} <- prepare_candidate(session, base_sha, commit, tree),
+    │                                          ^^^^^^^^^^^^^^^^^
+    │
+    └─ lib/kogen/engine/build/commit.ex:19:42: Kogen.Engine.Build.Commit.run/1
+
+    error: undefined function current_base/1 (expected Kogen.Engine.Build.Commit to define such a function or for it to be imported, but none are available)
+    │
+ 18 │          {:ok, base_sha} <- tag(:base_tip, current_base(session)),
+    │                                            ^^^^^^^^^^^^
+    │
+    └─ lib/kogen/engine/build/commit.ex:18:44: Kogen.Engine.Build.Commit.run/1
+
+    error: undefined function current_base/1 (expected Kogen.Engine.Build.Commit to define such a function or for it to be imported, but none are available)
+    │
+ 18 │          {:ok, base_sha} <- tag(:base_tip, current_base(session)),
+    │                                            ^^^^^^^^^^^^
+    │
+    └─ lib/kogen/engine/build/commit.ex:18:44: Kogen.Engine.Build.Commit.run/1
+
+
+== Compilation error in file lib/kogen/engine/build/commit.ex ==
+** (CompileError) lib/kogen/engine/build/commit.ex: cannot compile module Kogen.Engine.Build.Commit (errors have been logged)

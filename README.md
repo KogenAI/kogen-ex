@@ -16,7 +16,7 @@ This repository is the single Mix application that forms Kogen's core. Current w
 | Path | Contents |
 | --- | --- |
 | `lib/kogen/` | Contracts, domain facades, and the future core modules |
-| `test/` | ExUnit tests and the `Kogen.Testkit` support boundary |
+| `test/` | ExUnit tests, `Kogen.Testkit`, and [scrubbed gate feedback fixtures](test/fixtures/gate_feedback/README.md) |
 | `tools/kogen_checks/` | The local Credo check package and its tests |
 | `bin/kogen-bench` | Held-out benchmark runner for approved Build tasks |
 
@@ -33,7 +33,7 @@ This repository is the single Mix application that forms Kogen's core. Current w
 | Workspace | Isolated checkout and worktree operations | Contracts, Proc |
 | State | Persisted build state and receipts | Contracts, Workspace |
 | Checks | Deterministic verification and check results | Contracts, Proc, Workspace, Project |
-| Harness | Provider-backed Developer orchestration | Contracts, Proc, Provider, Project |
+| Harness | Provider-backed Developer orchestration | Checks, Contracts, Proc, Provider, Project |
 | Kernel | CLI and cross-domain coordination | Every domain above |
 
 ## Run the checks

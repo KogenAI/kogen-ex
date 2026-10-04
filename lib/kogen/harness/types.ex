@@ -90,7 +90,7 @@ defmodule Kogen.Harness.Result do
   @enforce_keys [:outcome, :gate, :items, :turns, :usage, :transcript_path]
   defstruct @enforce_keys
 
-  @type outcome :: :done | :gate_red | :gave_up
+  @type outcome :: :done | :gate_red | :gate_environment | :gave_up
   @type t :: %__MODULE__{
           outcome: outcome(),
           gate: map() | nil,
@@ -214,13 +214,27 @@ defmodule Kogen.Harness.GateCommand do
   @moduledoc false
 
   @enforce_keys [:name, :exit_status, :timed_out, :output]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++
+              [
+                :log_path,
+                reason: nil,
+                tool: "check",
+                exit_level: 3,
+                findings: [],
+                dialyzer_summaries: []
+              ]
 
   @type t :: %__MODULE__{
           name: String.t(),
           exit_status: integer() | nil,
           timed_out: boolean(),
-          output: String.t()
+          output: String.t(),
+          log_path: Path.t() | nil,
+          reason: String.t() | nil,
+          tool: String.t(),
+          exit_level: 0..3,
+          findings: [map()],
+          dialyzer_summaries: [String.t()]
         }
 end
 
@@ -233,7 +247,7 @@ defmodule Kogen.Harness.GateResult do
   defstruct @enforce_keys
 
   @type t :: %__MODULE__{
-          status: :pass | :fail,
+          status: :pass | :fail | :environment,
           fixes: [GateCommand.t()],
           checks: [GateCommand.t()],
           failures: [String.t()],
