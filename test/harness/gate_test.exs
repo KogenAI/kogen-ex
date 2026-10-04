@@ -23,6 +23,7 @@ defmodule Kogen.Harness.GateTest do
 
     assert {:ok, result} = Gate.run(opts, deadline())
     assert result.status == :pass
+    assert result.failed_test_count == 0
     assert [%{test_ids: ["test/sample_test.exs:12"], seed: seed}] = result.flake_excused
     assert is_integer(seed)
 
@@ -40,6 +41,33 @@ defmodule Kogen.Harness.GateTest do
            ]
 
     assert Process.get(:gate_base_argv) == retry_argv
+  end
+
+  test "a red gate reports distinct failing ExUnit tests", %{tmp_dir: tmp_dir} do
+    write_test_source!(tmp_dir)
+    output = two_failed_output()
+    Process.put(:gate_script_results, [{1, output}, {1, output}])
+
+    opts = options(tmp_dir, nil, nil)
+
+    assert {:ok, result} = Gate.run(opts, deadline())
+    assert result.status == :fail
+    assert result.failed_test_count == 2
+  end
+
+  test "compile errors from mix test have no comparable failed-test count", %{tmp_dir: tmp_dir} do
+    write_test_source!(tmp_dir)
+
+    Process.put(
+      :gate_script_results,
+      [{1, "** (SyntaxError) lib/sample.ex:3:1: syntax error before: end\n"}]
+    )
+
+    opts = options(tmp_dir, nil, nil)
+
+    assert {:ok, result} = Gate.run(opts, deadline())
+    assert result.status == :fail
+    assert is_nil(result.failed_test_count)
   end
 
   test "more than two excused tests in a Build leave the gate red", %{tmp_dir: tmp_dir} do
@@ -142,6 +170,19 @@ defmodule Kogen.Harness.GateTest do
       1) test sample (SampleTest)
          test/sample_test.exs:12
          ** (RuntimeError) flaky
+    """
+  end
+
+  defp two_failed_output do
+    """
+
+      1) test first failure (SampleTest)
+         test/sample_test.exs:12
+         ** (RuntimeError) first
+
+      2) test second failure (OtherTest)
+         test/other_test.exs:21
+         ** (RuntimeError) second
     """
   end
 

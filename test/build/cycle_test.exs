@@ -55,6 +55,62 @@ defmodule Kogen.Build.CycleTest do
     end
   end
 
+  test "one progress repair is earned when a red done gate has fewer failing tests" do
+    state = state_at(:done_gate, repairs_left: 0, last_failed_test_count: 4)
+
+    {retry, effects} =
+      Cycle.step(state, {:stage_ok, :done_gate, %{outcome: :gate_red, failed_test_count: 2}})
+
+    assert retry.stage == :develop
+    assert retry.repairs_left == 0
+    assert retry.last_failed_test_count == 2
+    assert retry.progress_repair_used?
+
+    assert [
+             {:record,
+              %{
+                event: :repair,
+                detail: %{
+                  test_progress: %{
+                    previous_failed_test_count: 4,
+                    failed_test_count: 2,
+                    progress_repair_granted: true
+                  }
+                }
+              }},
+             {:run, :develop, _args}
+           ] = effects
+
+    {retry, _effects} = Cycle.step(retry, {:stage_ok, :develop, %{tree: "tree-1"}})
+
+    {stopped, effects} =
+      Cycle.step(retry, {:stage_ok, :done_gate, %{outcome: :gate_red, failed_test_count: 1}})
+
+    assert {:failed, :repair_cap} = stopped.result
+    assert stopped.last_failed_test_count == 1
+
+    assert [{:record, %{event: :finished, reason: :repair_cap}}, {:finish, :failed, :repair_cap}] =
+             effects
+  end
+
+  test "an uncountable red gate breaks the test-progress comparison" do
+    state = state_at(:done_gate, repairs_left: 1, last_failed_test_count: 4)
+
+    {retry, _effects} =
+      Cycle.step(state, {:stage_ok, :done_gate, %{outcome: :gate_red, failed_test_count: nil}})
+
+    assert retry.stage == :develop
+    assert retry.repairs_left == 0
+    assert is_nil(retry.last_failed_test_count)
+
+    {retry, _effects} = Cycle.step(retry, {:stage_ok, :develop, %{tree: "tree-1"}})
+
+    {stopped, _effects} =
+      Cycle.step(retry, {:stage_ok, :done_gate, %{outcome: :gate_red, failed_test_count: 2}})
+
+    assert {:failed, :repair_cap} = stopped.result
+  end
+
   test "the cycle stays pure across a complete successful path" do
     state = Cycle.new(%{approval: %{slug: "sample"}, repairs: 2, recipe: staged_recipe()})
     {state, [{:run, :context, _args}]} = Cycle.step(state, :start)

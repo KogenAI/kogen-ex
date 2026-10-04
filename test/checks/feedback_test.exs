@@ -53,6 +53,26 @@ defmodule Kogen.Checks.FeedbackTest do
     assert length(Regex.scan(~r/raw tail \(first failed step/, feedback)) == 1
   end
 
+  test "classifies syntax errors from mix test as actionable compile findings" do
+    result =
+      Feedback.analyze(%{
+        name: "tests",
+        argv: ["mix", "test"],
+        exit_status: 1,
+        timed_out: false,
+        output: "** (SyntaxError) lib/sample.ex:3:1: syntax error before: end\n",
+        log_path: "logs/gate-tests.log",
+        workdir: @workdir
+      })
+
+    feedback = Feedback.render_model_feedback([result])
+
+    assert result.tool == "compile"
+    assert result.exit_level == 1
+    assert feedback =~ "lib/sample.ex:3:1: error: [compile/compile_error]"
+    assert feedback =~ "syntax error before: end"
+  end
+
   test "puts Dialyzer totals before file findings" do
     [_, output] = String.split(fixture("gate-full-46.log"), "Total errors:", parts: 2)
 

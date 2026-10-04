@@ -159,11 +159,15 @@ defmodule Kogen.Checks.Feedback do
       "compile" -> "compile"
       "credo" -> "credo"
       "format" -> "format"
-      "test" -> "exunit"
+      "test" -> if(compilation_output?(output), do: "compile", else: "exunit")
       "dialyzer" -> "dialyzer"
       _other -> output_tool(output)
     end
   end
+
+  defp compilation_output?(output),
+    do:
+      Regex.match?(~r/Compilation (?:error|failed)|\*\* \((?:CompileError|SyntaxError)\)/, output)
 
   defp mix_task(argv) do
     argv
@@ -177,7 +181,7 @@ defmodule Kogen.Checks.Feedback do
     detected =
       [
         {"format", Regex.match?(~r/mix format failed|files are not formatted/i, output)},
-        {"compile", Regex.match?(~r/Compilation (?:error|failed)|\*\* \(CompileError\)/, output)},
+        {"compile", compilation_output?(output)},
         {"credo", Regex.match?(~r/\[[FWC]\].*↗|Credo\.Check\./u, output)},
         {"dialyzer", String.contains?(output, "Total errors:")},
         {"exunit", Regex.match?(~r/\d+\) test\s|Running ExUnit/, output)}
@@ -236,8 +240,7 @@ defmodule Kogen.Checks.Feedback do
   defp failure_output?("exunit", output),
     do: Regex.match?(~r/Failed: [1-9]|Result: 0\/\d+ passed/, output)
 
-  defp failure_output?("compile", output),
-    do: Regex.match?(~r/Compilation (?:error|failed)|\*\* \(CompileError\)/, output)
+  defp failure_output?("compile", output), do: compilation_output?(output)
 
   defp failure_output?(_tool, output),
     do: Regex.match?(~r/make(?:\[\d+\])?: \*\*\*|exited [1-9]/, output)

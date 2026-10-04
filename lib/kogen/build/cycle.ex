@@ -12,6 +12,8 @@ defmodule Kogen.Build.Cycle do
       :recipe,
       :stage,
       :repairs_left,
+      :last_failed_test_count,
+      :progress_repair_used?,
       :provider_retries,
       :last_tree,
       :repair_tree,
@@ -25,6 +27,8 @@ defmodule Kogen.Build.Cycle do
             recipe: Recipe.t(),
             stage: atom(),
             repairs_left: non_neg_integer(),
+            last_failed_test_count: non_neg_integer() | nil,
+            progress_repair_used?: boolean(),
             provider_retries: non_neg_integer(),
             last_tree: String.t() | nil,
             repair_tree: String.t() | nil,
@@ -59,6 +63,8 @@ defmodule Kogen.Build.Cycle do
       recipe: recipe,
       stage: :ready,
       repairs_left: repairs,
+      last_failed_test_count: nil,
+      progress_repair_used?: false,
       provider_retries: 0,
       last_tree: nil,
       repair_tree: nil,
@@ -147,7 +153,8 @@ defmodule Kogen.Build.Cycle do
         advance_and_run(state, :done_gate)
 
       :gate_red ->
-        repair(state, :done_gate_red, %{outcome: :gate_red})
+        {next, progress} = update_test_progress(state, data)
+        repair(next, :done_gate_red, %{outcome: :gate_red, test_progress: progress})
 
       :gave_up ->
         finish(state, :failed, :developer_gave_up)
@@ -156,6 +163,30 @@ defmodule Kogen.Build.Cycle do
         fail_controller(state, :invalid_done_gate)
     end
   end
+
+  defp update_test_progress(state, %{failed_test_count: count})
+       when is_integer(count) and count >= 0 do
+    previous = state.last_failed_test_count
+
+    grant? =
+      not state.progress_repair_used? and is_integer(previous) and count < previous
+
+    next = %{
+      state
+      | last_failed_test_count: count,
+        progress_repair_used?: state.progress_repair_used? or grant?,
+        repairs_left: state.repairs_left + if(grant?, do: 1, else: 0)
+    }
+
+    {next,
+     %{
+       previous_failed_test_count: previous,
+       failed_test_count: count,
+       progress_repair_granted: grant?
+     }}
+  end
+
+  defp update_test_progress(state, _data), do: {%{state | last_failed_test_count: nil}, nil}
 
   defp review_result(state, :accept, findings) do
     case next_recipe_stage(state, :review) do

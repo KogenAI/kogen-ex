@@ -169,6 +169,7 @@ defmodule Kogen.Engine.Build.StageRunner do
 
   defp finish_develop_result(session, result, tree, gate_flakes) do
     {failure, detail} = GateSupport.gate_failure(result)
+    failed_test_count = Map.get(result.gate || %{}, :failed_test_count)
 
     session = %{
       session
@@ -184,7 +185,7 @@ defmodule Kogen.Engine.Build.StageRunner do
       {:ok, session,
        [
          {:stage_ok, :develop, %{tree: tree}},
-         {:stage_ok, :done_gate, %{outcome: result.outcome}}
+         {:stage_ok, :done_gate, %{outcome: result.outcome, failed_test_count: failed_test_count}}
        ]}
     end
   end

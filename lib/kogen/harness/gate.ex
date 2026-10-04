@@ -43,13 +43,38 @@ defmodule Kogen.Harness.Gate do
          fixes: fixes,
          checks: checks,
          failures: failures,
-         flake_excused: flake_excused
+         flake_excused: flake_excused,
+         failed_test_count: failed_test_count(checks, opts.project.checks)
        }}
     end
   end
 
   defp before_gate(nil), do: :ok
   defp before_gate(guard) when is_function(guard, 0), do: guard.()
+
+  defp failed_test_count(commands, specs) do
+    test_names = specs |> Enum.filter(&mix_test?(&1.argv)) |> MapSet.new(& &1.name)
+    test_commands = Enum.filter(commands, &MapSet.member?(test_names, &1.name))
+
+    if test_commands != [] and Enum.all?(test_commands, &test_count_known?/1) do
+      test_commands
+      |> Enum.flat_map(fn
+        %{exit_level: 1, findings: findings} -> findings
+        _passed -> []
+      end)
+      |> Enum.filter(&(&1.tool == "exunit" and is_binary(&1.symbol)))
+      |> Enum.map(& &1.symbol)
+      |> Enum.uniq()
+      |> length()
+    end
+  end
+
+  defp test_count_known?(%{tool: "exunit", exit_level: 0}), do: true
+
+  defp test_count_known?(%{tool: "exunit", exit_level: 1, findings: findings}),
+    do: Enum.any?(findings, &(&1.tool == "exunit" and is_binary(&1.symbol)))
+
+  defp test_count_known?(_command), do: false
 
   defp run_specs(opts, specs, deadline, kind) do
     specs
