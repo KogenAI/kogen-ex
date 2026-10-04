@@ -41,13 +41,34 @@ defmodule Kogen.Proc.ProcTest do
   end
 
   test "escalates to KILL when the child ignores TERM", %{tmp_dir: tmp_dir} do
+    timeout_ms = 500
+    grace_ms = 200
+    term_received = Path.join(tmp_dir, "term-received")
     started_at = System.monotonic_time(:millisecond)
 
+    script = ~S"""
+    use strict;
+    use warnings;
+    $SIG{TERM} = sub {
+      open my $marker, ">", $ENV{KOGEN_TERM_RECEIVED} or die "record TERM: $!";
+      print {$marker} "received";
+      close $marker or die "close TERM marker: $!";
+    };
+    while (1) { select undef, undef, undef, 1; }
+    """
+
     assert {:ok, %ProcResult{exit_status: nil, timed_out: true}} =
-             run(["sh", "-c", "trap '' TERM; exec sleep 30"], tmp_dir, timeout_ms: 100)
+             run(["/usr/bin/perl", "-e", script], tmp_dir,
+               env: %{"KOGEN_TERM_RECEIVED" => term_received},
+               timeout_ms: timeout_ms
+             )
 
     elapsed = System.monotonic_time(:millisecond) - started_at
-    assert elapsed >= 150
+    assert File.read!(term_received) == "received"
+
+    # This clock starts before wrapper startup; allow small scheduling and millisecond rounding
+    # while requiring the timeout plus the full TERM grace period before Proc.run returns.
+    assert elapsed >= timeout_ms + grace_ms - 20
     assert elapsed < 2_100
   end
 
