@@ -111,10 +111,10 @@ defmodule Kogen.Engine.BuildEscalationTest do
     {:ok, %Kogen.Contracts.Project{} = project} = Project.load(workdir)
 
     runtime =
-      request.runtime |> Runtime.trust_workspace(workdir) |> Runtime.for_build_run(run.dir)
+      request.runtime |> Runtime.trust_workspace(workdir) |> Runtime.for_run(run.dir)
 
     {:ok, env} = Kogen.Engine.candidate_environment(workdir, runtime, project)
-    env = Runtime.for_build_run(env, run.dir)
+    env = env |> Runtime.trust_workspace(workdir) |> Runtime.for_run(run.dir)
 
     {:ok, intent} =
       Kogen.Intent.parse_binary(approval.intent_bytes, ".kogen/intents/escalation/intent.md")

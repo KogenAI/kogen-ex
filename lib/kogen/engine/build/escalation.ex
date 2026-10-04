@@ -74,10 +74,10 @@ defmodule Kogen.Engine.Build.Escalation do
     runtime =
       session.request.runtime
       |> Runtime.trust_workspace(path)
-      |> Runtime.for_build_run(session.run_dir)
+      |> Runtime.for_run(session.run_dir)
 
     with {:ok, env} <- Kogen.Engine.candidate_environment(path, runtime, project) do
-      {:ok, Runtime.for_build_run(env, session.run_dir)}
+      {:ok, env |> Runtime.trust_workspace(path) |> Runtime.for_run(session.run_dir)}
     end
   end
 
