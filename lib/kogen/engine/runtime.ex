@@ -1,6 +1,8 @@
 defmodule Kogen.Engine.Runtime do
   @moduledoc false
 
+  alias Kogen.Contracts.MiseEnvironment
+
   @output_tail_bytes 2_048
 
   @enforce_keys [:base_env, :git_env, :mise]
@@ -38,21 +40,33 @@ defmodule Kogen.Engine.Runtime do
   end
 
   @doc "Trusts the mise config of one workspace path through the environment only."
-  @spec trust_workspace(t(), Path.t()) :: t()
+  @spec trust_workspace(t() | map(), Path.t()) :: t() | map()
   def trust_workspace(%__MODULE__{} = runtime, path) when is_binary(path) do
-    %{runtime | base_env: Map.put(runtime.base_env, "MISE_TRUSTED_CONFIG_PATHS", path)}
+    %{runtime | base_env: trust_workspace(runtime.base_env, path)}
   end
 
-  @doc "Scopes mise's writable state and cache to an individual Build run."
-  @spec for_build_run(t() | map(), Path.t()) :: t() | map()
-  def for_build_run(%__MODULE__{} = runtime, run_dir) when is_binary(run_dir) do
-    %{runtime | base_env: for_build_run(runtime.base_env, run_dir)}
+  def trust_workspace(env, path) when is_map(env) and is_binary(path) do
+    MiseEnvironment.trust_workspace(env, path)
   end
 
-  def for_build_run(env, run_dir) when is_map(env) and is_binary(run_dir) do
-    env
-    |> Map.put("MISE_STATE_DIR", Path.join(run_dir, "mise-state"))
-    |> Map.put("MISE_CACHE_DIR", Path.join(run_dir, "mise-cache"))
+  @doc "Adds one workspace to mise's trusted config paths through the environment only."
+  @spec add_trusted_workspace(t() | map(), Path.t()) :: t() | map()
+  def add_trusted_workspace(%__MODULE__{} = runtime, path) when is_binary(path) do
+    %{runtime | base_env: add_trusted_workspace(runtime.base_env, path)}
+  end
+
+  def add_trusted_workspace(env, path) when is_map(env) and is_binary(path) do
+    MiseEnvironment.add_trusted_workspace(env, path)
+  end
+
+  @doc "Scopes mise's writable state and cache to an individual Kogen run."
+  @spec for_run(t() | map(), Path.t()) :: t() | map()
+  def for_run(%__MODULE__{} = runtime, run_dir) when is_binary(run_dir) do
+    %{runtime | base_env: for_run(runtime.base_env, run_dir)}
+  end
+
+  def for_run(env, run_dir) when is_map(env) and is_binary(run_dir) do
+    MiseEnvironment.for_run(env, run_dir)
   end
 
   @spec git_environment(map()) :: %{String.t() => String.t()}

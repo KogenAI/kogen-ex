@@ -18,6 +18,7 @@ defmodule Kogen.Checks.Fixer do
   @moduledoc false
 
   alias Kogen.Checks.Fixer.State
+  alias Kogen.Contracts.CommandExit
   alias Kogen.Contracts.Failure
   alias Kogen.Contracts.ProcResult
   alias Kogen.Contracts.Project
@@ -68,8 +69,17 @@ defmodule Kogen.Checks.Fixer do
         {:error, failure(:candidate, :fix_timeout, "safe formatter timed out: #{spec.name}")}
 
       {:ok, %ProcResult{exit_status: status}} ->
-        {:error,
-         failure(:candidate, :fix_failed, "safe formatter #{spec.name} exited #{inspect(status)}")}
+        if CommandExit.tool_missing?(status) do
+          {:error,
+           failure(:environment, :tool_missing, "safe formatter tool missing: #{spec.name}")}
+        else
+          {:error,
+           failure(
+             :candidate,
+             :fix_failed,
+             "safe formatter #{spec.name} exited #{inspect(status)}"
+           )}
+        end
 
       {:error, :enoent} ->
         {:error,

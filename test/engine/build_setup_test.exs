@@ -82,6 +82,32 @@ defmodule Kogen.Engine.Build.SetupTest do
     assert byte_size(detail) <= 2_200
   end
 
+  test "setup command exit statuses 126 and 127 are tool missing environment failures", %{
+    tmp_dir: tmp_dir
+  } do
+    Process.put({FakeProc, :receiver}, self())
+
+    for status <- [126, 127] do
+      Process.put({FakeProc, :result}, %ProcResult{
+        argv: ["mix", "compile"],
+        exit_status: status,
+        timed_out: false,
+        output_tail: "command unavailable",
+        log_path: nil,
+        duration_ms: 1
+      })
+
+      assert {:error, %Failure{class: :environment, reason: :tool_missing}} =
+               Setup.run(
+                 [spec("compile", ["mix", "compile"])],
+                 tmp_dir,
+                 Path.join(tmp_dir, "setup-run-#{status}"),
+                 %{},
+                 FakeProc
+               )
+    end
+  end
+
   test "runs real successful and failing setup commands through Proc", %{tmp_dir: tmp_dir} do
     env = %{"PATH" => "/usr/bin:/bin"}
     run_dir = Path.join(tmp_dir, "run")

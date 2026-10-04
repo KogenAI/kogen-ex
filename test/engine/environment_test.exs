@@ -22,6 +22,7 @@ defmodule Kogen.Engine.EnvironmentTest do
     tmp_dir: tmp_dir
   } do
     run_dir = Path.join(tmp_dir, "run")
+    workspace = Path.join(tmp_dir, "workspace")
 
     runtime =
       %{
@@ -36,22 +37,34 @@ defmodule Kogen.Engine.EnvironmentTest do
         "/runtime",
         "/runtime/bin"
       )
-      |> Runtime.for_build_run(run_dir)
+      |> Runtime.for_run(run_dir)
+      |> Runtime.trust_workspace(workspace)
 
     assert runtime.base_env["MISE_STATE_DIR"] == Path.join(run_dir, "mise-state")
     assert runtime.base_env["MISE_CACHE_DIR"] == Path.join(run_dir, "mise-cache")
 
     process_env =
-      Runtime.for_build_run(
-        Map.merge(runtime.base_env, %{
-          "MISE_STATE_DIR" => "/project/mise-state",
-          "MISE_CACHE_DIR" => "/project/mise-cache"
-        }),
-        run_dir
-      )
+      runtime.base_env
+      |> Map.merge(%{
+        "MISE_STATE_DIR" => "/project/mise-state",
+        "MISE_CACHE_DIR" => "/project/mise-cache",
+        "MISE_TRUSTED_CONFIG_PATHS" => "/project/trusted"
+      })
+      |> Runtime.for_run(run_dir)
+      |> Runtime.trust_workspace(workspace)
 
     assert process_env["MISE_STATE_DIR"] == Path.join(run_dir, "mise-state")
     assert process_env["MISE_CACHE_DIR"] == Path.join(run_dir, "mise-cache")
+    assert process_env["MISE_TRUSTED_CONFIG_PATHS"] == workspace
+  end
+
+  test "adds a trusted workspace without dropping existing mise trust paths", %{tmp_dir: tmp_dir} do
+    existing = Path.join(tmp_dir, "bench-config")
+    workspace = Path.join(tmp_dir, "workspace")
+
+    env = Runtime.add_trusted_workspace(%{"MISE_TRUSTED_CONFIG_PATHS" => existing}, workspace)
+
+    assert env["MISE_TRUSTED_CONFIG_PATHS"] == Enum.join([existing, workspace], ":")
   end
 
   test "includes mise failure output in the toolchain error", %{tmp_dir: tmp_dir} do

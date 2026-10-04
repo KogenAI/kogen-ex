@@ -57,6 +57,39 @@ defmodule Kogen.Kernel.Types.BuildOptions do
         }
 end
 
+defmodule Kogen.Kernel.Types.ShapeInputs do
+  @moduledoc false
+
+  @enforce_keys [
+    :slug,
+    :project_root,
+    :task,
+    :model,
+    :effort,
+    :project,
+    :provider_config,
+    :runtime,
+    :process_env,
+    :run_dir,
+    :home
+  ]
+  defstruct @enforce_keys
+
+  @type t :: %__MODULE__{
+          slug: String.t(),
+          project_root: Path.t(),
+          task: String.t(),
+          model: String.t(),
+          effort: String.t(),
+          project: Kogen.Contracts.Project.t(),
+          provider_config: term(),
+          runtime: Kogen.Engine.Runtime.t(),
+          process_env: %{String.t() => String.t()},
+          run_dir: Path.t(),
+          home: Path.t()
+        }
+end
+
 defmodule Kogen.Kernel.CLI.Args do
   @moduledoc false
 

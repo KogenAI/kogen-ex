@@ -151,6 +151,7 @@ defmodule KogenChecks.GateWiringTest do
         Kogen.Proc.Request,
         Kogen.Project.Loader,
         Kogen.Workspace.Git,
+        Kogen.Contracts.MiseEnvironment,
         Kogen.Engine.Runtime,
         Kogen.Provider.ChatGPT.Codec,
         Kogen.Provider.ChatGPT.Codec.Recording,

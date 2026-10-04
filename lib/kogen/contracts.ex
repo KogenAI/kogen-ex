@@ -5,11 +5,13 @@ defmodule Kogen.Contracts do
     exports: [
       AcceptanceItem,
       CheckSpec,
+      CommandExit,
       Failure,
       Intent,
       JSON,
       ModelRequest,
       ModelResponse,
+      MiseEnvironment,
       ProcPort,
       ProcResult,
       Project,

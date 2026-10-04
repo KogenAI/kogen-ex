@@ -5,6 +5,7 @@ defmodule Kogen.Checks.Runner do
   alias Kogen.Checks.ReceiptBuilder
   alias Kogen.Checks.RunState
   alias Kogen.Contracts.CheckSpec
+  alias Kogen.Contracts.CommandExit
   alias Kogen.Contracts.Failure
   alias Kogen.Contracts.ProcResult
   alias Kogen.Contracts.Project
@@ -184,10 +185,15 @@ defmodule Kogen.Checks.Runner do
     assessment = analyze_result(spec, result, log_path, state.workdir)
 
     if assessment.exit_level == 3 do
+      reason =
+        if CommandExit.tool_missing?(result.exit_status),
+          do: :tool_missing,
+          else: :check_unavailable
+
       {:error,
        failure(
          :environment,
-         :check_unavailable,
+         reason,
          Feedback.render_environment_detail(prior_assessments(state, assessment))
        )}
     else

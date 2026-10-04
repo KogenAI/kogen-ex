@@ -37,6 +37,7 @@ defmodule Kogen.Kernel do
   alias Kogen.Kernel.Types.ApprovalPreview
   alias Kogen.Kernel.Types.BuildOptions
   alias Kogen.Kernel.Types.IntentStatus
+  alias Kogen.Kernel.Types.ShapeInputs
   alias Kogen.Kernel.Workspaces
   alias Kogen.Proc.Sandbox
   alias Kogen.Provider.ChatGPT
@@ -161,35 +162,24 @@ defmodule Kogen.Kernel do
   def shape(slug, project_root, task, model, effort) do
     with {:ok, runtime} <- runtime(),
          {:ok, project} <- Kogen.Project.load(project_root),
-         {:ok, process_env} <- Engine.candidate_environment(project_root, runtime, project),
+         {:ok, runtime, process_env, run_dir} <-
+           shape_environment(slug, project_root, runtime, project),
          {:ok, provider_config, _source, _label} <- provider_config(),
          {:ok, home} <- runtime_home(runtime) do
-      run_dir = shape_run_dir(process_env, slug)
-
-      request = %ShapeRequest{
-        workdir: project_root,
-        slug: slug,
-        task: task,
-        model: model,
-        effort: effort,
-        provider_mod: ChatGPT,
-        provider_config: provider_config,
-        env: process_env,
-        git_env: Runtime.git_environment(process_env),
-        run_dir: run_dir,
-        sandbox: %Sandbox{
-          enabled:
-            project.sandbox and not Runtime.sandboxed?(process_env) and
-              not Runtime.sandboxed?(runtime),
-          home: home,
+      request =
+        shape_request(%ShapeInputs{
+          slug: slug,
           project_root: project_root,
-          origin: project_root,
-          workspace: project_root,
+          task: task,
+          model: model,
+          effort: effort,
+          project: project,
+          provider_config: provider_config,
+          runtime: runtime,
+          process_env: process_env,
           run_dir: run_dir,
-          tmp_dir: Runtime.temporary_directory(process_env),
-          workspace_is_project: true
-        }
-      }
+          home: home
+        })
 
       Shaper.shape(request)
     end
@@ -346,6 +336,51 @@ defmodule Kogen.Kernel do
       home when is_binary(home) -> {:ok, home}
       nil -> RuntimeDiscovery.home()
     end
+  end
+
+  defp shape_environment(slug, project_root, runtime, project) do
+    run_dir = shape_run_dir(runtime.base_env, slug)
+
+    runtime =
+      runtime
+      |> Runtime.add_trusted_workspace(project_root)
+      |> Runtime.for_run(run_dir)
+
+    with {:ok, process_env} <- Engine.candidate_environment(project_root, runtime, project) do
+      process_env =
+        process_env
+        |> Runtime.add_trusted_workspace(project_root)
+        |> Runtime.for_run(run_dir)
+
+      {:ok, runtime, process_env, run_dir}
+    end
+  end
+
+  defp shape_request(%ShapeInputs{} = inputs) do
+    %ShapeRequest{
+      workdir: inputs.project_root,
+      slug: inputs.slug,
+      task: inputs.task,
+      model: inputs.model,
+      effort: inputs.effort,
+      provider_mod: ChatGPT,
+      provider_config: inputs.provider_config,
+      env: inputs.process_env,
+      git_env: Runtime.git_environment(inputs.process_env),
+      run_dir: inputs.run_dir,
+      sandbox: %Sandbox{
+        enabled:
+          inputs.project.sandbox and not Runtime.sandboxed?(inputs.process_env) and
+            not Runtime.sandboxed?(inputs.runtime),
+        home: inputs.home,
+        project_root: inputs.project_root,
+        origin: inputs.project_root,
+        workspace: inputs.project_root,
+        run_dir: inputs.run_dir,
+        tmp_dir: Runtime.temporary_directory(inputs.process_env),
+        workspace_is_project: true
+      }
+    }
   end
 
   defp shape_run_dir(process_env, slug) do

@@ -4,6 +4,7 @@ defmodule Kogen.Checks.Ledger do
   alias Kogen.Checks.Ledger.Report
   alias Kogen.Checks.Ledger.Validation
   alias Kogen.Checks.LedgerRow
+  alias Kogen.Contracts.CommandExit
   alias Kogen.Contracts.Failure
   alias Kogen.Contracts.Intent
   alias Kogen.Contracts.ProcResult
@@ -166,15 +167,19 @@ defmodule Kogen.Checks.Ledger do
     with :ok <- prepared_test(test_path),
          :ok <- prepare_run_files(run_dir),
          {:ok, exit_status} <- run_tests(workdir, test_path, run_dir, env, sandbox) do
-      case read_report(Path.join(run_dir, "ledger.jsonl")) do
-        {:ok, rows} ->
-          {:ok, rows, exit_status}
+      if CommandExit.tool_missing?(exit_status) do
+        tool_missing_failure(run_dir, exit_status)
+      else
+        case read_report(Path.join(run_dir, "ledger.jsonl")) do
+          {:ok, rows} ->
+            {:ok, rows, exit_status}
 
-        {:error, %Failure{reason: :ledger_empty}} ->
-          empty_report_failure(intent, run_dir, exit_status)
+          {:error, %Failure{reason: :ledger_empty}} ->
+            empty_report_failure(intent, run_dir, exit_status)
 
-        {:error, %Failure{} = failure} ->
-          {:error, failure}
+          {:error, %Failure{} = failure} ->
+            {:error, failure}
+        end
       end
     end
   end
@@ -210,6 +215,22 @@ defmodule Kogen.Checks.Ledger do
     end
   end
 
+  defp tool_missing_failure(run_dir, exit_status) do
+    output = acceptance_output(Path.join([run_dir, "logs", "acceptance.log"]))
+
+    detail =
+      case missing_runtime_tool(output) do
+        tool when is_binary(tool) ->
+          "Acceptance test runner could not find #{tool}.\nOutput (first 20 lines):\n#{output}"
+
+        nil ->
+          "Acceptance test runner could not find a required tool (exit status #{exit_status}).\n" <>
+            "Output (first 20 lines):\n#{output}"
+      end
+
+    {:error, failure(:environment, :tool_missing, detail)}
+  end
+
   defp missing_runtime_tool(output) do
     lowered = String.downcase(output)
 
@@ -217,6 +238,9 @@ defmodule Kogen.Checks.Ledger do
       String.contains?(lowered, "erl: not found") or
           String.contains?(lowered, "could not find erl") ->
         "erl"
+
+      String.contains?(lowered, "elixir: no such file or directory") ->
+        "elixir"
 
       String.contains?(lowered, "mix: not found") or
         String.contains?(lowered, "mix command not found") or
@@ -273,18 +297,18 @@ defmodule Kogen.Checks.Ledger do
     ]
 
     workdir
-    |> test_argv(test_path, run_dir)
+    |> test_argv(test_path, run_dir, env)
     |> Proc.run(options)
     |> process_result()
   end
 
-  defp test_argv(workdir, test_path, run_dir) do
+  defp test_argv(workdir, test_path, run_dir, env) do
     formatter_path = Path.join(run_dir, "ledger_formatter.ex")
 
     preload =
       "Code.require_file(#{inspect(formatter_path)}); Code.ensure_loaded!(KogenLedgerFormatter)"
 
-    [
+    argv = [
       "elixir",
       "-e",
       preload,
@@ -297,6 +321,15 @@ defmodule Kogen.Checks.Ledger do
       "ExUnit.CLIFormatter",
       Path.relative_to(test_path, workdir)
     ]
+
+    if mise_config?(env), do: ["mise", "exec", "--" | argv], else: argv
+  end
+
+  defp mise_config?(env) do
+    case Map.get(env, "MISE_CONFIG_FILE") do
+      path when is_binary(path) -> String.trim(path) != ""
+      _missing -> false
+    end
   end
 
   defp process_result(result) do

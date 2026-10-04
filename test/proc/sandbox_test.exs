@@ -144,7 +144,7 @@ defmodule Kogen.Proc.SandboxTest do
   end
 
   @tag :seatbelt
-  test "mise exec trusts a workspace config with Build-local state in the sandbox", %{
+  test "mise exec trusts an external config with run-local state in the sandbox", %{
     tmp_dir: tmp_dir
   } do
     home = Path.join(tmp_dir, "home")
@@ -158,24 +158,68 @@ defmodule Kogen.Proc.SandboxTest do
     for path <- [home, project, origin, workspace, run_dir, config_dir, sandbox_tmp],
         do: File.mkdir_p!(path)
 
-    mise_config = Path.join(workspace, "mise.toml")
-    File.write!(mise_config, "[env]\nKOGEN_MISE_SANDBOX_TEST = \"trusted\"\n")
+    File.mkdir_p!(Path.join([workspace, "test", "acceptance"]))
+
+    File.write!(
+      Path.join(workspace, "mix.exs"),
+      "defmodule SandboxProbe.MixProject do\n" <>
+        "  use Mix.Project\n" <>
+        ~s(  def project, do: [app: :sandbox_probe, version: "0.1.0", elixir: "~> 1.20"]\n) <>
+        "end\n"
+    )
+
+    File.write!(Path.join([workspace, "test", "test_helper.exs"]), "ExUnit.start()\n")
+    File.write!(Path.join([workspace, "test", "acceptance", "compile_test.exs"]), "")
+
+    mise_config = Path.join(config_dir, "mise.toml")
+
+    File.write!(
+      mise_config,
+      ~s([tools]\nelixir = "1.20.4-otp-29"\nerlang = "29.1.1"\n) <>
+        "[env]\nKOGEN_MISE_SANDBOX_TEST = \"trusted\"\n"
+    )
 
     mise = System.find_executable("mise")
     assert is_binary(mise), "mise must be available to the sandbox regression test"
-    path = Enum.join([Path.dirname(mise), "/usr/bin", "/bin"], ":")
+
+    path =
+      Enum.join(
+        [
+          Path.dirname(mise),
+          "/opt/bench/mise/installs/elixir/1.20.2-otp-29/bin",
+          "/opt/bench/mise/installs/erlang/29.0.3/bin",
+          "/usr/bin",
+          "/bin"
+        ],
+        ":"
+      )
+
     state_dir = Path.join(run_dir, "mise-state")
     cache_dir = Path.join(run_dir, "mise-cache")
+
+    elixir = System.find_executable("elixir")
+    assert is_binary(elixir), "Elixir must be available through mise for the sandbox test"
+
+    data_dir =
+      elixir
+      |> Path.dirname()
+      |> Path.dirname()
+      |> Path.dirname()
+      |> Path.dirname()
+      |> Path.dirname()
 
     env = %{
       "HOME" => home,
       "PATH" => path,
       "TMPDIR" => sandbox_tmp,
       "MISE_CONFIG_DIR" => config_dir,
-      "MISE_DATA_DIR" => Path.join([home, ".local", "share", "mise"]),
-      "MISE_TRUSTED_CONFIG_PATHS" => workspace,
+      "MISE_CONFIG_FILE" => mise_config,
+      "MISE_DATA_DIR" => data_dir,
+      "MISE_TRUSTED_CONFIG_PATHS" => Enum.join([workspace, config_dir], ":"),
       "MISE_STATE_DIR" => state_dir,
-      "MISE_CACHE_DIR" => cache_dir
+      "MISE_CACHE_DIR" => cache_dir,
+      "MIX_ENV" => "test",
+      "MIX_HOME" => Path.join(sandbox_tmp, "mix-home")
     }
 
     sandbox = %Sandbox{
@@ -196,7 +240,8 @@ defmodule Kogen.Proc.SandboxTest do
                  "--",
                  "/bin/sh",
                  "-c",
-                 "test \"$KOGEN_MISE_SANDBOX_TEST\" = trusted"
+                 "test \"$KOGEN_MISE_SANDBOX_TEST\" = trusted && " <>
+                   "mix test --dry-run test/acceptance/compile_test.exs"
                ],
                cd: workspace,
                env: env,
@@ -204,13 +249,8 @@ defmodule Kogen.Proc.SandboxTest do
              )
 
     assert_link_targets(
-      Path.join(state_dir, "trusted-configs"),
-      Path.basename(workspace)
-    )
-
-    assert_link_targets(
       Path.join(state_dir, "tracked-configs"),
-      Path.join(Path.basename(workspace), "mise.toml")
+      Path.join(Path.basename(config_dir), "mise.toml")
     )
   end
 

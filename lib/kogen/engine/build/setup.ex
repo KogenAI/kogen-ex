@@ -2,6 +2,7 @@ defmodule Kogen.Engine.Build.Setup do
   @moduledoc false
 
   alias Kogen.Contracts.CheckSpec
+  alias Kogen.Contracts.CommandExit
   alias Kogen.Contracts.Failure
   alias Kogen.Contracts.ProcResult
 
@@ -65,7 +66,11 @@ defmodule Kogen.Engine.Build.Setup do
     output = output_tail(result.output_tail)
     detail = "setup command #{name} failed (#{status})"
     detail = if output == "", do: detail, else: detail <> "\n" <> output
-    failure(:setup_failed, detail)
+
+    reason =
+      if CommandExit.tool_missing?(result.exit_status), do: :tool_missing, else: :setup_failed
+
+    failure(reason, detail)
   end
 
   defp output_tail(output) when byte_size(output) <= 2_048, do: String.replace_invalid(output)

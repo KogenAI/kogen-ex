@@ -19,6 +19,8 @@ end
 defmodule Kogen.Kernel.Approval do
   @moduledoc false
 
+  alias Kogen.Contracts.CommandExit
+  alias Kogen.Contracts.Failure
   alias Kogen.Contracts.Intent, as: IntentData
   alias Kogen.Contracts.ProcResult
   alias Kogen.Contracts.Project, as: ProjectData
@@ -246,8 +248,25 @@ defmodule Kogen.Kernel.Approval do
       argv = Enum.map(spec.argv, &if(&1 == "{path}", do: relative, else: &1))
 
       case Proc.run(argv, cd: root, env: env, timeout_ms: spec.timeout_ms) do
-        {:ok, %ProcResult{exit_status: 0, timed_out: false}} -> {:cont, :ok}
-        result -> {:halt, {:error, {:acceptance_check_failed, spec.name, result}}}
+        {:ok, %ProcResult{exit_status: 0, timed_out: false}} ->
+          {:cont, :ok}
+
+        {:ok, %ProcResult{} = result} ->
+          if CommandExit.tool_missing?(result.exit_status) do
+            {:halt,
+             {:error,
+              %Failure{
+                class: :environment,
+                reason: :tool_missing,
+                detail:
+                  "Acceptance check #{spec.name} could not run (exit status #{result.exit_status}); a required tool is unavailable."
+              }}}
+          else
+            {:halt, {:error, {:acceptance_check_failed, spec.name, {:ok, result}}}}
+          end
+
+        result ->
+          {:halt, {:error, {:acceptance_check_failed, spec.name, result}}}
       end
     end)
   end

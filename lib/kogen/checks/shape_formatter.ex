@@ -2,6 +2,7 @@ defmodule Kogen.Checks.ShapeFormatter do
   @moduledoc false
 
   alias Kogen.Checks.ShapeFormatRequest
+  alias Kogen.Contracts.CommandExit
   alias Kogen.Contracts.Failure
   alias Kogen.Contracts.ProcResult
   alias Kogen.Contracts.Project
@@ -44,11 +45,12 @@ defmodule Kogen.Checks.ShapeFormatter do
         {:ok, %ProcResult{exit_status: 0, timed_out: false}} ->
           :ok
 
-        {:ok, %ProcResult{exit_status: 127, timed_out: false}} ->
-          missing_formatter(argv, files, log_path)
-
         {:ok, %ProcResult{} = result} ->
-          {:error, formatter_failure(argv, files, result, log_path)}
+          if not result.timed_out and CommandExit.tool_missing?(result.exit_status) do
+            missing_formatter(argv, files, log_path)
+          else
+            {:error, formatter_failure(argv, files, result, log_path)}
+          end
 
         {:error, :enoent} ->
           missing_formatter(argv, files, log_path)

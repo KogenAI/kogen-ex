@@ -4,6 +4,7 @@ defmodule Kogen.Checks.Feedback do
   alias Kogen.Checks.Feedback.Parser, as: Parser
   alias Kogen.Checks.Feedback.Parser.Common
   alias Kogen.Checks.Feedback.Renderer
+  alias Kogen.Contracts.CommandExit
 
   @failed_test_location ~r/(?:\A|\n)\s*\d+\)\s+test\b[^\n]*\n\s*([^\s]+\.exs:\d+)/
 
@@ -144,6 +145,7 @@ defmodule Kogen.Checks.Feedback do
 
   defp exit_level(%{output: output} = result) do
     cond do
+      CommandExit.tool_missing?(result.exit_status) -> 3
       environment_output?(output) -> 3
       usage_output?(output) -> 2
       result.exit_status == 0 and nothing_ran?(output) -> 3

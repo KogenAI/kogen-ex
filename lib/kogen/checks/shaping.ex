@@ -18,7 +18,9 @@ defmodule Kogen.Checks.Shaping do
   alias Kogen.Checks.ShapeValidation
   alias Kogen.Checks.Shaping.Reclassifier
   alias Kogen.Checks.Shaping.StageFile
+  alias Kogen.Contracts.CommandExit
   alias Kogen.Contracts.Failure
+  alias Kogen.Contracts.MiseEnvironment
   alias Kogen.Contracts.ProcResult
   alias Kogen.Proc
   alias Kogen.Workspace
@@ -37,7 +39,11 @@ defmodule Kogen.Checks.Shaping do
   end
 
   defp verify(%ShapeValidation{} = request) do
-    env = Map.merge(request.env, request.project.env)
+    env =
+      request.env
+      |> Map.merge(request.project.env)
+      |> MiseEnvironment.add_trusted_workspace(request.workdir)
+      |> MiseEnvironment.for_run(request.run_dir)
 
     with :ok <- acceptance_checks(request, env),
          {:ok, rows} <-
@@ -125,7 +131,11 @@ defmodule Kogen.Checks.Shaping do
       "Acceptance check #{name} #{status}.\nOutput (first 20 lines):\n" <>
         first_output_lines(log_path, result.output_tail)
 
-    failure(:candidate, :acceptance_check_failed, detail)
+    if CommandExit.tool_missing?(result.exit_status) do
+      failure(:environment, :tool_missing, detail)
+    else
+      failure(:candidate, :acceptance_check_failed, detail)
+    end
   end
 
   defp first_output_lines(path, fallback) do
