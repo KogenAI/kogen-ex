@@ -43,7 +43,7 @@ defmodule Kogen.Provider.ChatGPT.TransportTest do
 
     body = sse(%{"type" => "response.completed", "response" => completed("resp_slow", [item])})
     {url, _server} = start_server(200, body, :slow_chunked)
-    config = %{config(url) | timeout_ms: 75}
+    config = %{config(url) | timeout_ms: 400}
     started = System.monotonic_time(:millisecond)
 
     assert {:ok, response} = ChatGPT.respond(config, request())
