@@ -1,5 +1,5 @@
 defmodule Kogen.Harness.GateTest do
-  use Kogen.Testkit.Case
+  use Kogen.Testkit.Case, async: true
 
   alias Kogen.Contracts.CheckSpec
   alias Kogen.Contracts.ProcResult
@@ -118,6 +118,45 @@ defmodule Kogen.Harness.GateTest do
     assert [detail] = result.failures
     assert detail =~ "exit 3"
     refute detail =~ "[exunit/"
+  end
+
+  test "the gate formatter checks protected tests without rewriting them", %{tmp_dir: tmp_dir} do
+    workdir = Path.join(tmp_dir, "project")
+    test_path = Path.join([workdir, "test", "acceptance", "probe_test.exs"])
+    approved = "defmodule ProbeTest do\n  use ExUnit.Case, async: true\nend\n"
+    File.mkdir_p!(Path.dirname(test_path))
+    File.write!(test_path, approved)
+
+    bin_dir = Path.join(tmp_dir, "bin")
+    mix_path = Path.join(bin_dir, "mix")
+    File.mkdir_p!(bin_dir)
+
+    File.write!(mix_path, """
+    #!/bin/sh
+    if [ "$1" = "format" ] && [ "$2" = "--check-formatted" ]; then
+      exit 0
+    fi
+    printf 'rewritten\\n' > test/acceptance/probe_test.exs
+    exit 0
+    """)
+
+    File.chmod!(mix_path, 0o755)
+
+    opts = options(tmp_dir, nil, nil)
+
+    format_check = %CheckSpec{
+      name: "format",
+      argv: ["mix", "format", "--check-formatted"],
+      timeout_ms: 5_000
+    }
+
+    project = %{opts.project | checks: [format_check]}
+    path = bin_dir <> ":/usr/bin:/bin:/usr/local/bin"
+    opts = %{opts | proc_mod: Kogen.Proc, project: project, env: %{"PATH" => path}}
+
+    assert {:ok, result} = Gate.run(opts, deadline())
+    assert result.status == :pass
+    assert File.read!(test_path) == approved
   end
 
   defp options(tmp_dir, base_test, changed_paths) do

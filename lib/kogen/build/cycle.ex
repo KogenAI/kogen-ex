@@ -2,6 +2,7 @@ defmodule Kogen.Build.Cycle do
   @moduledoc "Pure transition function for one Build attempt."
 
   alias Kogen.Build.Cycle.Escalation
+  alias Kogen.Build.Cycle.ProviderFailure
   alias Kogen.Build.Recipe
   alias Kogen.Contracts.Failure
 
@@ -54,7 +55,6 @@ defmodule Kogen.Build.Cycle do
           | {:record, map()}
           | {:finish, terminal(), term()}
 
-  @provider_retries 2
   @stage_success_events [:context, :plan, :develop, :done_gate, :fix, :check]
 
   @spec new(%{
@@ -287,24 +287,9 @@ defmodule Kogen.Build.Cycle do
   end
 
   defp handle_failure(state, stage, %Failure{class: :provider, reason: reason}) do
-    if state.provider_retries < @provider_retries do
-      {retry_state_stage, retry_run_stage} = provider_retry_target(stage)
-      provider_retries = state.provider_retries + 1
-
-      next = %{
-        state
-        | stage: retry_state_stage,
-          provider_retries: provider_retries,
-          pending_land: false
-      }
-
-      {next,
-       [
-         record(:provider_retry, %{stage: stage, reason: reason}),
-         run(retry_run_stage, stage_args(next, %{provider_retry: provider_retries}))
-       ]}
-    else
-      finish(state, :failed, {:provider_retries_exhausted, reason})
+    case ProviderFailure.retry(state, stage, reason) do
+      {:retry, next, effects} -> {next, effects}
+      {:stop, result} -> finish(state, :failed, result)
     end
   end
 
@@ -314,9 +299,6 @@ defmodule Kogen.Build.Cycle do
 
   defp handle_failure(state, _stage, %Failure{}),
     do: finish(state, :failed, {:controller, :unknown_failure_class})
-
-  defp provider_retry_target(stage) when stage in [:commit, :land], do: {:commit, :commit}
-  defp provider_retry_target(stage), do: {stage, stage}
 
   defp repair(state, reason, detail) do
     if state.repairs_left == 0 do

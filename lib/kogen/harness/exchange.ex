@@ -37,6 +37,8 @@ defmodule Kogen.Harness.Exchange do
   alias Kogen.Harness.PromptCacheKey
   alias Kogen.Harness.Recording
 
+  @retry_backoff_ms 200
+
   @spec respond(Opts.t(), Request.t()) :: {:ok, ModelResponse.t()} | {:error, term()}
   def respond(%Opts{} = opts, %Request{} = exchange_request) do
     request = build_request(opts, exchange_request)
@@ -49,10 +51,87 @@ defmodule Kogen.Harness.Exchange do
              exchange_request.turn,
              request
            ) do
+      deadline = System.monotonic_time(:millisecond) + exchange_request.remaining_ms
       result = provider_call(opts, request, exchange_request.remaining_ms)
-      record_response(opts, exchange_request, result)
+      respond_after_first_attempt(opts, exchange_request, request, deadline, result)
     end
   end
+
+  defp respond_after_first_attempt(
+         opts,
+         exchange_request,
+         request,
+         deadline,
+         {:error, %ProviderError{class: class} = error}
+       )
+       when class in [:timeout, :transport] do
+    if remaining_ms(deadline) > @retry_backoff_ms do
+      retry_after_transient_error(opts, exchange_request, request, deadline, error)
+    else
+      record_response(opts, exchange_request, {:error, error})
+    end
+  end
+
+  defp respond_after_first_attempt(opts, exchange_request, _request, _deadline, result),
+    do: record_response(opts, exchange_request, result)
+
+  defp retry_after_transient_error(opts, exchange_request, request, deadline, error) do
+    retry_event = %{
+      event: :provider_retry,
+      stage: exchange_request.stage,
+      turn: exchange_request.turn,
+      attempt: 1,
+      reason: error.class,
+      detail: "Retrying idempotent model request once after #{error.class}."
+    }
+
+    with :ok <-
+           Recording.append(
+             opts,
+             :provider_error,
+             exchange_request.stage,
+             exchange_request.turn,
+             error
+           ),
+         :ok <- record_event(opts, exchange_request, retry_event) do
+      receive do
+      after
+        @retry_backoff_ms -> :ok
+      end
+
+      with :ok <-
+             Recording.append(
+               opts,
+               :request,
+               exchange_request.stage,
+               exchange_request.turn,
+               request
+             ) do
+        result = provider_call(opts, request, remaining_ms(deadline))
+        record_response(opts, exchange_request, result)
+      end
+    end
+  end
+
+  defp record_event(%Opts{event_recorder: nil} = opts, request, event) do
+    Recording.append(opts, event.event, request.stage, request.turn, event)
+  end
+
+  defp record_event(%Opts{event_recorder: recorder} = opts, request, event)
+       when is_function(recorder, 1) do
+    with :ok <-
+           Recording.append(
+             opts,
+             event.event,
+             request.stage,
+             request.turn,
+             event
+           ) do
+      recorder.(event)
+    end
+  end
+
+  defp remaining_ms(deadline), do: max(deadline - System.monotonic_time(:millisecond), 0)
 
   defp build_request(opts, request) do
     %{

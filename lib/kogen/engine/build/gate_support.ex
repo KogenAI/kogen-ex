@@ -6,6 +6,7 @@ defmodule Kogen.Engine.Build.GateSupport do
   alias Kogen.Contracts.ProcResult
   alias Kogen.Engine.Build.Guard
   alias Kogen.Engine.Build.PhaseTiming
+  alias Kogen.Engine.Build.ProtectedPaths
   alias Kogen.Engine.Build.Session
   alias Kogen.Harness.Opts
   alias Kogen.Harness.Result, as: HarnessResult
@@ -37,6 +38,8 @@ defmodule Kogen.Engine.Build.GateSupport do
 
     opts
     |> Map.put(:phase_recorder, opts.phase_recorder || phase_recorder(session))
+    |> Map.put(:event_recorder, opts.event_recorder || event_recorder(session))
+    |> Map.put(:protected_restorer, opts.protected_restorer || protected_restorer(session))
     |> Map.put(:changed?, opts.changed? || changed_detector(session))
     |> Map.put(:protected, Enum.uniq(opts.protected ++ protected))
     |> Map.put(:base_test, base_test)
@@ -80,6 +83,12 @@ defmodule Kogen.Engine.Build.GateSupport do
       })
     end
   end
+
+  defp event_recorder(session) do
+    fn event -> State.record(session.run, Map.put(event, :attempt, session.attempt)) end
+  end
+
+  defp protected_restorer(session), do: fn -> ProtectedPaths.restore(session) end
 
   @spec base_test(Session.t(), [String.t()], pos_integer()) ::
           {:ok, ProcResult.t()} | {:error, term()}

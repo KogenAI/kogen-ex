@@ -6,6 +6,7 @@ defmodule Kogen.Harness.DeveloperState do
     :usage,
     :turns,
     :empty_refusals,
+    :protected_restores,
     :started_at,
     :deadline,
     :transcript_path
@@ -17,6 +18,7 @@ defmodule Kogen.Harness.DeveloperState do
           usage: Kogen.Harness.Usage.t(),
           turns: non_neg_integer(),
           empty_refusals: non_neg_integer(),
+          protected_restores: non_neg_integer(),
           started_at: integer(),
           deadline: integer(),
           transcript_path: Path.t()
@@ -47,6 +49,7 @@ defmodule Kogen.Harness.Developer do
   @developer_prompt_source Path.expand("../../../priv/prompts/developer.md", __DIR__)
   @external_resource @developer_prompt_source
   @developer_prompt File.read!(@developer_prompt_source)
+  @protected_restore_limit 3
 
   @spec run(Opts.t(), String.t(), Plan.t() | nil, map() | nil) ::
           {:ok, Result.t()} | {:error, term()}
@@ -66,6 +69,7 @@ defmodule Kogen.Harness.Developer do
       usage: Usage.zero(),
       turns: 0,
       empty_refusals: 0,
+      protected_restores: 0,
       started_at: started_at,
       deadline: started_at + opts.limits.wall_ms,
       transcript_path: transcript_path
@@ -125,12 +129,21 @@ defmodule Kogen.Harness.Developer do
     do: done_claim(opts, prompt, state)
 
   defp handle_response(opts, prompt, state, %ModelResponse{tool_calls: calls}) do
-    with {:ok, next} <- run_tool_calls(opts, state, calls) do
+    with {:ok, next} <- run_tool_calls(opts, state, calls),
+         {:ok, next, _restored?} <- restore_protected(opts, next) do
       developer_loop(opts, prompt, next)
     end
   end
 
   defp done_claim(opts, prompt, state) do
+    with {:ok, state, restored?} <- restore_protected(opts, state) do
+      if restored?,
+        do: developer_loop(opts, prompt, state),
+        else: finish_done_claim(opts, prompt, state)
+    end
+  end
+
+  defp finish_done_claim(opts, prompt, state) do
     with {:ok, changed?} <- changed_files?(opts) do
       if changed? or state.empty_refusals > 0 do
         run_gate(opts, state)
@@ -138,6 +151,75 @@ defmodule Kogen.Harness.Developer do
         refuse_empty_done(opts, prompt, state)
       end
     end
+  end
+
+  defp restore_protected(%Opts{protected_restorer: nil}, state), do: {:ok, state, false}
+
+  defp restore_protected(%Opts{protected_restorer: restorer} = opts, state)
+       when is_function(restorer, 0) do
+    case restorer.() do
+      {:ok, []} ->
+        {:ok, state, false}
+
+      {:ok, paths} when is_list(paths) ->
+        with :ok <- record_protected_restores(opts, state, paths) do
+          restore_count = state.protected_restores + 1
+
+          next = %{
+            state
+            | protected_restores: restore_count,
+              items: state.items ++ Enum.map(paths, &Codec.user_item(protected_note(&1)))
+          }
+
+          if state.protected_restores >= @protected_restore_limit do
+            error(
+              :protected_restore_limit,
+              "The builder changed approved protected files more than #{@protected_restore_limit} times."
+            )
+          else
+            {:ok, next, true}
+          end
+        end
+
+      {:error, reason} ->
+        error(
+          :protected_restore_failed,
+          "Could not restore approved protected files: #{inspect(reason)}"
+        )
+
+      other ->
+        error(:protected_restore_failed, "Protected-file restorer returned #{inspect(other)}.")
+    end
+  end
+
+  defp record_protected_restores(opts, state, paths) do
+    Enum.reduce_while(paths, :ok, fn path, :ok ->
+      event = %{
+        event: :protected_restored,
+        stage: :develop,
+        turn: state.turns,
+        path: path,
+        detail: "Restored approved bytes after a builder edit."
+      }
+
+      case record_event(opts, event) do
+        :ok -> {:cont, :ok}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+  end
+
+  defp record_event(%Opts{} = opts, event) do
+    with :ok <- Recording.append(opts, event.event, event.stage, event.turn, event) do
+      case opts.event_recorder do
+        recorder when is_function(recorder, 1) -> recorder.(event)
+        nil -> :ok
+      end
+    end
+  end
+
+  defp protected_note(path) do
+    "You changed #{path}; acceptance tests and the Intent are read-only and have been restored. Make the implementation satisfy them."
   end
 
   defp refuse_empty_done(opts, prompt, state) do
@@ -275,7 +357,8 @@ defmodule Kogen.Harness.Developer do
   defp developer_prompt(%Opts{builder_tools: :shell}) do
     {:ok,
      @developer_prompt <>
-       "\n\nShell-only recipe: inspect efficiently with `sed -n` and `rg -n`; edit with a " <>
+       "\n\nShell-only recipe: acceptance tests and the Intent files are read-only, including " <>
+       "when using shell commands or formatters. Inspect efficiently with `sed -n` and `rg -n`; edit with a " <>
        "short `apply_patch <<'PATCH' ... PATCH` heredoc when available, or a focused " <>
        "`python3 - <<'PY'` edit. Combine related reads and keep command output focused. " <>
        "All file changes must stay inside the worktree."}

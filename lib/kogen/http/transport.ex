@@ -65,6 +65,7 @@ defmodule Kogen.Http.Transport do
         receive_response(
           ref,
           System.monotonic_time(:millisecond) + timeout_ms,
+          timeout_ms,
           %State{},
           profile
         )
@@ -144,7 +145,7 @@ defmodule Kogen.Http.Transport do
     end
   end
 
-  defp receive_response(ref, deadline, %State{} = state, profile) do
+  defp receive_response(ref, deadline, idle_timeout_ms, %State{} = state, profile) do
     remaining = deadline - System.monotonic_time(:millisecond)
 
     if remaining <= 0 do
@@ -153,13 +154,13 @@ defmodule Kogen.Http.Transport do
     else
       receive do
         {:http, {^ref, :stream_start, _headers}} ->
-          receive_response(ref, deadline, %{state | status: 200}, profile)
+          receive_response(ref, deadline, idle_timeout_ms, %{state | status: 200}, profile)
 
         {:http, {^ref, :stream_start, _headers, _handler}} ->
-          receive_response(ref, deadline, %{state | status: 200}, profile)
+          receive_response(ref, deadline, idle_timeout_ms, %{state | status: 200}, profile)
 
         {:http, {^ref, :stream, chunk}} when is_binary(chunk) ->
-          append_chunk(ref, deadline, state, chunk, profile)
+          append_chunk(ref, idle_timeout_ms, state, chunk, profile)
 
         {:http, {^ref, :stream_end, _headers}} ->
           finish_stream(state)
@@ -177,7 +178,7 @@ defmodule Kogen.Http.Transport do
     end
   end
 
-  defp append_chunk(ref, deadline, state, chunk, profile) do
+  defp append_chunk(ref, idle_timeout_ms, state, chunk, profile) do
     size = state.size + byte_size(chunk)
 
     if size > @max_response_bytes do
@@ -186,7 +187,8 @@ defmodule Kogen.Http.Transport do
     else
       receive_response(
         ref,
-        deadline,
+        System.monotonic_time(:millisecond) + idle_timeout_ms,
+        idle_timeout_ms,
         %{state | chunks: [chunk | state.chunks], size: size},
         profile
       )

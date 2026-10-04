@@ -33,6 +33,25 @@ defmodule Kogen.Provider.ChatGPT.TransportTest do
     assert is_pid(server)
   end
 
+  test "a slowly progressing SSE response is governed by its idle timeout" do
+    item = %{
+      "id" => "msg_slow",
+      "type" => "message",
+      "role" => "assistant",
+      "content" => [%{"type" => "output_text", "text" => "still progressing"}]
+    }
+
+    body = sse(%{"type" => "response.completed", "response" => completed("resp_slow", [item])})
+    {url, _server} = start_server(200, body, :slow_chunked)
+    config = %{config(url) | timeout_ms: 75}
+    started = System.monotonic_time(:millisecond)
+
+    assert {:ok, response} = ChatGPT.respond(config, request())
+
+    assert response.text == "still progressing"
+    assert System.monotonic_time(:millisecond) - started > config.timeout_ms
+  end
+
   test "classifies HTTP auth, usage-limit shapes, and overloaded failures" do
     responses = [
       {401, ~s({"detail":"login rejected"}), :login},
@@ -195,6 +214,25 @@ defmodule Kogen.Provider.ChatGPT.TransportTest do
 
     Enum.each(chunks(body, 11), fn chunk ->
       :gen_tcp.send(socket, [Integer.to_string(byte_size(chunk), 16), "\r\n", chunk, "\r\n"])
+    end)
+
+    :gen_tcp.send(socket, "0\r\n\r\n")
+  end
+
+  defp send_response(socket, status, body, :slow_chunked) do
+    header =
+      "HTTP/1.1 #{status} OK\r\nContent-Type: text/event-stream\r\nTransfer-Encoding: chunked\r\nConnection: close\r\n\r\n"
+
+    :ok = :gen_tcp.send(socket, header)
+
+    Enum.each(chunks(body, 18), fn chunk ->
+      :ok =
+        :gen_tcp.send(socket, [Integer.to_string(byte_size(chunk), 16), "\r\n", chunk, "\r\n"])
+
+      receive do
+      after
+        30 -> :ok
+      end
     end)
 
     :gen_tcp.send(socket, "0\r\n\r\n")
