@@ -143,6 +143,86 @@ defmodule Kogen.Proc.SandboxTest do
     end
   end
 
+  @tag :seatbelt
+  test "mise exec trusts a workspace config with Build-local state in the sandbox", %{
+    tmp_dir: tmp_dir
+  } do
+    home = Path.join(tmp_dir, "home")
+    project = Path.join(tmp_dir, "project")
+    origin = Path.join(tmp_dir, "origin.git")
+    workspace = Path.join(tmp_dir, "workspace")
+    run_dir = Path.join(tmp_dir, "run")
+    config_dir = Path.join(tmp_dir, "mise-config")
+    sandbox_tmp = Path.join(tmp_dir, "tmp")
+
+    for path <- [home, project, origin, workspace, run_dir, config_dir, sandbox_tmp],
+        do: File.mkdir_p!(path)
+
+    mise_config = Path.join(workspace, "mise.toml")
+    File.write!(mise_config, "[env]\nKOGEN_MISE_SANDBOX_TEST = \"trusted\"\n")
+
+    mise = System.find_executable("mise")
+    assert is_binary(mise), "mise must be available to the sandbox regression test"
+    path = Enum.join([Path.dirname(mise), "/usr/bin", "/bin"], ":")
+    state_dir = Path.join(run_dir, "mise-state")
+    cache_dir = Path.join(run_dir, "mise-cache")
+
+    env = %{
+      "HOME" => home,
+      "PATH" => path,
+      "TMPDIR" => sandbox_tmp,
+      "MISE_CONFIG_DIR" => config_dir,
+      "MISE_DATA_DIR" => Path.join([home, ".local", "share", "mise"]),
+      "MISE_TRUSTED_CONFIG_PATHS" => workspace,
+      "MISE_STATE_DIR" => state_dir,
+      "MISE_CACHE_DIR" => cache_dir
+    }
+
+    sandbox = %Sandbox{
+      enabled: true,
+      home: home,
+      project_root: project,
+      origin: origin,
+      workspace: workspace,
+      run_dir: run_dir,
+      tmp_dir: sandbox_tmp
+    }
+
+    assert {:ok, %ProcResult{exit_status: 0, timed_out: false}} =
+             Proc.run(
+               [
+                 mise,
+                 "exec",
+                 "--",
+                 "/bin/sh",
+                 "-c",
+                 "test \"$KOGEN_MISE_SANDBOX_TEST\" = trusted"
+               ],
+               cd: workspace,
+               env: env,
+               sandbox: sandbox
+             )
+
+    assert_link_targets(
+      Path.join(state_dir, "trusted-configs"),
+      Path.basename(workspace)
+    )
+
+    assert_link_targets(
+      Path.join(state_dir, "tracked-configs"),
+      Path.join(Path.basename(workspace), "mise.toml")
+    )
+  end
+
+  defp assert_link_targets(directory, suffix) do
+    assert Enum.any?(Path.wildcard(Path.join(directory, "*")), fn path ->
+             case File.read_link(path) do
+               {:ok, target} -> String.ends_with?(target, suffix)
+               {:error, _reason} -> false
+             end
+           end)
+  end
+
   defp assert_sandbox_denies(argv, workspace, env, sandbox) do
     assert {:ok, %ProcResult{exit_status: status, timed_out: false, output_tail: output}} =
              Proc.run(argv, cd: workspace, env: env, sandbox: sandbox)

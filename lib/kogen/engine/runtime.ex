@@ -43,6 +43,18 @@ defmodule Kogen.Engine.Runtime do
     %{runtime | base_env: Map.put(runtime.base_env, "MISE_TRUSTED_CONFIG_PATHS", path)}
   end
 
+  @doc "Scopes mise's writable state and cache to an individual Build run."
+  @spec for_build_run(t() | map(), Path.t()) :: t() | map()
+  def for_build_run(%__MODULE__{} = runtime, run_dir) when is_binary(run_dir) do
+    %{runtime | base_env: for_build_run(runtime.base_env, run_dir)}
+  end
+
+  def for_build_run(env, run_dir) when is_map(env) and is_binary(run_dir) do
+    env
+    |> Map.put("MISE_STATE_DIR", Path.join(run_dir, "mise-state"))
+    |> Map.put("MISE_CACHE_DIR", Path.join(run_dir, "mise-cache"))
+  end
+
   @spec git_environment(map()) :: %{String.t() => String.t()}
   def git_environment(env) when is_map(env) do
     Map.filter(env, fn {key, _value} ->
