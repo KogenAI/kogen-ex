@@ -14,6 +14,8 @@ case "$recipe" in
 esac
 builder_model=${KOGEN_BENCH_MODEL:-gpt-6-luna}
 builder_effort=${KOGEN_BENCH_EFFORT:-max}
+shape_model=${KOGEN_BENCH_SHAPE_MODEL:-gpt-6-luna}
+shape_effort=${KOGEN_BENCH_SHAPE_EFFORT:-max}
 task_dir=$(cd "$1" && pwd -P)
 work_dir=$(cd "$2" && pwd -P)
 mkdir -p "$3"
@@ -118,15 +120,17 @@ with open(event_path, "a", encoding="utf-8") as target:
     target.write(json.dumps(row, separators=(",", ":")) + "\n")
 raise SystemExit(status)
 PY
-python3 - "$out_dir/usage.json" "$recipe" "$builder_model" "$builder_effort" <<'PY'
+python3 - "$out_dir/usage.json" "$recipe" "$builder_model" "$builder_effort" \
+  "$shape_model" "$shape_effort" <<'PY'
 import json
 import sys
 
-path, recipe, model, effort = sys.argv[1:]
+path, recipe, model, effort, shape_model, shape_effort = sys.argv[1:]
 with open(path, "w", encoding="utf-8") as output:
     json.dump({
         "recipe": recipe,
         "builder": {"model": model, "effort": effort},
+        "shape": {"model": shape_model, "effort": shape_effort, "wall_ms": None},
         "status": "not_started",
         "stages": [],
         "attempts": [],
@@ -375,7 +379,8 @@ write_failed_usage() {
   python3 - "$out_dir/shape.json" "$out_dir/report.json" "$out_dir/usage.json" \
     "$failed_stage" "$failed_model" "$failed_effort" "$failed_status" "$failed_wall_ms" \
     "$shaper_root" "$recipe" "$timings_file" "$events_file" \
-    "$bench_started_ns" "$failed_finished_ns" "$builder_model" "$builder_effort" <<'PY'
+    "$bench_started_ns" "$failed_finished_ns" "$builder_model" "$builder_effort" \
+    "$shape_model" "$shape_effort" "$shape_wall_ms" <<'PY'
 import json
 import os
 import sys
@@ -384,7 +389,7 @@ from pathlib import Path
 (
     shape_path, report_path, output_path, failed_stage, failed_model, failed_effort,
     status, wall_ms, transcript_root, recipe, timing_input, events_output, started_ns, finished_ns,
-    builder_model, builder_effort,
+    builder_model, builder_effort, shape_model, shape_effort, shape_wall_ms,
 ) = sys.argv[1:]
 started_ns = int(started_ns)
 finished_ns = int(finished_ns)
@@ -549,6 +554,7 @@ result = {
     "status": "failed",
     "failed_stage": failed_stage,
     "exit_code": int(status),
+    "shape": {"model": shape_model, "effort": shape_effort, "wall_ms": int(shape_wall_ms)},
     "stages": stages,
     "attempts": report.get("attempts", []),
     "escalations": report.get("escalations", []),
@@ -571,15 +577,17 @@ slug=$(basename "$task_dir")
 runtime_tmpdir=$(cat "$scratch/project_tmpdir")
 setup_log_path="${runtime_tmpdir%/}/$(basename "$scratch")-$slug-setup.log"
 shaper_root="${runtime_tmpdir%/}/kogen-shaper/$slug"
+shape_wall_ms=0
 if run_capture shape "$out_dir/shape.json" "$KOGEN_BIN" intent shape "$slug" \
   --task-file "$prompt_file" --project "$project_dir" --origin "$origin" \
-  --base main --model gpt-6-luna --effort max --json; then
-  :
+  --base main --model "$shape_model" --effort "$shape_effort" --json; then
+  shape_wall_ms=$CAPTURE_WALL_MS
 else
   stage_status=$?
+  shape_wall_ms=$CAPTURE_WALL_MS
   copy_bench_setup_log
   copy_shaper_setup_logs
-  write_failed_usage shape gpt-6-luna max "$stage_status" "$CAPTURE_WALL_MS"
+  write_failed_usage shape "$shape_model" "$shape_effort" "$stage_status" "$CAPTURE_WALL_MS"
   exit "$stage_status"
 fi
 copy_bench_setup_log
@@ -633,13 +641,14 @@ bench_finished_ns=$(python3 -c 'import time; print(time.monotonic_ns())')
 
 python3 - "$out_dir/shape.json" "$out_dir/report.json" "$out_dir/usage.json" \
   "$recipe" "$timings_file" "$events_file" "$bench_started_ns" "$bench_finished_ns" \
-  "$builder_model" "$builder_effort" <<'PY'
+  "$builder_model" "$builder_effort" "$shape_model" "$shape_effort" "$shape_wall_ms" <<'PY'
 import json
 import sys
 
-shape_path, report_path, output_path, recipe, timing_input, events_output, started_ns, finished_ns, builder_model, builder_effort = sys.argv[1:]
+shape_path, report_path, output_path, recipe, timing_input, events_output, started_ns, finished_ns, builder_model, builder_effort, shape_model, shape_effort, shape_wall_ms = sys.argv[1:]
 started_ns = int(started_ns)
 finished_ns = int(finished_ns)
+shape_wall_ms = int(shape_wall_ms)
 with open(shape_path, encoding="utf-8") as source:
     shape = json.load(source)
 with open(report_path, encoding="utf-8") as source:
@@ -747,6 +756,7 @@ result = {
     "status": report.get("status"),
     "roles": report.get("roles", {}),
     "builder": {"model": builder_model, "effort": builder_effort},
+    "shape": {"model": shape_model, "effort": shape_effort, "wall_ms": shape_wall_ms},
     "attempts": report.get("attempts", []),
     "escalations": report.get("escalations", []),
     "stages": stages,
