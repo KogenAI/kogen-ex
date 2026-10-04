@@ -1,13 +1,13 @@
-defmodule Kogen.Harness.Paths do
+defmodule Kogen.Tooling.Paths do
   @moduledoc false
 
-  alias Kogen.Harness.Error
-  alias Kogen.Harness.Opts
+  alias Kogen.Tooling.Context
+  alias Kogen.Tooling.Error
 
   @max_links 40
 
-  @spec safe(Opts.t(), String.t()) :: {:ok, Path.t(), Path.t()} | {:error, Error.t()}
-  def safe(%Opts{} = opts, requested_path) when is_binary(requested_path) do
+  @spec safe(Context.t(), String.t()) :: {:ok, Path.t(), Path.t()} | {:error, Error.t()}
+  def safe(%Context{} = opts, requested_path) when is_binary(requested_path) do
     with true <- Path.type(opts.workdir) == :absolute,
          root = Path.expand(opts.workdir),
          requested = Path.expand(requested_path, root),
@@ -23,8 +23,8 @@ defmodule Kogen.Harness.Paths do
 
   def safe(_opts, _requested_path), do: error(:invalid_path, "Path must be a string.")
 
-  @spec run_dir(Opts.t()) :: {:ok, Path.t()} | {:error, Error.t()}
-  def run_dir(%Opts{} = opts) do
+  @spec run_dir(Context.t()) :: {:ok, Path.t()} | {:error, Error.t()}
+  def run_dir(%Context{} = opts) do
     with true <- Path.type(opts.workdir) == :absolute and Path.type(opts.run_dir) == :absolute,
          root = Path.expand(opts.workdir),
          requested = Path.expand(opts.run_dir),

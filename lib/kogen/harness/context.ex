@@ -27,9 +27,9 @@ defmodule Kogen.Harness.Context do
   alias Kogen.Harness.Opts
   alias Kogen.Harness.Pack
   alias Kogen.Harness.Recording
-  alias Kogen.Harness.ToolResult
   alias Kogen.Harness.Tools
   alias Kogen.Harness.Usage
+  alias Kogen.Tooling.ToolResult
 
   @max_turns 15
   @max_pack_bytes 24_000

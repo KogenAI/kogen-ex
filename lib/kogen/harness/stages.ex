@@ -4,7 +4,6 @@ defmodule Kogen.Harness.Stages do
   alias Kogen.Contracts.ModelResponse
   alias Kogen.Harness.Codec
   alias Kogen.Harness.Context
-  alias Kogen.Harness.Error
   alias Kogen.Harness.Exchange
   alias Kogen.Harness.Exchange.Request, as: ExchangeRequest
   alias Kogen.Harness.Opts
@@ -12,6 +11,7 @@ defmodule Kogen.Harness.Stages do
   alias Kogen.Harness.Plan
   alias Kogen.Harness.PlanSanitizer
   alias Kogen.Harness.Review
+  alias Kogen.Tooling.Error
 
   @review_diff_limit 200_000
   @review_diff_truncated_marker "\n\n[TRUNCATED: Candidate diff continues beyond the 200,000-character review limit.]"

@@ -33,7 +33,8 @@ This repository is the single Mix application that forms Kogen's core. Current w
 | Workspace | Isolated checkout and worktree operations | Contracts, Proc |
 | State | Persisted build state and receipts | Contracts, Workspace |
 | Checks | Deterministic verification and check results | Contracts, Proc, Workspace, Project |
-| Harness | Provider-backed Developer orchestration | Checks, Contracts, Proc, Provider, Project |
+| Tooling | Builder tool schemas, confined file access, edits, search, writes, and shell commands | Contracts, Proc |
+| Harness | Provider-backed Developer orchestration and stage coordination | Checks, Contracts, Proc, Provider, Project, Tooling |
 | Kernel | CLI and cross-domain coordination | Every domain above |
 
 ## Run the checks

@@ -35,7 +35,14 @@ defmodule KogenChecks.GateWiringTest do
         Kogen.Provider => [Kogen.Proc],
         Kogen.State => [Kogen.Workspace],
         Kogen.Checks => [Kogen.Proc, Kogen.Workspace, Kogen.Project],
-        Kogen.Harness => [Kogen.Checks, Kogen.Proc, Kogen.Provider, Kogen.Project],
+        Kogen.Harness => [
+          Kogen.Checks,
+          Kogen.Proc,
+          Kogen.Provider,
+          Kogen.Project,
+          Kogen.Tooling
+        ],
+        Kogen.Tooling => [Kogen.Proc],
         Kogen.Engine => [
           Kogen.Proc,
           Kogen.Project,
@@ -156,6 +163,7 @@ defmodule KogenChecks.GateWiringTest do
         Kogen.Provider.ChatGPT.SIWC.TokenResponse,
         Kogen.Provider.ChatGPT.SIWCCCodec,
         Kogen.Harness.Codec,
+        Kogen.Tooling.Codec,
         Kogen.Checks.Ledger,
         Kogen.State.Json,
         Kogen.Kernel.CLI.ShapeJson

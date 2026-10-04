@@ -2,14 +2,15 @@ defmodule Kogen.Harness.Recording do
   @moduledoc false
 
   alias Kogen.Harness.Codec
-  alias Kogen.Harness.Error
   alias Kogen.Harness.Opts
-  alias Kogen.Harness.Paths
+  alias Kogen.Harness.ToolingContext
   alias Kogen.Harness.TranscriptEntry
+  alias Kogen.Tooling.Error
+  alias Kogen.Tooling.Paths
 
   @spec path(Opts.t()) :: {:ok, Path.t()} | {:error, Error.t()}
   def path(%Opts{} = opts) do
-    with {:ok, run_dir} <- Paths.run_dir(opts),
+    with {:ok, run_dir} <- Paths.run_dir(ToolingContext.from_opts(opts)),
          :ok <- File.mkdir_p(run_dir) do
       {:ok, Path.join(run_dir, "transcript.jsonl")}
     else

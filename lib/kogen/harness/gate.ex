@@ -4,11 +4,12 @@ defmodule Kogen.Harness.Gate do
   alias Kogen.Checks.Feedback
   alias Kogen.Contracts.CheckSpec
   alias Kogen.Contracts.ProcResult
-  alias Kogen.Harness.Command
-  alias Kogen.Harness.Error
   alias Kogen.Harness.GateCommand
   alias Kogen.Harness.GateResult
   alias Kogen.Harness.Opts
+  alias Kogen.Harness.ToolingContext
+  alias Kogen.Tooling.Command
+  alias Kogen.Tooling.Error
 
   @max_excused_tests 2
   @module_reference ~r/\b[A-Z][A-Za-z0-9_]*(?:\.[A-Z][A-Za-z0-9_]*)*\b/
@@ -336,7 +337,12 @@ defmodule Kogen.Harness.Gate do
   end
 
   defp run_argv(opts, spec, argv, timeout_ms, kind, suffix) do
-    case Command.run(opts, argv, timeout_ms, "gate-#{kind}-#{spec.name}#{suffix}") do
+    case Command.run(
+           ToolingContext.from_opts(opts),
+           argv,
+           timeout_ms,
+           "gate-#{kind}-#{spec.name}#{suffix}"
+         ) do
       {:ok, result} ->
         %GateCommand{
           name: spec.name,

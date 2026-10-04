@@ -1,17 +1,17 @@
-defmodule Kogen.Harness.Mutations do
+defmodule Kogen.Tooling.Mutations do
   @moduledoc false
 
   alias Kogen.Contracts.ToolCall
-  alias Kogen.Harness.Codec
-  alias Kogen.Harness.Error
-  alias Kogen.Harness.Opts
-  alias Kogen.Harness.Paths
-  alias Kogen.Harness.ToolResult
-  alias Kogen.Harness.Tools
+  alias Kogen.Tooling.Codec
+  alias Kogen.Tooling.Context
+  alias Kogen.Tooling.Error
+  alias Kogen.Tooling.Paths
+  alias Kogen.Tooling.ToolResult
+  alias Kogen.Tooling.Tools
 
   @max_write_lines 200
 
-  @spec run(Opts.t(), ToolCall.t()) :: ToolResult.t()
+  @spec run(Context.t(), ToolCall.t()) :: ToolResult.t()
   def run(opts, %ToolCall{name: name} = call) when name in ["edit", "write"] do
     case Codec.decode_tool_call(call) do
       {:ok, arguments} -> change(opts, arguments)
@@ -70,7 +70,7 @@ defmodule Kogen.Harness.Mutations do
     end
   end
 
-  defp refuse_protected(%Opts{protected: protected}, relative) do
+  defp refuse_protected(%Context{protected: protected}, relative) do
     if relative in protected do
       {:error,
        %Error{

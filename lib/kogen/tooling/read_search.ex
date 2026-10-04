@@ -1,19 +1,19 @@
-defmodule Kogen.Harness.ReadSearch do
+defmodule Kogen.Tooling.ReadSearch do
   @moduledoc false
 
   alias Kogen.Contracts.ProcResult
   alias Kogen.Contracts.ToolCall
-  alias Kogen.Harness.Codec
-  alias Kogen.Harness.Command
-  alias Kogen.Harness.Error
-  alias Kogen.Harness.Opts
-  alias Kogen.Harness.Paths
-  alias Kogen.Harness.ToolResult
+  alias Kogen.Tooling.Codec
+  alias Kogen.Tooling.Command
+  alias Kogen.Tooling.Context
+  alias Kogen.Tooling.Error
+  alias Kogen.Tooling.Paths
+  alias Kogen.Tooling.ToolResult
 
   @max_lines 400
   @max_results 200
 
-  @spec run(Opts.t(), ToolCall.t()) :: ToolResult.t()
+  @spec run(Context.t(), ToolCall.t()) :: ToolResult.t()
   def run(opts, %ToolCall{name: name} = call) when name in ["read", "search"] do
     case Codec.decode_tool_call(call) do
       {:ok, arguments} ->

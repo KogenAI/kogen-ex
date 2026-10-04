@@ -1,14 +1,14 @@
-defmodule Kogen.Harness.Command do
+defmodule Kogen.Tooling.Command do
   @moduledoc false
 
   alias Kogen.Contracts.ProcResult
-  alias Kogen.Harness.Error
-  alias Kogen.Harness.Opts
-  alias Kogen.Harness.Paths
+  alias Kogen.Tooling.Context
+  alias Kogen.Tooling.Error
+  alias Kogen.Tooling.Paths
 
-  @spec run(Opts.t(), [String.t()], pos_integer(), String.t()) ::
+  @spec run(Context.t(), [String.t()], pos_integer(), String.t()) ::
           {:ok, ProcResult.t()} | {:error, Error.t()}
-  def run(%Opts{} = opts, argv, timeout_ms, label) do
+  def run(%Context{} = opts, argv, timeout_ms, label) do
     with {:ok, run_dir} <- Paths.run_dir(opts),
          :ok <- File.mkdir_p(Path.join(run_dir, "logs")) do
       log_path = Path.join([run_dir, "logs", "#{safe_label(label)}-#{unique_id()}.log"])

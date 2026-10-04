@@ -20,4 +20,16 @@ defmodule KogenChecks.Check.DomainSizeTest do
     |> run_check(DomainSize, max_lines: 3)
     |> refute_issues()
   end
+
+  test "counts a separate Tooling domain independently from Harness" do
+    files = [
+      to_source_file("defmodule Kogen.Harness do\nend\n", "lib/kogen/harness.ex"),
+      to_source_file("defmodule Kogen.Tooling do\nend\n", "lib/kogen/tooling.ex"),
+      to_source_file("defmodule Kogen.Tooling.Tools do\nend\n", "lib/kogen/tooling/tools.ex")
+    ]
+
+    files
+    |> run_check(DomainSize, max_lines: 3)
+    |> assert_issue(fn issue -> assert issue.message =~ "Domain `tooling` has 6 lib lines" end)
+  end
 end

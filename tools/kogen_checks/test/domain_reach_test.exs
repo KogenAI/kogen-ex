@@ -39,4 +39,23 @@ defmodule KogenChecks.Check.DomainReachTest do
     |> run_check(DomainReach, dependencies: %{Kogen.Workspace => [Kogen.Proc]})
     |> refute_issues()
   end
+
+  test "Builder Tooling depends on process execution without reaching back into Harness" do
+    "defmodule Kogen.Tooling.Tools do\n  def run(call), do: Kogen.Proc.Runner.run(call)\nend\n"
+    |> to_source_file("lib/kogen/tooling/tools.ex")
+    |> run_check(DomainReach, dependencies: %{Kogen.Tooling => [Kogen.Proc]})
+    |> refute_issues()
+
+    "defmodule Kogen.Tooling.Tools do\n  def run(opts), do: Kogen.Harness.Opts.new(opts)\nend\n"
+    |> to_source_file("lib/kogen/tooling/tools.ex")
+    |> run_check(DomainReach, dependencies: %{Kogen.Tooling => [Kogen.Proc]})
+    |> assert_issue(fn issue -> assert issue.trigger == "Kogen.Harness.Opts" end)
+  end
+
+  test "Harness may call its declared Tooling dependency" do
+    "defmodule Kogen.Harness.Developer do\n  def run(call), do: Kogen.Tooling.Tools.run(call)\nend\n"
+    |> to_source_file("lib/kogen/harness/developer.ex")
+    |> run_check(DomainReach, dependencies: %{Kogen.Harness => [Kogen.Tooling]})
+    |> refute_issues()
+  end
 end

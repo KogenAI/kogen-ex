@@ -16,7 +16,7 @@ defmodule KogenChecks.CapabilityGuard do
   def trace(_event, _env), do: :ok
 
   defp maybe_raise(target, function, arity, meta, env) do
-    case violation(target, function, arity, env.module) do
+    case violation(target, function, arity, env.module, env.file) do
       nil ->
         :ok
 
@@ -25,9 +25,9 @@ defmodule KogenChecks.CapabilityGuard do
     end
   end
 
-  defp violation(target, function, arity, caller) do
+  defp violation(target, function, arity, caller, file) do
     cond do
-      process_primitive?(target, function) and not process_adapter?(caller) ->
+      process_primitive?(target, function) and not process_adapter?(caller, file) ->
         "#{inspect(target)}.#{function}/#{arity} must be called through Kogen.Proc"
 
       global_mutation?(target, function) ->
@@ -46,13 +46,21 @@ defmodule KogenChecks.CapabilityGuard do
   defp process_primitive?(:os, :cmd), do: true
   defp process_primitive?(_target, _function), do: false
 
-  defp process_adapter?(nil), do: false
-  defp process_adapter?(Kogen.Proc), do: true
-  defp process_adapter?(Kogen.Testkit.Proc), do: true
+  defp process_adapter?(nil, _file), do: false
+  defp process_adapter?(Kogen.Proc, _file), do: true
+  defp process_adapter?(Kogen.Testkit.Proc, _file), do: true
 
-  defp process_adapter?(caller) do
+  defp process_adapter?(caller, file) do
     parts = Module.split(caller)
-    Enum.take(parts, 2) == ["Kogen", "Proc"]
+
+    Enum.take(parts, 2) == ["Kogen", "Proc"] or testkit_proc_file?(file)
+  end
+
+  defp testkit_proc_file?(file) do
+    case file |> Path.split() |> Enum.reverse() do
+      ["proc.ex", "testkit", "support", "test" | _parents] -> true
+      _other -> false
+    end
   end
 
   defp global_mutation?(File, function), do: function in [:cd, :cd!]

@@ -39,8 +39,13 @@ defmodule KogenChecks.CapabilityGuardTest do
   end
 
   test "permits the process adapters and Kernel ambient reads" do
-    compile_module(Kogen.Proc.Runner, ~s{System.cmd("git", ["status"]) })
-    compile_module(Kogen.Testkit.Proc, ~s{System.cmd("git", ["status"]) })
+    compile_module(Kogen.Proc.GuardProbe, ~s{System.cmd("git", ["status"]) })
+
+    compile_module(
+      Kogen.Testkit.ProcGuardProbe,
+      ~s{System.cmd("git", ["status"]) },
+      "test/support/testkit/proc.ex"
+    )
 
     compile_module(
       Kogen.Kernel.Config,
@@ -60,8 +65,8 @@ defmodule KogenChecks.CapabilityGuardTest do
     assert error.description =~ message
   end
 
-  defp compile_module(module, body) do
+  defp compile_module(module, body, file \\ "test/planted_capability.exs") do
     source = "defmodule #{inspect(module)} do\n  def run, do: #{body}\nend\n"
-    Code.compile_string(source, "test/planted_capability.exs")
+    Code.compile_string(source, file)
   end
 end

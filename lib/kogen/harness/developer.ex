@@ -30,7 +30,6 @@ defmodule Kogen.Harness.Developer do
   alias Kogen.Contracts.ToolCall
   alias Kogen.Harness.Codec
   alias Kogen.Harness.DeveloperState
-  alias Kogen.Harness.Error
   alias Kogen.Harness.Exchange
   alias Kogen.Harness.Exchange.Request, as: ExchangeRequest
   alias Kogen.Harness.Gate
@@ -38,9 +37,10 @@ defmodule Kogen.Harness.Developer do
   alias Kogen.Harness.Plan
   alias Kogen.Harness.Recording
   alias Kogen.Harness.Result
-  alias Kogen.Harness.ToolResult
   alias Kogen.Harness.Tools
   alias Kogen.Harness.Usage
+  alias Kogen.Tooling.Error
+  alias Kogen.Tooling.ToolResult
 
   @empty_done_message "Kogen found no changed files. Make the requested change before claiming done."
   @developer_prompt_source Path.expand("../../../priv/prompts/developer.md", __DIR__)

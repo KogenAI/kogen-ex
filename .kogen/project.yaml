@@ -33,6 +33,7 @@ domains:
   state: [lib/kogen/state.ex, lib/kogen/state, test/state]
   checks: [lib/kogen/checks.ex, lib/kogen/checks, test/checks]
   harness: [lib/kogen/harness.ex, lib/kogen/harness, test/harness]
+  tooling: [lib/kogen/tooling.ex, lib/kogen/tooling, test/tooling]
   build: [lib/kogen/build.ex, lib/kogen/build, test/build]
   engine: [lib/kogen/engine.ex, lib/kogen/engine, test/engine, test/acceptance, test/e2e]
   kernel: [lib/kogen/kernel.ex, lib/kogen/kernel, test/kernel]

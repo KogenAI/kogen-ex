@@ -22,7 +22,6 @@ defmodule Kogen.Harness.Shaping do
   alias Kogen.Contracts.ModelResponse
   alias Kogen.Contracts.ToolCall
   alias Kogen.Harness.Codec
-  alias Kogen.Harness.Error
   alias Kogen.Harness.Exchange
   alias Kogen.Harness.Exchange.Request, as: ExchangeRequest
   alias Kogen.Harness.Opts
@@ -31,8 +30,9 @@ defmodule Kogen.Harness.Shaping do
   alias Kogen.Harness.ShapePass
   alias Kogen.Harness.ShaperTools
   alias Kogen.Harness.Shaping.State
-  alias Kogen.Harness.ToolResult
   alias Kogen.Harness.Usage
+  alias Kogen.Tooling.Error
+  alias Kogen.Tooling.ToolResult
 
   @instructions """
   You are Kogen Intent shaper. Read the project and task, then shape a short, actionable Intent and its acceptance test. Do not implement the task.
