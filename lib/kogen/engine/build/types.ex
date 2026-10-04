@@ -119,7 +119,8 @@ defmodule Kogen.Engine.Build.Session do
     direct_preflight_complete?: false,
     flake_excused: [],
     scope_warnings: [],
-    lines: []
+    lines: [],
+    attempt: :builder
   ]
 
   @type t :: %__MODULE__{
@@ -144,6 +145,7 @@ defmodule Kogen.Engine.Build.Session do
           last_harness: Kogen.Harness.Result.t() | nil,
           failure: Kogen.Contracts.Failure.t() | nil,
           failure_text: String.t() | nil,
+          attempt: :builder | :escalation,
           landed_sha: String.t() | nil,
           acceptance: [Kogen.Checks.LedgerRow.t()] | nil,
           receipts: [Kogen.Contracts.Receipt.t()] | nil,

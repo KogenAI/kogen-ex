@@ -93,18 +93,19 @@ defmodule Kogen.Engine.Build.StageRunner do
     end
   end
 
-  defp develop(_args, %Session{request: %{recipe: %{name: name}}} = session)
-       when name in ["direct", "direct-shell"] and not session.direct_preflight_complete? do
+  defp develop(args, %Session{request: %{recipe: %{name: name}}} = session)
+       when name in ["direct", "direct-shell", "direct-escalate"] and
+              not session.direct_preflight_complete? do
     case direct_preflight(session) do
-      :ok -> develop_harness(%{session | direct_preflight_complete?: true})
+      :ok -> develop_harness(%{session | direct_preflight_complete?: true}, args)
       {:error, %Failure{} = failure} -> fail(session, :develop, failure)
     end
   end
 
-  defp develop(_args, %Session{} = session), do: develop_harness(session)
+  defp develop(args, %Session{} = session), do: develop_harness(session, args)
 
-  defp develop_harness(%Session{} = session) do
-    resume = resume_data(session)
+  defp develop_harness(%Session{} = session, args) do
+    resume = GateSupport.resume_data(session, args)
     started_at = System.monotonic_time(:millisecond)
 
     case Harness.develop(harness_options(session), session.intent_text, session.plan, resume, 0) do
@@ -136,13 +137,15 @@ defmodule Kogen.Engine.Build.StageRunner do
   end
 
   defp finish_develop(session, result, started_at) do
+    {model, effort} = GateSupport.builder_settings(session)
+
     with {:ok, tree} <- Guard.tree_hash(session.workdir, session.git_env),
          :ok <-
            record_model(
              session,
              :develop,
-             session.request.model,
-             session.request.effort,
+             model,
+             effort,
              result.usage,
              elapsed(started_at)
            ),
@@ -175,7 +178,12 @@ defmodule Kogen.Engine.Build.StageRunner do
       {:ok, session,
        [
          {:stage_ok, :develop, %{tree: tree}},
-         {:stage_ok, :done_gate, %{outcome: result.outcome, failed_test_count: failed_test_count}}
+         {:stage_ok, :done_gate,
+          %{
+            outcome: result.outcome,
+            failed_test_count: failed_test_count,
+            findings: Map.get(result.gate || %{}, :failures, [])
+          }}
        ]}
     end
   end
@@ -187,11 +195,6 @@ defmodule Kogen.Engine.Build.StageRunner do
       detail: "The done gate could not complete its checks."
     }
   end
-
-  defp resume_data(%Session{last_harness: %HarnessResult{items: items}, failure_text: text})
-       when is_binary(text), do: %{previous_items: items, failure_text: text}
-
-  defp resume_data(_session), do: nil
 
   defp fix(session) do
     with :ok <-
@@ -329,6 +332,7 @@ defmodule Kogen.Engine.Build.StageRunner do
       stage: stage,
       model: model,
       effort: effort,
+      attempt: session.attempt,
       tokens: usage,
       wall_ms: wall_ms
     })

@@ -1,6 +1,7 @@
 defmodule Kogen.Build.Cycle do
   @moduledoc "Pure transition function for one Build attempt."
 
+  alias Kogen.Build.Cycle.Escalation
   alias Kogen.Build.Recipe
   alias Kogen.Contracts.Failure
 
@@ -12,12 +13,16 @@ defmodule Kogen.Build.Cycle do
       :recipe,
       :stage,
       :repairs_left,
+      :repair_cap,
       :last_failed_test_count,
       :progress_repair_used?,
       :provider_retries,
       :last_tree,
       :repair_tree,
       :pending_land,
+      :attempt,
+      :escalation_used?,
+      :last_gate_findings,
       :result
     ]
     defstruct @enforce_keys
@@ -27,12 +32,16 @@ defmodule Kogen.Build.Cycle do
             recipe: Recipe.t(),
             stage: atom(),
             repairs_left: non_neg_integer(),
+            repair_cap: non_neg_integer(),
             last_failed_test_count: non_neg_integer() | nil,
             progress_repair_used?: boolean(),
             provider_retries: non_neg_integer(),
             last_tree: String.t() | nil,
             repair_tree: String.t() | nil,
             pending_land: boolean(),
+            attempt: :builder | :escalation,
+            escalation_used?: boolean(),
+            last_gate_findings: [String.t()],
             result: {atom(), term()} | nil
           }
   end
@@ -41,6 +50,7 @@ defmodule Kogen.Build.Cycle do
   @type run_stage :: :context | :plan | :develop | :fix | :check | :review | :commit | :land
   @type effect ::
           {:run, run_stage(), map()}
+          | {:escalate, map()}
           | {:record, map()}
           | {:finish, terminal(), term()}
 
@@ -63,12 +73,16 @@ defmodule Kogen.Build.Cycle do
       recipe: recipe,
       stage: :ready,
       repairs_left: repairs,
+      repair_cap: repairs,
       last_failed_test_count: nil,
       progress_repair_used?: false,
       provider_retries: 0,
       last_tree: nil,
       repair_tree: nil,
       pending_land: false,
+      attempt: :builder,
+      escalation_used?: false,
+      last_gate_findings: [],
       result: nil
     }
   end
@@ -134,7 +148,7 @@ defmodule Kogen.Build.Cycle do
     tree = tree_from(data)
 
     if same_repaired_tree?(state, tree) do
-      fail_candidate(state, :unchanged)
+      fail_candidate(state, :unchanged, :unchanged)
     else
       case next_recipe_stage(state, :develop) do
         :done_gate ->
@@ -154,6 +168,7 @@ defmodule Kogen.Build.Cycle do
 
       :gate_red ->
         {next, progress} = update_test_progress(state, data)
+        next = %{next | last_gate_findings: Escalation.findings(data)}
         repair(next, :done_gate_red, %{outcome: :gate_red, test_progress: progress})
 
       :gave_up ->
@@ -305,7 +320,8 @@ defmodule Kogen.Build.Cycle do
 
   defp repair(state, reason, detail) do
     if state.repairs_left == 0 do
-      fail_candidate(state, :repair_cap)
+      trigger = if reason == :done_gate_red, do: :gate_red, else: :repair_cap
+      fail_candidate(state, :repair_cap, trigger)
     else
       next = %{
         state
@@ -323,7 +339,20 @@ defmodule Kogen.Build.Cycle do
     end
   end
 
-  defp fail_candidate(state, reason), do: finish(state, :failed, reason)
+  defp fail_candidate(state, reason, trigger) do
+    case Escalation.prepare(state, trigger) do
+      {:ok, next, data} ->
+        {next,
+         [
+           record(:escalation_started, data),
+           {:escalate, data},
+           run(:develop, stage_args(next, %{escalation_summary: data.summary, reason: trigger}))
+         ]}
+
+      :disabled ->
+        finish(state, :failed, reason)
+    end
+  end
 
   defp fail_controller(state, reason) do
     finish(state, :failed, {:controller, reason})
@@ -334,7 +363,7 @@ defmodule Kogen.Build.Cycle do
 
     {next,
      [
-       record(:finished, %{status: status, reason: reason}),
+       record(:finished, %{status: status, reason: reason, attempt: state.attempt}),
        {:finish, status, reason}
      ]}
   end
@@ -352,7 +381,8 @@ defmodule Kogen.Build.Cycle do
       %{
         approval: state.approval,
         repairs_left: state.repairs_left,
-        provider_retries: state.provider_retries
+        provider_retries: state.provider_retries,
+        attempt: state.attempt
       },
       extra
     )

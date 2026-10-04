@@ -36,6 +36,9 @@ defmodule Kogen.Kernel.Report do
         {"status", Atom.to_string(status)},
         {"recipe", nullable(event_value(events, :recipe))},
         {"roles", event_value(events, :roles) || %{}},
+        {"escalation", nullable(event_value(events, :escalation))},
+        {"escalations", escalations(events)},
+        {"attempts", attempts(events)},
         {"approval", nullable(run.approval_commit)},
         {"base",
          nullable(event_value(events, :base_sha) || landing_value(run, :expected_parent))},
@@ -64,12 +67,89 @@ defmodule Kogen.Kernel.Report do
     for %Event{event: "model_stage"} = event <- events do
       json_object([
         {"stage", event.stage},
+        {"attempt", nullable(event.attempt)},
         {"model", event.model},
         {"effort", event.effort},
         {"tokens", event.tokens},
         {"wall_ms", event.wall_ms}
       ])
     end
+  end
+
+  defp escalations(events) do
+    for %Event{event: "escalation_started"} = event <- events do
+      json_object([
+        {"attempt", event.attempt},
+        {"trigger", event.trigger},
+        {"summary", event.summary},
+        {"findings", event.findings || []},
+        {"model", event.model},
+        {"effort", event.effort}
+      ])
+    end
+  end
+
+  defp attempts(events) do
+    model_rows = Enum.filter(events, &(&1.event == "model_stage"))
+
+    model_rows
+    |> attempt_names(events)
+    |> Enum.map(&attempt_summary(events, model_rows, &1))
+  end
+
+  defp attempt_names(model_rows, events) do
+    model_attempts = Enum.map(model_rows, &(&1.attempt || "builder"))
+
+    escalation_attempts =
+      for %Event{event: "escalation_started", attempt: attempt} <- events, do: attempt
+
+    finished_attempts = for %Event{event: "finished", attempt: attempt} <- events, do: attempt
+
+    (model_attempts ++ escalation_attempts ++ finished_attempts)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq()
+  end
+
+  defp attempt_summary(events, model_rows, attempt) do
+    rows = Enum.filter(model_rows, &((&1.attempt || "builder") == attempt))
+
+    escalation =
+      Enum.find(events, fn event ->
+        event.event == "escalation_started" and
+          (attempt == "builder" or event.attempt == attempt)
+      end)
+
+    final = Enum.find(events, &(&1.event == "finished" and &1.attempt == attempt))
+    developer = Enum.find(rows, &(&1.stage == "develop"))
+    {status, reason} = attempt_outcome(attempt, escalation, final)
+
+    json_object([
+      {"attempt", attempt},
+      {"model", nullable((developer && developer.model) || (escalation && escalation.model))},
+      {"effort", nullable((developer && developer.effort) || (escalation && escalation.effort))},
+      {"status", nullable(status)},
+      {"reason", nullable(reason)},
+      {"tokens", sum_tokens(rows)},
+      {"wall_ms", Enum.reduce(rows, 0, &(&1.wall_ms + &2))}
+    ])
+  end
+
+  defp attempt_outcome("builder", %Event{trigger: trigger}, _final), do: {"failed", trigger}
+  defp attempt_outcome(_attempt, _escalation, %Event{} = final), do: {final.status, final.reason}
+  defp attempt_outcome(_attempt, %Event{trigger: trigger}, nil), do: {"failed", trigger}
+  defp attempt_outcome(_attempt, _escalation, _final), do: {nil, nil}
+
+  defp sum_tokens(rows) do
+    names = ["input", "cached_input", "output", "reasoning"]
+
+    Map.new(names, fn name ->
+      total =
+        Enum.reduce(rows, 0, fn row, total ->
+          total + Map.get(row.tokens || %{}, name, 0)
+        end)
+
+      {name, total}
+    end)
   end
 
   defp phase_timings(events) do

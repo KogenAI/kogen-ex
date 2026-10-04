@@ -28,12 +28,20 @@ defmodule Kogen.E2e.Build.Options do
   @moduledoc false
 
   @enforce_keys [:seed_project]
-  defstruct [:seed_project, :move_base_on, recipe: "staged"]
+  defstruct [
+    :seed_project,
+    :move_base_on,
+    recipe: "staged",
+    builder_model: "scripted-model",
+    builder_effort: "medium"
+  ]
 
   @type t :: %__MODULE__{
           seed_project: Path.t(),
           move_base_on: atom() | nil,
-          recipe: String.t()
+          recipe: String.t(),
+          builder_model: String.t(),
+          builder_effort: String.t()
         }
 end
 

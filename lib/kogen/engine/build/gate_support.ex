@@ -44,6 +44,30 @@ defmodule Kogen.Engine.Build.GateSupport do
     |> Map.put(:flake_excused_test_ids, previously_excused)
   end
 
+  @spec builder_settings(Session.t()) :: {String.t(), String.t()}
+  def builder_settings(%Session{attempt: :escalation, request: %{recipe: recipe}}) do
+    case Recipe.escalation(recipe) do
+      %{model: model, effort: effort} -> {model, effort}
+      _missing -> Recipe.role(recipe, :builder)
+    end
+  end
+
+  def builder_settings(%Session{request: %{recipe: recipe}}), do: Recipe.role(recipe, :builder)
+
+  @spec resume_data(Session.t(), map()) :: map() | nil
+  def resume_data(%Session{attempt: :escalation}, args) do
+    %{
+      previous_items: [],
+      failure_text: Map.get(args, :escalation_summary, "Builder attempt failed."),
+      fresh: true
+    }
+  end
+
+  def resume_data(%Session{last_harness: %HarnessResult{items: items}, failure_text: text}, _args)
+      when is_binary(text), do: %{previous_items: items, failure_text: text}
+
+  def resume_data(_session, _args), do: nil
+
   defp phase_recorder(session) do
     fn phase, name, wall_ms, started_at, finished_at ->
       State.record(session.run, %{
@@ -175,7 +199,7 @@ defmodule Kogen.Engine.Build.GateSupport do
 
   defp default_harness_options(session, guard) do
     context = Map.get(session.request.recipe.roles, :context)
-    builder = Recipe.role(session.request.recipe, :builder)
+    builder = builder_settings(session)
     planner = Map.get(session.request.recipe.roles, :planner, builder)
     reviewer = Map.get(session.request.recipe.roles, :reviewer, builder)
 

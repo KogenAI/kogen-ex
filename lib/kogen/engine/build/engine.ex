@@ -4,6 +4,7 @@ defmodule Kogen.Engine.Build.Engine do
   alias Kogen.Build.Cycle
   alias Kogen.Contracts.Failure
   alias Kogen.Engine.Build.ApprovalManifest
+  alias Kogen.Engine.Build.Escalation
   alias Kogen.Engine.Build.Finish
   alias Kogen.Engine.Build.Prepared
   alias Kogen.Engine.Build.Request
@@ -313,6 +314,13 @@ defmodule Kogen.Engine.Build.Engine do
     end
   end
 
+  defp run_effects(session, [{:escalate, _args} | rest]) do
+    case Escalation.reset_candidate(session) do
+      {:ok, updated} -> run_effects(updated, rest)
+      {:error, updated, failure} -> escalate_setup_failed(updated, failure, rest)
+    end
+  end
+
   defp run_effects(session, [{:finish, status, reason} | _rest]) do
     {:done, finish(session, status, reason)}
   end
@@ -337,6 +345,9 @@ defmodule Kogen.Engine.Build.Engine do
       {:done, result} -> {:done, result}
     end
   end
+
+  defp escalate_setup_failed(session, failure, rest),
+    do: apply_effect_event(session, {:stage_failed, :develop, failure}, rest)
 
   defp finish_if_terminal(session) do
     case session.cycle.result do

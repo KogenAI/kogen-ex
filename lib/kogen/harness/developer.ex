@@ -219,6 +219,20 @@ defmodule Kogen.Harness.Developer do
   end
 
   defp initial_items(
+         intent_text,
+         plan,
+         %{fresh: true, previous_items: [], failure_text: failure_text},
+         repairs_left
+       )
+       when is_binary(failure_text) do
+    user_text =
+      initial_user_text(intent_text, plan, repairs_left) <>
+        "\n\nEscalation summary:\n" <> failure_text
+
+    [Codec.user_item(user_text)]
+  end
+
+  defp initial_items(
          _intent_text,
          _plan,
          %{previous_items: items, failure_text: failure_text},

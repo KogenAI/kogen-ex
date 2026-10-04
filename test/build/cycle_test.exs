@@ -171,6 +171,75 @@ defmodule Kogen.Build.CycleTest do
     assert state.stage == :develop
   end
 
+  test "direct-escalate only escalates terminal builder failures once" do
+    recipe = Recipe.for_build("direct-escalate", "gpt-6-luna", "max")
+
+    trigger_events = [
+      {:gate_red, state_at(:done_gate, recipe: recipe, repairs_left: 0),
+       {:stage_ok, :done_gate, %{outcome: :gate_red, findings: ["A1 is still red"]}}},
+      {:unchanged, state_at(:develop, recipe: recipe, repair_tree: "tree-1"),
+       {:stage_ok, :develop, %{tree: "tree-1"}}},
+      {:repair_cap, state_at(:check, recipe: recipe, repairs_left: 0),
+       {:stage_failed, :check, failure(:candidate, :red)}}
+    ]
+
+    for {trigger, state, event} <- trigger_events do
+      {escalation, effects} = Cycle.step(state, event)
+
+      assert escalation.attempt == :escalation
+      assert escalation.escalation_used?
+      assert escalation.stage == :develop
+      assert escalation.repairs_left == escalation.repair_cap
+
+      assert [
+               {:record, %{event: :escalation_started, trigger: ^trigger}},
+               {:escalate, %{trigger: ^trigger} = data},
+               {:run, :develop, %{attempt: :escalation} = args}
+             ] = effects
+
+      assert args.escalation_summary == data.summary
+
+      if trigger == :gate_red, do: assert(data.summary =~ "A1 is still red")
+    end
+  end
+
+  test "direct-escalate waits for the repair cap and does not escalate twice" do
+    recipe = Recipe.for_build("direct-escalate", "gpt-6-luna", "max")
+    state = state_at(:done_gate, recipe: recipe, repairs_left: 1)
+
+    {repair, effects} =
+      Cycle.step(state, {:stage_ok, :done_gate, %{outcome: :gate_red, findings: ["A1 red"]}})
+
+    assert repair.stage == :develop
+    assert repair.attempt == :builder
+    assert repair.repairs_left == 0
+    refute Enum.any?(effects, &match?({:escalate, _args}, &1))
+
+    escalated =
+      state_at(:done_gate,
+        recipe: recipe,
+        attempt: :escalation,
+        escalation_used?: true,
+        repairs_left: 0
+      )
+
+    {failed, effects} =
+      Cycle.step(escalated, {:stage_ok, :done_gate, %{outcome: :gate_red}})
+
+    assert {:failed, :repair_cap} = failed.result
+    refute Enum.any?(effects, &match?({:escalate, _args}, &1))
+  end
+
+  test "direct-escalate does not escalate when the developer gives up" do
+    recipe = Recipe.for_build("direct-escalate", "gpt-6-luna", "max")
+    state = state_at(:done_gate, recipe: recipe)
+
+    {failed, effects} = Cycle.step(state, {:stage_ok, :done_gate, %{outcome: :gave_up}})
+
+    assert {:failed, :developer_gave_up} = failed.result
+    refute Enum.any?(effects, &match?({:escalate, _args}, &1))
+  end
+
   defp state_at(stage, overrides \\ []) do
     state =
       Cycle.new(%{

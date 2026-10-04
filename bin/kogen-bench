@@ -9,9 +9,11 @@ usage() {
 [ "$#" -eq 3 ] || usage
 recipe=${KOGEN_BENCH_RECIPE:-staged}
 case "$recipe" in
-  staged|direct|direct-shell) ;;
-  *) echo "KOGEN_BENCH_RECIPE must be staged, direct, or direct-shell" >&2; exit 2 ;;
+  staged|direct|direct-shell|direct-escalate) ;;
+  *) echo "KOGEN_BENCH_RECIPE must be staged, direct, direct-shell, or direct-escalate" >&2; exit 2 ;;
 esac
+builder_model=${KOGEN_BENCH_MODEL:-gpt-6-luna}
+builder_effort=${KOGEN_BENCH_EFFORT:-max}
 task_dir=$(cd "$1" && pwd -P)
 work_dir=$(cd "$2" && pwd -P)
 mkdir -p "$3"
@@ -102,17 +104,25 @@ with open(event_path, "a", encoding="utf-8") as target:
     target.write(json.dumps(row, separators=(",", ":")) + "\n")
 raise SystemExit(status)
 PY
-cat > "$out_dir/usage.json" <<JSON
-{
-  "recipe": "$recipe",
-  "status": "not_started",
-  "stages": [],
-  "total": {
-    "tokens": {"input": 0, "cached_input": 0, "output": 0, "reasoning": 0},
-    "wall_ms": 0
-  }
-}
-JSON
+python3 - "$out_dir/usage.json" "$recipe" "$builder_model" "$builder_effort" <<'PY'
+import json
+import sys
+
+path, recipe, model, effort = sys.argv[1:]
+with open(path, "w", encoding="utf-8") as output:
+    json.dump({
+        "recipe": recipe,
+        "builder": {"model": model, "effort": effort},
+        "status": "not_started",
+        "stages": [],
+        "attempts": [],
+        "total": {
+            "tokens": {"input": 0, "cached_input": 0, "output": 0, "reasoning": 0},
+            "wall_ms": 0,
+        },
+    }, output, indent=2)
+    output.write("\n")
+PY
 
 git clone --quiet "$work_dir" "$project_dir"
 git -C "$project_dir" checkout --quiet -B main "$work_base"
@@ -351,7 +361,7 @@ write_failed_usage() {
   python3 - "$out_dir/shape.json" "$out_dir/report.json" "$out_dir/usage.json" \
     "$failed_stage" "$failed_model" "$failed_effort" "$failed_status" "$failed_wall_ms" \
     "$shaper_root" "$recipe" "$timings_file" "$events_file" \
-    "$bench_started_ns" "$failed_finished_ns" <<'PY'
+    "$bench_started_ns" "$failed_finished_ns" "$builder_model" "$builder_effort" <<'PY'
 import json
 import os
 import sys
@@ -360,6 +370,7 @@ from pathlib import Path
 (
     shape_path, report_path, output_path, failed_stage, failed_model, failed_effort,
     status, wall_ms, transcript_root, recipe, timing_input, events_output, started_ns, finished_ns,
+    builder_model, builder_effort,
 ) = sys.argv[1:]
 started_ns = int(started_ns)
 finished_ns = int(finished_ns)
@@ -443,6 +454,7 @@ for stage in report.get("model_stages", []):
     stage_tokens = tokens(stage.get("tokens"))
     stages.append({
         "stage": stage.get("stage"),
+        "attempt": stage.get("attempt", "builder"),
         "model": stage.get("model"),
         "effort": stage.get("effort"),
         "calls": [{"tokens": stage_tokens, "wall_ms": int(stage.get("wall_ms", 0) or 0)}],
@@ -518,11 +530,14 @@ phases = [
 totals = {name: sum(stage["tokens"][name] for stage in stages) for name in token_names}
 result = {
     "recipe": recipe,
+    "builder": {"model": builder_model, "effort": builder_effort},
     "run_status": "failed",
     "status": "failed",
     "failed_stage": failed_stage,
     "exit_code": int(status),
     "stages": stages,
+    "attempts": report.get("attempts", []),
+    "escalations": report.get("escalations", []),
     "phases": phases,
     "total": {
         "tokens": totals,
@@ -566,11 +581,16 @@ fi
 
 if run_capture build "$scratch/build.txt" "$KOGEN_BIN" build "$slug" \
   --project "$project_dir" --origin "$origin" --base main \
-  --model gpt-6-luna --effort max --recipe "$recipe"; then
+  --model "$builder_model" --effort "$builder_effort" --recipe "$recipe"; then
   :
 else
   stage_status=$?
-  write_failed_usage build gpt-6-luna max "$stage_status" "$CAPTURE_WALL_MS"
+  build_wall_ms=$CAPTURE_WALL_MS
+  if run_capture report "$out_dir/report.json" "$KOGEN_BIN" report "$slug" \
+    --project "$project_dir" --origin "$origin" --base main --json; then
+    :
+  fi
+  write_failed_usage build "$builder_model" "$builder_effort" "$stage_status" "$build_wall_ms"
   exit "$stage_status"
 fi
 
@@ -598,11 +618,12 @@ log_line "Kogen landed: $(git --git-dir="$origin" rev-parse refs/heads/main)"
 bench_finished_ns=$(python3 -c 'import time; print(time.monotonic_ns())')
 
 python3 - "$out_dir/shape.json" "$out_dir/report.json" "$out_dir/usage.json" \
-  "$recipe" "$timings_file" "$events_file" "$bench_started_ns" "$bench_finished_ns" <<'PY'
+  "$recipe" "$timings_file" "$events_file" "$bench_started_ns" "$bench_finished_ns" \
+  "$builder_model" "$builder_effort" <<'PY'
 import json
 import sys
 
-shape_path, report_path, output_path, recipe, timing_input, events_output, started_ns, finished_ns = sys.argv[1:]
+shape_path, report_path, output_path, recipe, timing_input, events_output, started_ns, finished_ns, builder_model, builder_effort = sys.argv[1:]
 started_ns = int(started_ns)
 finished_ns = int(finished_ns)
 with open(shape_path, encoding="utf-8") as source:
@@ -645,6 +666,7 @@ for stage in report.get("model_stages", []):
     tokens = normalized_tokens(stage.get("tokens"))
     stages.append({
         "stage": stage.get("stage"),
+        "attempt": stage.get("attempt", "builder"),
         "model": stage.get("model"),
         "effort": stage.get("effort"),
         "calls": [{"tokens": tokens, "wall_ms": int(stage.get("wall_ms", 0) or 0)}],
@@ -710,6 +732,9 @@ result = {
     "run_status": "complete",
     "status": report.get("status"),
     "roles": report.get("roles", {}),
+    "builder": {"model": builder_model, "effort": builder_effort},
+    "attempts": report.get("attempts", []),
+    "escalations": report.get("escalations", []),
     "stages": stages,
     "phases": phases,
     "total": {

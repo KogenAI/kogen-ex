@@ -32,7 +32,12 @@ defmodule Kogen.Kernel.CLITest do
 
     assert direct_shell.recipe == "direct-shell"
 
-    assert {:error, "--recipe must be staged, direct, or direct-shell"} =
+    assert {:ok, direct_escalate} =
+             Arguments.parse(["build", "greet", "--recipe", "direct-escalate"])
+
+    assert direct_escalate.recipe == "direct-escalate"
+
+    assert {:error, "--recipe must be staged, direct, direct-shell, or direct-escalate"} =
              Arguments.parse(["build", "greet", "--recipe", "unknown"])
   end
 

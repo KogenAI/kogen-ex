@@ -8,7 +8,14 @@ defmodule Kogen.Build.Recipe do
           required(:name) => String.t(),
           required(:stages) => [stage()],
           required(:roles) => %{required(role()) => {String.t(), String.t()}},
-          required(:builder_tools) => :full | :shell
+          required(:builder_tools) => :full | :shell,
+          optional(:escalation) => escalation() | nil
+        }
+
+  @type escalation :: %{
+          required(:model) => String.t(),
+          required(:effort) => String.t(),
+          required(:on) => [atom()]
         }
 
   @staged_stages [:context, :plan, :develop, :done_gate, :fix, :check, :review, :commit, :land]
@@ -16,8 +23,8 @@ defmodule Kogen.Build.Recipe do
 
   @spec for_build(String.t(), String.t(), String.t()) :: t()
   def for_build(name, builder_model, builder_effort)
-      when name in ["staged", "direct", "direct-shell"] and is_binary(builder_model) and
-             is_binary(builder_effort) do
+      when name in ["staged", "direct", "direct-shell", "direct-escalate"] and
+             is_binary(builder_model) and is_binary(builder_effort) do
     stages = if name == "staged", do: @staged_stages, else: @direct_stages
     builder = {builder_model, builder_effort}
 
@@ -31,17 +38,28 @@ defmodule Kogen.Build.Recipe do
             reviewer: {"gpt-6.1-sol", "high"}
           }
 
-        direct_recipe when direct_recipe in ["direct", "direct-shell"] ->
+        direct_recipe when direct_recipe in ["direct", "direct-shell", "direct-escalate"] ->
           %{builder: builder}
       end
 
     builder_tools = if name == "direct-shell", do: :shell, else: :full
 
-    %{name: name, stages: stages, roles: roles, builder_tools: builder_tools}
+    recipe = %{name: name, stages: stages, roles: roles, builder_tools: builder_tools}
+
+    if name == "direct-escalate" do
+      Map.put(recipe, :escalation, %{
+        model: "gpt-6.1-sol",
+        effort: "high",
+        on: [:repair_cap, :unchanged, :gate_red]
+      })
+    else
+      recipe
+    end
   end
 
   @spec name(t()) :: String.t()
-  def name(%{name: name}) when name in ["staged", "direct", "direct-shell"], do: name
+  def name(%{name: name}) when name in ["staged", "direct", "direct-shell", "direct-escalate"],
+    do: name
 
   @spec stages(t()) :: [stage()]
   def stages(%{stages: stages}) when is_list(stages), do: stages
@@ -55,4 +73,8 @@ defmodule Kogen.Build.Recipe do
       {role, %{model: model, effort: effort}}
     end)
   end
+
+  @spec escalation(t()) :: escalation() | nil
+  def escalation(%{escalation: value}), do: value
+  def escalation(_recipe), do: nil
 end

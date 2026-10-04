@@ -17,7 +17,8 @@ defmodule Kogen.Engine.Build.RunEvents do
       roles: Recipe.role_settings(request.recipe),
       credential_source: request.credential_source,
       credential_label: request.credential_label,
-      recipe: Recipe.name(request.recipe)
+      recipe: Recipe.name(request.recipe),
+      escalation: Recipe.escalation(request.recipe)
     })
   end
 end

@@ -37,7 +37,15 @@ defmodule Kogen.E2e.Build do
       ScriptedProvider.start_link(steps, provider_hook(fixture, options.move_base_on))
 
     try do
-      result = run_build!(fixture, server, options.recipe)
+      result =
+        run_build!(
+          fixture,
+          server,
+          options.recipe,
+          options.builder_model,
+          options.builder_effort
+        )
+
       %{result | provider_requests: ScriptedProvider.requests(%Config{server: server})}
     after
       GenServer.stop(server, :normal)
@@ -62,9 +70,9 @@ defmodule Kogen.E2e.Build do
   @doc false
   def workspace_root(project_root, home), do: Kogen.Kernel.workspace_root(project_root, home)
 
-  defp run_build!(%Fixture{} = fixture, server, recipe_name) do
+  defp run_build!(%Fixture{} = fixture, server, recipe_name, builder_model, builder_effort) do
     runtime = Environment.runtime!(fixture.project_root, fixture.home)
-    request = build_request!(fixture, server, runtime, recipe_name)
+    request = build_request!(fixture, server, runtime, recipe_name, builder_model, builder_effort)
 
     case Kogen.Kernel.build(request) do
       {:ok, build} -> started_result(fixture, build)
@@ -75,10 +83,17 @@ defmodule Kogen.E2e.Build do
   defp build_request!(%Fixture{} = fixture, server) do
     runtime = Environment.runtime!(fixture.project_root, fixture.home)
 
-    build_request!(fixture, server, runtime, "staged")
+    build_request!(fixture, server, runtime, "staged", "scripted-model", "medium")
   end
 
-  defp build_request!(%Fixture{} = fixture, server, runtime, recipe_name) do
+  defp build_request!(
+         %Fixture{} = fixture,
+         server,
+         runtime,
+         recipe_name,
+         builder_model,
+         builder_effort
+       ) do
     %Request{
       slug: @slug,
       home: fixture.home,
@@ -86,9 +101,9 @@ defmodule Kogen.E2e.Build do
       workspace_root: fixture.workspace_root,
       origin: fixture.origin,
       base: "main",
-      model: "scripted-model",
-      effort: "medium",
-      recipe: Kogen.Engine.build_recipe(recipe_name, "scripted-model", "medium"),
+      model: builder_model,
+      effort: builder_effort,
+      recipe: Kogen.Engine.build_recipe(recipe_name, builder_model, builder_effort),
       runtime: runtime,
       provider_mod: ScriptedProvider,
       provider_config: %Config{server: server},

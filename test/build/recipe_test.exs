@@ -29,5 +29,15 @@ defmodule Kogen.Build.RecipeTest do
     assert Recipe.for_build("direct-shell", "builder", "low").roles == %{
              builder: {"builder", "low"}
            }
+
+    recipe = Recipe.for_build("direct-escalate", "gpt-6-luna", "max")
+    assert recipe.stages == [:develop, :done_gate, :fix, :check, :commit, :land]
+    assert recipe.roles == %{builder: {"gpt-6-luna", "max"}}
+
+    assert recipe.escalation == %{
+             model: "gpt-6.1-sol",
+             effort: "high",
+             on: [:repair_cap, :unchanged, :gate_red]
+           }
   end
 end
