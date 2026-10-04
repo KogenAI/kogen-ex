@@ -150,7 +150,7 @@ if isinstance(raw_setup, str) and ".setup-compile.log" in raw_setup:
     raw_setup = raw_setup.replace(".setup-compile.log", '"$BENCH_SETUP_LOG"')
 
 if isinstance(raw_setup, str) and raw_setup.strip():
-    setup_argv = prefix + ["sh", "-lc", raw_setup]
+    setup_argv = prefix + ["sh", "-c", raw_setup]
 elif isinstance(raw_setup, list) and raw_setup and all(isinstance(part, str) for part in raw_setup):
     setup_argv = prefix + raw_setup
 elif isinstance(raw_setup, dict) and isinstance(raw_setup.get("argv"), list):
