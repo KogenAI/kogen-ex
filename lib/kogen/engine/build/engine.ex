@@ -148,12 +148,13 @@ defmodule Kogen.Engine.Build.Engine do
     end
   end
 
-  # Trust the exact workspace path; do not write a global mise trust entry.
-  defp workspace_environment(path, runtime, project, run_dir) do
-    runtime = Runtime.for_run(Runtime.trust_workspace(runtime, path), run_dir)
+  # Resolve tools from the approved project root so home-directory configs do
+  # not change the candidate toolchain; trust both paths through the environment.
+  defp workspace_environment(path, project_root, runtime, project, run_dir) do
+    runtime = Runtime.for_run(Runtime.add_trusted_workspace(runtime, project_root), run_dir)
 
-    with {:ok, env} <- Kogen.Engine.candidate_environment(path, runtime, project) do
-      {:ok, env |> Runtime.trust_workspace(path) |> Runtime.for_run(run_dir)}
+    with {:ok, env} <- Kogen.Engine.candidate_environment(project_root, runtime, project) do
+      {:ok, env |> Runtime.add_trusted_workspace(path) |> Runtime.for_run(run_dir)}
     end
   end
 
@@ -163,7 +164,13 @@ defmodule Kogen.Engine.Build.Engine do
     with :ok <- Workspace.insert_files(path, approved_files(prepared.approval)),
          {:ok, candidate_project} <- Project.load(path),
          {:ok, process_env} <-
-           workspace_environment(path, request.runtime, candidate_project, prepared.run.dir) do
+           workspace_environment(
+             path,
+             request.project_root,
+             request.runtime,
+             candidate_project,
+             prepared.run.dir
+           ) do
       start_candidate(prepared, path, candidate_project, process_env)
     else
       {:error, {:toolchain_failed, detail}} ->
