@@ -126,7 +126,14 @@ defmodule Kogen.Harness.Shaping do
     with :ok <- valid_request(slug, task, history, failure_text, turn_offset, opts),
          {:ok, transcript_path} <- Recording.path(opts),
          {:ok, items} <-
-           input_items(slug, task, Map.keys(opts.project.domains), history, failure_text) do
+           input_items(
+             slug,
+             task,
+             Map.keys(opts.project.domains),
+             history,
+             failure_text,
+             opts.workdir
+           ) do
       started_at = System.monotonic_time(:millisecond)
 
       state = %State{
@@ -254,7 +261,7 @@ defmodule Kogen.Harness.Shaping do
 
   defp continue_loop({:error, reason}, _response), do: {:error, reason}
 
-  defp input_items(slug, task, domains, [], nil) do
+  defp input_items(slug, task, domains, [], nil, _workdir) do
     configured_domains = domains |> Enum.sort() |> Enum.join(", ")
 
     text =
@@ -263,18 +270,33 @@ defmodule Kogen.Harness.Shaping do
     {:ok, [Codec.user_item(text)]}
   end
 
-  defp input_items(_slug, _task, _domains, history, failure_text)
+  defp input_items(slug, _task, _domains, history, failure_text, workdir)
        when is_list(history) and is_binary(failure_text) do
+    paths =
+      slug
+      |> output_paths()
+      |> Enum.map_join("\n", fn path ->
+        case File.lstat(Path.join(workdir, path)) do
+          {:ok, %File.Stat{type: :regular}} ->
+            "- `#{path}`: present on disk. Keep it in place; change it only if the failure below requires a correction."
+
+          _missing_or_unreadable ->
+            "- `#{path}`: missing or unreadable. Write it during this repair pass at this exact path."
+        end
+      end)
+
     repair =
-      "Validation failed. Repair the generated files in this conversation. Preserve content that already passes. " <>
-        "If a required file is missing, write it at the exact path named below. Do not finish until both required files exist. " <>
-        "Follow the validator's rule and use the quoted item or source text to make a focused correction.\n\n" <>
+      "Validation failed. Repair the generated files in this conversation. The required paths and their current state are:\n" <>
+        paths <>
+        "\nBoth exact paths must exist after this pass. Every missing path must be written now. " <>
+        "Do not delete required files. The available tools can read, search, and write files; they cannot remove them. " <>
+        "Preserve present content unless the failure below requires a focused correction.\n\n" <>
         "Exact failure output:\n\n" <> failure_text
 
     {:ok, history ++ [Codec.user_item(repair)]}
   end
 
-  defp input_items(_slug, _task, _domains, _history, _failure_text),
+  defp input_items(_slug, _task, _domains, _history, _failure_text, _workdir),
     do: error(:invalid_shape_history, "Shaper repair history is invalid.")
 
   defp valid_request(slug, task, history, failure_text, turn_offset, opts) do

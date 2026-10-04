@@ -46,7 +46,7 @@ defmodule Kogen.Checks.Ledger do
   def acceptance(workdir, %Intent{} = intent, run_dir, env, git_env, sandbox) do
     with {:ok, items} <- test_items(intent),
          {:ok, before_tree} <- Workspace.tree_hash(workdir, git_env) do
-      result = report(workdir, intent.slug, run_dir, env, sandbox)
+      result = report(workdir, intent, run_dir, env, sandbox)
 
       with {:ok, after_tree} <- Workspace.tree_hash(workdir, git_env),
            :ok <- same_tree(before_tree, after_tree),
@@ -100,7 +100,7 @@ defmodule Kogen.Checks.Ledger do
   def base_rows(workdir, %Intent{} = intent, run_dir, env, git_env, sandbox) do
     with {:ok, _items} <- test_items(intent),
          {:ok, before_tree} <- Workspace.tree_hash(workdir, git_env) do
-      result = report(workdir, intent.slug, run_dir, env, sandbox)
+      result = report(workdir, intent, run_dir, env, sandbox)
 
       with {:ok, after_tree} <- Workspace.tree_hash(workdir, git_env),
            :ok <- same_tree(before_tree, after_tree),
@@ -124,8 +124,13 @@ defmodule Kogen.Checks.Ledger do
   end
 
   defp base_feedback(%Failure{} = failure, rows, slug, run_dir) do
-    row = Enum.find(rows, &String.contains?(failure.detail, &1.tag))
+    row = Enum.find(rows, &(&1.tag != "" and String.contains?(failure.detail, &1.tag)))
     output = first_output_lines(Path.join([run_dir, "logs", "acceptance.log"]))
+
+    missing_tag =
+      if failure.reason == :acceptance_missing_on_base,
+        do: "no tests tagged intent: #{failure.detail}\n",
+        else: ""
 
     context =
       if row do
@@ -138,7 +143,9 @@ defmodule Kogen.Checks.Ledger do
 
     %{
       failure
-      | detail: failure.detail <> "\n" <> context <> "Output (first 20 lines):\n" <> output
+      | detail:
+          failure.detail <>
+            "\n" <> missing_tag <> context <> "Output (first 20 lines):\n" <> output
     }
   end
 
@@ -153,14 +160,82 @@ defmodule Kogen.Checks.Ledger do
     end
   end
 
-  defp report(workdir, slug, run_dir, env, sandbox) do
-    test_path = Path.join([workdir, "test", "acceptance", "#{slug}_test.exs"])
+  defp report(workdir, %Intent{} = intent, run_dir, env, sandbox) do
+    test_path = Path.join([workdir, "test", "acceptance", "#{intent.slug}_test.exs"])
 
     with :ok <- prepared_test(test_path),
          :ok <- prepare_run_files(run_dir),
-         {:ok, exit_status} <- run_tests(workdir, test_path, run_dir, env, sandbox),
-         {:ok, rows} <- read_report(Path.join(run_dir, "ledger.jsonl")) do
-      {:ok, rows, exit_status}
+         {:ok, exit_status} <- run_tests(workdir, test_path, run_dir, env, sandbox) do
+      case read_report(Path.join(run_dir, "ledger.jsonl")) do
+        {:ok, rows} ->
+          {:ok, rows, exit_status}
+
+        {:error, %Failure{reason: :ledger_empty}} ->
+          empty_report_failure(intent, run_dir, exit_status)
+
+        {:error, %Failure{} = failure} ->
+          {:error, failure}
+      end
+    end
+  end
+
+  defp empty_report_failure(%Intent{} = intent, run_dir, exit_status) do
+    output = acceptance_output(Path.join([run_dir, "logs", "acceptance.log"]))
+
+    case missing_runtime_tool(output) do
+      tool when is_binary(tool) ->
+        {:error,
+         failure(
+           :environment,
+           :tool_missing,
+           "Acceptance test runner could not find #{tool}.\nOutput (first 20 lines):\n#{output}"
+         )}
+
+      nil when exit_status != 0 ->
+        {:error,
+         failure(
+           :candidate,
+           :acceptance_compile_failed,
+           "Acceptance test file failed to compile or load (exit status #{exit_status}).\n" <>
+             "Output (first 20 lines):\n#{output}"
+         )}
+
+      nil ->
+        tags =
+          intent.acceptance
+          |> Enum.filter(&(&1.verify in [:test, :test_keep]))
+          |> Enum.map_join("\n", &"no tests tagged intent: #{intent.slug}/#{&1.id}")
+
+        {:error, failure(:candidate, :no_tagged_tests, tags)}
+    end
+  end
+
+  defp missing_runtime_tool(output) do
+    lowered = String.downcase(output)
+
+    cond do
+      String.contains?(lowered, "erl: not found") or
+          String.contains?(lowered, "could not find erl") ->
+        "erl"
+
+      String.contains?(lowered, "mix: not found") or
+        String.contains?(lowered, "mix command not found") or
+          String.contains?(lowered, "could not execute \"mix\"") ->
+        "mix"
+
+      true ->
+        nil
+    end
+  end
+
+  defp acceptance_output(path) do
+    case File.read(path) do
+      {:ok, contents} ->
+        output = contents |> String.split("\n", trim: false) |> Enum.take(20) |> Enum.join("\n")
+        if String.trim(output) == "", do: "(no output captured)", else: output
+
+      {:error, _reason} ->
+        "(acceptance output log unavailable)"
     end
   end
 

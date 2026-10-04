@@ -6,6 +6,20 @@ defmodule Kogen.Shaper.Validation do
   alias Kogen.Intent, as: IntentDomain
 
   @approach_action ~r/\b(?:add|advance|calculate|change|compare|compute|count|derive|extend|filter|handle|implement|keep|limit|map|move|normalize|parse|preserve|record|replace|return|route|run|schedule|shift|skip|store|update|use|validate|wrap)\b/i
+  @approach_action_at_start ~r/\A(?:add|advance|calculate|change|compare|compute|count|derive|extend|filter|handle|implement|keep|limit|map|move|normalize|parse|preserve|record|replace|return|route|run|schedule|shift|skip|store|update|use|validate|wrap)\b/i
+  @notes_section ~r/(^## Notes[ \t]*\R)(.*)\z/ms
+  @approach_label ~r/\A(\s*)approach\s*:\s*(.*)\z/is
+
+  @spec normalize_intent(binary()) :: binary()
+  def normalize_intent(source) when is_binary(source) do
+    case Regex.run(@notes_section, source) do
+      [matched, heading, notes] ->
+        String.replace_suffix(source, matched, heading <> normalize_approach(notes))
+
+      _no_notes_section ->
+        source
+    end
+  end
 
   @spec intent(binary(), Path.t()) :: {:ok, Intent.t()} | {:error, Failure.t()}
   def intent(bytes, path) do
@@ -54,6 +68,21 @@ defmodule Kogen.Shaper.Validation do
   end
 
   defp valid_approach?(_missing), do: false
+
+  defp normalize_approach(notes) do
+    case Regex.run(@approach_label, notes) do
+      [_, leading, text] ->
+        leading <> "Approach: " <> String.trim_leading(text)
+
+      _missing_label ->
+        text = String.trim_leading(notes)
+        word_count = text |> String.split(~r/\s+/, trim: true) |> length()
+
+        if word_count >= 8 and Regex.match?(@approach_action_at_start, text),
+          do: "Approach: " <> text,
+          else: notes
+    end
+  end
 
   defp render_parse_issues(issues, source) do
     lines = String.split(source, "\n", trim: false)

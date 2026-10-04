@@ -137,6 +137,50 @@ defmodule Kogen.Shaper.ShapingReliabilityTests do
     end
   end
 
+  test "repair feedback names both required paths and their current file state", %{
+    tmp_dir: tmp_dir
+  } do
+    project = seed_project!(Path.join(tmp_dir, "project"))
+
+    invalid_intent = intent("usually keeps", "A1 verifies Tiny.value/0 returns :old.")
+
+    valid_intent =
+      change_intent(
+        "Approach: Change Tiny.value/0 to return :new and preserve its public function path."
+      )
+
+    changed_test = String.replace(acceptance_test(), ":old", ":new")
+
+    {:ok, server} =
+      ScriptedProvider.start_link([
+        ScriptedProvider.write(:shape, intent_path(), invalid_intent),
+        ScriptedProvider.write(:shape, intent_path(), valid_intent),
+        ScriptedProvider.write(:shape, acceptance_path(), changed_test)
+      ])
+
+    config = %Config{server: server}
+
+    try do
+      assert {:ok, result} = Shaper.shape(request(project, tmp_dir, config))
+      assert result.rounds == 3
+
+      [_, intent_repair, acceptance_repair] = ScriptedProvider.requests(config)
+      intent_feedback = Enum.map_join(intent_repair.input, &inspect/1)
+      acceptance_feedback = Enum.map_join(acceptance_repair.input, &inspect/1)
+
+      assert intent_feedback =~ "#{intent_path()}`: present on disk"
+      assert intent_feedback =~ "#{acceptance_path()}`: missing or unreadable"
+      assert intent_feedback =~ "Every missing path must be written now"
+
+      assert acceptance_feedback =~ "#{intent_path()}`: present on disk"
+      assert acceptance_feedback =~ "#{acceptance_path()}`: missing or unreadable"
+      assert acceptance_feedback =~ "Write it during this repair pass at this exact path"
+      assert File.read!(result.acceptance_path) == changed_test
+    after
+      GenServer.stop(server, :normal)
+    end
+  end
+
   test "retries an all-keep intent that does not prove a change", %{tmp_dir: tmp_dir} do
     project = seed_project!(Path.join(tmp_dir, "project"))
 

@@ -21,7 +21,7 @@ defmodule Kogen.Shaper.Runner do
 
   @spec run(Request.t()) :: {:ok, Result.t()} | {:error, term()}
   def run(%Request{} = request) do
-    with :ok <- valid_request(request),
+    with :ok <- Request.validate(request),
          {:ok, project} <- ProjectDomain.load(request.workdir),
          {:ok, opts} <- harness_options(request, project),
          :ok <- ShapeWarnings.clear(request.workdir, request.slug),
@@ -152,14 +152,25 @@ defmodule Kogen.Shaper.Runner do
 
         repair(state, pass, failure)
 
+      {:error, %Failure{class: :candidate} = failure} ->
+        progress(
+          state.request,
+          attempt_number,
+          "validation_failed reason=#{failure.reason}; repair_limit_reached " <>
+            "repairs=#{state.repairs}/#{@max_repairs} attempts=#{attempt_number} calls=#{length(state.calls)}"
+        )
+
+        validation_exhausted(failure, state.repairs, attempt_number, length(state.calls))
+
       {:error, %Failure{} = failure} ->
         progress(
           state.request,
           attempt_number,
-          "validation_failed reason=#{failure.reason}; repair_limit_reached"
+          "validation_stopped class=#{failure.class} reason=#{failure.reason} " <>
+            "repairs=#{state.repairs} attempts=#{attempt_number} calls=#{length(state.calls)}"
         )
 
-        validation_exhausted(failure, state.repairs)
+        {:error, failure}
     end
   end
 
@@ -196,11 +207,11 @@ defmodule Kogen.Shaper.Runner do
 
     case Kogen.Checks.format_shape_files(format_request) do
       :ok ->
-        validate_files(state.request, state.project, state.opts)
+        validate_files(state.request, state.project, state.opts, attempt_number)
 
       {:warning, %Failure{class: :environment, reason: reason}} ->
         progress(state.request, attempt_number, "warning formatter_skipped reason=#{reason}")
-        validate_files(state.request, state.project, state.opts)
+        validate_files(state.request, state.project, state.opts, attempt_number)
 
       {:error, %Failure{} = failure} ->
         {:error, failure}
@@ -219,23 +230,82 @@ defmodule Kogen.Shaper.Runner do
     attempt(next)
   end
 
-  defp validate_files(request, project, opts) do
+  defp validate_files(request, project, opts, attempt_number) do
     intent_path = intent_path(request.slug)
     acceptance_path = acceptance_path(request.slug)
 
-    with {:ok, intent_bytes} <- read_generated(request.workdir, intent_path),
-         {:ok, intent} <- Validation.intent(intent_bytes, intent_path),
-         {:ok, test_bytes} <- read_generated(request.workdir, acceptance_path) do
-      Kogen.Checks.validate_shape(%ShapeValidation{
-        workdir: request.workdir,
-        project: project,
-        intent: intent,
-        acceptance_bytes: test_bytes,
-        run_dir: opts.run_dir,
-        env: opts.env,
-        git_env: request.git_env,
-        sandbox: request.sandbox
-      })
+    intent_result =
+      with {:ok, intent_bytes} <- read_generated(request.workdir, intent_path),
+           {:ok, normalized_bytes} <-
+             normalize_generated_intent(request, intent_path, intent_bytes, attempt_number) do
+        Validation.intent(normalized_bytes, intent_path)
+      end
+
+    acceptance_result = read_generated(request.workdir, acceptance_path)
+
+    resolve_generated_files({intent_result, acceptance_result}, request, project, opts)
+  end
+
+  defp resolve_generated_files({{:ok, intent}, {:ok, test_bytes}}, request, project, opts) do
+    Kogen.Checks.validate_shape(%ShapeValidation{
+      workdir: request.workdir,
+      project: project,
+      intent: intent,
+      acceptance_bytes: test_bytes,
+      run_dir: opts.run_dir,
+      env: opts.env,
+      git_env: request.git_env,
+      sandbox: request.sandbox
+    })
+  end
+
+  defp resolve_generated_files(
+         {{:error, %Failure{class: :candidate} = intent_failure},
+          {:error, %Failure{class: :candidate} = acceptance_failure}},
+         _request,
+         _project,
+         _opts
+       ) do
+    {:error,
+     %{
+       intent_failure
+       | detail: intent_failure.detail <> "\n" <> failure_output(acceptance_failure)
+     }}
+  end
+
+  defp resolve_generated_files(
+         {{:error, %Failure{} = failure}, _acceptance},
+         _request,
+         _project,
+         _opts
+       ), do: {:error, failure}
+
+  defp resolve_generated_files(
+         {{:ok, _intent}, {:error, %Failure{} = failure}},
+         _request,
+         _project,
+         _opts
+       ), do: {:error, failure}
+
+  defp normalize_generated_intent(request, path, bytes, attempt_number) do
+    normalized = Validation.normalize_intent(bytes)
+
+    if normalized == bytes do
+      {:ok, bytes}
+    else
+      case File.write(Path.join(request.workdir, path), normalized, [:binary]) do
+        :ok ->
+          progress(request, attempt_number, "normalized intent approach label path=#{path}")
+          {:ok, normalized}
+
+        {:error, reason} ->
+          {:error,
+           failure(
+             :environment,
+             :intent_normalization_failed,
+             "Could not write normalized Intent at #{path}: #{inspect(reason)}"
+           )}
+      end
     end
   end
 
@@ -279,41 +349,6 @@ defmodule Kogen.Shaper.Runner do
     {:ok, opts}
   end
 
-  defp valid_request(%Request{} = request) do
-    cond do
-      not absolute_directory?(request.workdir) ->
-        {:error, :project_unavailable}
-
-      not valid_slug?(request.slug) ->
-        {:error, :invalid_slug}
-
-      not is_binary(request.task) or String.trim(request.task) == "" ->
-        {:error, :empty_task}
-
-      not nonempty_string?(request.model) or not nonempty_string?(request.effort) ->
-        {:error, :invalid_model}
-
-      not is_binary(request.run_dir) or Path.type(request.run_dir) != :absolute ->
-        {:error, :invalid_run_dir}
-
-      true ->
-        valid_runtime_options(request)
-    end
-  end
-
-  defp valid_runtime_options(request) do
-    cond do
-      not is_map(request.env) or not is_map(request.git_env) ->
-        {:error, :invalid_environment}
-
-      not valid_limits?(request.limits) ->
-        {:error, :invalid_limits}
-
-      true ->
-        :ok
-    end
-  end
-
   defp result(request, calls, rounds, opts, warnings) do
     %Result{
       slug: request.slug,
@@ -330,31 +365,18 @@ defmodule Kogen.Shaper.Runner do
     progress(request, attempt_number, "warning #{code} items=#{Enum.join(ids, ",")}")
   end
 
-  defp validation_exhausted(%Failure{} = failure, repairs) do
+  defp validation_exhausted(%Failure{} = failure, repairs, attempts, calls) do
     {:error,
-     %Failure{
-       class: :candidate,
-       reason: :shaping_validation_failed,
-       detail:
-         "Shaper validation failed after #{repairs} repair round(s).\n" <> failure_output(failure)
+     %{
+       failure
+       | detail:
+           "Shaper repair limit reached for #{failure.reason} after #{repairs} repair round(s), " <>
+             "#{attempts} attempt(s), and #{calls} model call(s).\n" <> failure_output(failure)
      }}
   end
 
   defp failure_output(%Failure{} = failure),
     do: "#{failure.class}/#{failure.reason}: #{failure.detail}"
-
-  defp absolute_directory?(path),
-    do: is_binary(path) and Path.type(path) == :absolute and File.dir?(path)
-
-  defp nonempty_string?(value), do: is_binary(value) and String.trim(value) != ""
-
-  defp valid_slug?(slug),
-    do: is_binary(slug) and Regex.match?(~r/\A[a-z0-9]+(?:-[a-z0-9]+)*\z/, slug)
-
-  defp valid_limits?(%{max_turns: turns, wall_ms: wall_ms}),
-    do: is_integer(turns) and turns > 0 and is_integer(wall_ms) and wall_ms > 0
-
-  defp valid_limits?(_limits), do: false
 
   defp intent_path(slug), do: ".kogen/intents/#{slug}/intent.md"
   defp acceptance_path(slug), do: ".kogen/acceptance/#{slug}_test.exs"
