@@ -39,6 +39,98 @@ defmodule Kogen.Shaper.RepairReliabilityTest do
 
       assert File.read!(Path.join([tmp_dir, "shape-run", "logs", "shaper.log"])) =~
                "normalized intent approach label"
+
+      instructions = hd(ScriptedProvider.requests(config)).instructions
+
+      assert Enum.all?(
+               [
+                 "`size` is exactly `small`, `medium`, or `large`",
+                 "Choose the smallest size that fits the finished Intent; do not default to `medium`.",
+                 "Every Acceptance item has at most 25 words, regardless of size.",
+                 "Use headings exactly as shown and in this order",
+                 "Do not change the order of the words or omit `domain=`."
+               ],
+               &String.contains?(instructions, &1)
+             )
+    after
+      GenServer.stop(server, :normal)
+    end
+  end
+
+  test "reclassifies base-green test items without spending a repair", %{tmp_dir: tmp_dir} do
+    project = seed_project!(Path.join(tmp_dir, "project"))
+
+    intent_bytes = """
+    ---
+    title: Preserve and add Tiny value
+    domains: [app]
+    size: small
+    ---
+    Add Tiny.new_value/0 while preserving the existing Tiny.value/0 result.
+
+    ## Acceptance
+    - A1: Existing Tiny.value/0 calls continue returning :old.
+    - A2: Tiny.new_value/0 returns :new for the updated result.
+
+    ## Verify
+    - A1: test domain=app
+    - A2: test domain=app
+
+    ## Notes
+    Approach: Add Tiny.new_value/0 returning :new while preserving Tiny.value/0 and its existing result.
+    """
+
+    acceptance_bytes = """
+    defmodule Tiny.Acceptance.ShapeLoopTest do
+      use ExUnit.Case, async: true
+      @tag intent: "shape-loop/A1"
+      test "the existing public function remains available" do
+        assert Tiny.value() == :old
+      end
+
+      @tag intent: "shape-loop/A2"
+      test "the new function returns the updated result" do
+        assert function_exported?(Tiny, :new_value, 0)
+
+        if function_exported?(Tiny, :new_value, 0) do
+          assert Tiny.new_value() == :new
+        end
+      end
+    end
+    """
+
+    {:ok, server} =
+      ScriptedProvider.start_link([
+        ScriptedProvider.write_many(:shape, [
+          {intent_path(), intent_bytes},
+          {acceptance_path(), acceptance_bytes}
+        ])
+      ])
+
+    config = %Config{server: server}
+
+    try do
+      task = "Add Tiny.new_value/0 while preserving Tiny.value/0."
+      assert {:ok, result} = Shaper.shape(request(project, tmp_dir, config, task))
+      assert result.rounds == 1
+      assert length(result.calls) == 1
+      assert length(ScriptedProvider.requests(config)) == 1
+      assert [warning] = result.warnings
+      assert warning.code == :shape_reclassified
+      assert warning.item_ids == ["A1"]
+
+      rewritten = File.read!(result.intent_path)
+      assert rewritten =~ "- A1: test keep domain=app"
+      assert rewritten =~ "- A2: test domain=app"
+      assert warning.message =~ "A1 changed from test to test keep"
+      assert warning.message =~ "green on the base"
+
+      warning_path =
+        Path.join([project, ".kogen", "intents", "shape-loop", "shape-warnings.json"])
+
+      assert %{
+               "warnings" => [%{"code" => "shape_reclassified", "item_ids" => ["A1"]}]
+             } = :json.decode(File.read!(warning_path))
     after
       GenServer.stop(server, :normal)
     end
@@ -81,7 +173,7 @@ defmodule Kogen.Shaper.RepairReliabilityTest do
     end
   end
 
-  defp request(project, tmp_dir, %Config{} = config) do
+  defp request(project, tmp_dir, %Config{} = config, task \\ nil) do
     {:ok, runtime} = Kogen.Kernel.runtime()
     {:ok, project_config} = Kogen.Project.load(project)
     {:ok, env} = Kogen.Kernel.candidate_environment(project, runtime, project_config)
@@ -90,7 +182,7 @@ defmodule Kogen.Shaper.RepairReliabilityTest do
     %Request{
       workdir: project,
       slug: "shape-loop",
-      task: "Change Tiny.value/0 to return :new while preserving its public function.",
+      task: task || "Change Tiny.value/0 to return :new while preserving its public function.",
       model: "scripted-model",
       effort: "low",
       provider_mod: ScriptedProvider,

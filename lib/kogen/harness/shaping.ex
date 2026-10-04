@@ -47,7 +47,7 @@ defmodule Kogen.Harness.Shaping do
   ---
   title: <plain title, at most 72 characters>
   domains: [<one or more configured domain names>]
-  size: medium
+  size: <small|medium|large>
   ---
   <one concise prose paragraph describing the problem, scope, and behavior to preserve>
 
@@ -64,9 +64,12 @@ defmodule Kogen.Harness.Shaping do
   ```
 
   Intent rules:
-  - `size` is exactly `small`, `medium`, or `large`. Small allows 1 Brief paragraph, at most 90 Brief words, 3 Acceptance items, and 250 Notes words. Medium allows 2 paragraphs, 200 Brief words, 6 items, and 400 Notes words. Large allows 3 paragraphs, 330 Brief words, 10 items, and 600 Notes words.
+  - The `size` is exactly `small`, `medium`, or `large`. Choose the smallest size that fits the finished Intent; do not default to `medium`. Small allows 1 Brief paragraph, 90 Brief words, 3 Acceptance items, and 250 Notes words. Medium allows 2 paragraphs, 200 Brief words, 6 items, and 400 Notes words. Large allows 3 paragraphs, 330 Brief words, 10 Acceptance items, and 600 Notes words. If more than 10 distinct outcomes are required, do not omit one to fit; report that the task needs a narrower scope.
+  - Every Acceptance item has at most 25 words, regardless of size. Small holds 1–3 items, medium 4–6, and large 7–10 when that many outcomes are needed. Keep each Brief or Acceptance sentence to 30 words or fewer.
   - The Brief is prose without a heading, list, or code block. Use only configured project domain names.
-  - Acceptance ids are sequential from A1. Keep each item to 25 words or fewer, state a definite observable result, and avoid hedges. Give every item exactly one Verify line using `test` or `test keep` and a configured domain.
+  - Use headings exactly as shown and in this order: `## Acceptance`, `## Verify`, `## Notes`. Write Acceptance entries as one line each with sequential ids (`- A1: ...`, `- A2: ...`); reuse each id exactly once in Verify and in its `@tag intent: "<slug>/A<n>"` test tag.
+  - State a definite observable result and avoid hedges. Give every item exactly one Verify line in this form: `- A1: test domain=<configured-domain>` or `- A1: test keep domain=<configured-domain>`. Do not change the order of the words or omit `domain=`.
+  - Trim surrounding whitespace from headings, item lines, frontmatter values, and line endings. Do not indent section headings, Acceptance entries, or Verify entries.
   - An Intent must include a concrete implementation approach in Notes: say which code path to change and how, plus the behavior to preserve. Acceptance criteria alone are not a plan. Keep this concise.
   - Write a complete test module to the exact acceptance path. Use `async: true`, test through public functions, and add one `@tag intent: "<slug>/A<n>"` for every Acceptance item. Use `test` for behavior the task adds or changes and `test keep` only for existing behavior that passes on the unchanged checkout. At least one item must use `test`. If a `test keep` item is red on the base, Kogen will reclassify it as `test` and show an approval warning.
   - Do not write to other paths. Do not finish by only describing the files: use the write tool for both. If validation asks for repair, preserve valid content, repair the named rule or missing file, and do not finish until both exact files have been written.

@@ -79,9 +79,6 @@ defmodule Kogen.Shaper.Tests do
 
       assert Enum.at(requests, 0).instructions =~ "Use this exact Intent structure"
 
-      assert Enum.at(requests, 0).instructions =~
-               "`size` is exactly `small`, `medium`, or `large`"
-
       assert Enum.at(requests, 0).instructions =~ "Acceptance criteria alone are not a plan"
       assert Enum.at(requests, 0).instructions =~ "At least one item must use `test`"
       assert Enum.at(requests, 0).instructions =~ "title: Check acceptance tests at approval"

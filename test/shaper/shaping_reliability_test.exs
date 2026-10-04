@@ -94,49 +94,6 @@ defmodule Kogen.Shaper.ShapingReliabilityTests do
     end
   end
 
-  test "validation feedback names the test and includes the first output lines", %{
-    tmp_dir: tmp_dir
-  } do
-    project = seed_project!(Path.join(tmp_dir, "project"))
-
-    valid_intent =
-      "keeps"
-      |> intent(
-        "Approach: Keep Tiny.value/0 unchanged and preserve its public result by avoiding unrelated changes."
-      )
-      |> String.replace("test keep domain=app", "test domain=app")
-
-    corrected_test = String.replace(acceptance_test(), ":old", ":new")
-
-    {:ok, server} =
-      ScriptedProvider.start_link([
-        ScriptedProvider.write_many(:shape, [
-          {intent_path(), valid_intent},
-          {acceptance_path(), acceptance_test()}
-        ]),
-        ScriptedProvider.write_many(:shape, [
-          {intent_path(), valid_intent},
-          {acceptance_path(), corrected_test}
-        ])
-      ])
-
-    config = %Config{server: server}
-
-    try do
-      assert {:ok, result} = Shaper.shape(request(project, tmp_dir, config))
-      assert result.rounds == 2
-
-      [_, repair_request] = ScriptedProvider.requests(config)
-      feedback = Enum.map_join(repair_request.input, &inspect/1)
-      assert feedback =~ "green_on_base"
-      assert feedback =~ "Acceptance test: test the existing public value remains available"
-      assert feedback =~ "Output (first 20 lines):"
-      assert feedback =~ "Compiling 1 file (.ex)"
-    after
-      GenServer.stop(server, :normal)
-    end
-  end
-
   test "repair feedback names both required paths and their current file state", %{
     tmp_dir: tmp_dir
   } do
@@ -212,6 +169,8 @@ defmodule Kogen.Shaper.ShapingReliabilityTests do
       assert result.rounds == 2
       repair = Enum.map_join(Enum.at(ScriptedProvider.requests(config), 1).input, &inspect/1)
       assert repair =~ "all_items_keep"
+      assert repair =~ "No non-keep acceptance item is red on the unchanged base"
+      assert repair =~ "base=passed"
       assert repair =~ "Acceptance test: test the existing public value remains available"
       assert length(result.calls) == 2
     after
