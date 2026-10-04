@@ -150,6 +150,9 @@ defmodule Kogen.E2e.ScriptedProvider do
       String.contains?(instructions, "read-only Context Pack stage") ->
         {:ok, :context}
 
+      String.contains?(instructions, "one-shot implementation plan for a cheaper coding agent") ->
+        {:ok, :plan}
+
       String.contains?(instructions, "implementation planner") ->
         {:ok, :plan}
 

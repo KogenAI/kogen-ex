@@ -15,19 +15,25 @@ defmodule Kogen.E2e.PlanShellTest do
     {:ok, seed_project: seed_project}
   end
 
-  test "planner reads the repository and lands through the shell-only builder", context do
+  test "one-shot ls-files planner hands its exact plan to the shell builder and lands", context do
     parent = Path.join(context.tmp_dir, "plan-shell-recipe")
     File.mkdir_p!(parent)
     shell_edit = "cat > lib/tiny_app.ex <<'EOF'\n" <> ready_source() <> "EOF"
+    plan_text = "## Acceptance criteria\n\n1. TinyApp.value/0 returns :ready."
 
     script = [
-      ScriptedProvider.call(:plan, "read", %{"path" => "lib/tiny_app.ex"}),
-      ScriptedProvider.answer(:plan, "Update TinyApp.value/0."),
+      ScriptedProvider.answer(:plan, plan_text),
       ScriptedProvider.call(:develop, "shell", %{"cmd" => shell_edit}),
       ScriptedProvider.answer(:develop, "Done.")
     ]
 
-    options = %Options{seed_project: context.seed_project, recipe: "plan-shell"}
+    options = %Options{
+      seed_project: context.seed_project,
+      recipe: "plan-shell",
+      builder_model: "gpt-6-luna",
+      builder_effort: "max"
+    }
+
     result = Build.run!(parent, script, options)
 
     assert %Result{build: %{status: :landed, landed_sha: sha}, run_status: :landed} = result
@@ -36,11 +42,46 @@ defmodule Kogen.E2e.PlanShellTest do
     refute Map.has_key?(started.roles, "context")
     refute Map.has_key?(started.roles, "reviewer")
 
-    [planner_read, planner_finish, builder_edit, _builder_finish] = result.provider_requests
-    assert {planner_read.model, planner_read.effort} == {"gpt-6.1-sol", "high"}
-    assert Enum.map(planner_read.tools, & &1["name"]) == ["read", "search"]
-    assert Enum.map(planner_finish.tools, & &1["name"]) == ["read", "search"]
+    [planner, builder_edit, _builder_finish] = result.provider_requests
+    assert {planner.model, planner.effort} == {"gpt-6.1-sol", "high"}
+
+    assert planner.instructions =~
+             "You are a staff engineer writing a one-shot implementation plan"
+
+    assert planner.instructions =~ "## Acceptance criteria"
+    assert planner.instructions =~ "## Technical approach"
+    assert planner.instructions =~ "## Implementation steps"
+    assert planner.tools == []
+    assert planner.previous_response_id == nil
+
+    intent =
+      File.read!(Path.join(result.fixture.project_root, ".kogen/intents/build-engine/intent.md"))
+
+    files = Git.git!(result.fixture.project_root, ["ls-files"])
+
+    expected_planner_input =
+      "TASK (verbatim):\n```\n" <>
+        intent <>
+        "\n```\n\nREPOSITORY FILE LIST (git ls-files):\n```\n" <>
+        files <> "```\n"
+
+    assert user_text(planner) == expected_planner_input
+    refute user_text(planner) =~ "defmodule TinyApp do"
+
+    assert length(
+             Enum.filter(result.provider_requests, &(&1.instructions == planner.instructions))
+           ) == 1
+
+    assert {builder_edit.model, builder_edit.effort} == {"gpt-6-luna", "max"}
     assert Enum.map(builder_edit.tools, & &1["name"]) == ["shell"]
+
+    builder_text = user_text(builder_edit)
+    assert builder_text =~ "Approved Intent:\n#{intent}"
+
+    assert builder_text =~
+             "## Implementation plan\n\nA senior engineer prepared the plan below by investigating a scratch copy of this repository"
+
+    assert builder_text =~ "<plan>\n#{plan_text}\n</plan>\n"
 
     assert Enum.map(Enum.filter(result.events, &(&1.event == "model_stage")), & &1.stage) == [
              "plan",
@@ -59,4 +100,6 @@ defmodule Kogen.E2e.PlanShellTest do
     end
     """
   end
+
+  defp user_text(%{input: [%{"role" => "user", "content" => [%{"text" => text}]}]}), do: text
 end

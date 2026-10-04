@@ -253,19 +253,22 @@ defmodule Kogen.Harness.Developer do
   end
 
   defp initial_user_text(intent_text, plan, repairs_left) do
-    plan_text = if match?(%Plan{}, plan), do: plan.text, else: "No technical plan was supplied."
+    plan_content = plan_content(plan)
 
     String.trim("""
     Approved Intent:
     #{intent_text}
 
-    Implementation plan advice:
-    #{plan_text}
+    #{plan_content}
 
     The controller supplied a remaining repair budget of #{repairs_left} pass(es). The Build Cycle owns that budget.
     Begin work in the supplied worktree.
     """)
   end
+
+  defp plan_content(%Plan{builder_addendum: addendum}) when is_binary(addendum), do: addendum
+  defp plan_content(%Plan{text: text}), do: "Implementation plan advice:\n" <> text
+  defp plan_content(_plan), do: "Implementation plan advice:\nNo technical plan was supplied."
 
   defp developer_prompt(%Opts{builder_tools: :full}), do: {:ok, @developer_prompt}
 

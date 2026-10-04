@@ -2,6 +2,7 @@ defmodule Kogen.Harness.Stages do
   @moduledoc false
 
   alias Kogen.Contracts.ModelResponse
+  alias Kogen.Contracts.ProcResult
   alias Kogen.Contracts.ToolCall
   alias Kogen.Harness.Codec
   alias Kogen.Harness.Context
@@ -11,6 +12,7 @@ defmodule Kogen.Harness.Stages do
   alias Kogen.Harness.Pack
   alias Kogen.Harness.Plan
   alias Kogen.Harness.PlanSanitizer
+  alias Kogen.Harness.PlanShellPrompts
   alias Kogen.Harness.Recording
   alias Kogen.Harness.Review
   alias Kogen.Harness.Tools
@@ -19,6 +21,8 @@ defmodule Kogen.Harness.Stages do
   alias Kogen.Tooling.ToolResult
 
   @max_plan_turns 15
+  @plan_shell_file_list_timeout_ms 120_000
+  @plan_shell_request_timeout_ms 900_000
   @review_diff_limit 200_000
   @review_diff_truncated_marker "\n\n[TRUNCATED: Candidate diff continues beyond the 200,000-character review limit.]"
 
@@ -30,6 +34,12 @@ defmodule Kogen.Harness.Stages do
   def context_pack(opts, intent_text), do: Context.run(opts, intent_text)
 
   @spec plan(Opts.t(), Pack.t() | nil, String.t()) :: {:ok, Plan.t()} | {:error, term()}
+  def plan(%Opts{planner_mode: :ls_files} = opts, nil, intent_text) when is_binary(intent_text),
+    do: plan_from_ls_files(opts, intent_text)
+
+  def plan(%Opts{planner_mode: :ls_files}, _pack, _intent_text),
+    do: error(:invalid_plan_context, "The ls-files planner cannot receive a context pack.")
+
   def plan(%Opts{} = opts, pack, intent_text) when is_nil(pack) or is_struct(pack, Pack) do
     {model, effort} = Map.get(opts.models, :planner, opts.models.strong)
     now = System.monotonic_time(:millisecond)
@@ -42,6 +52,76 @@ defmodule Kogen.Harness.Stages do
     }
 
     plan_loop(opts, pack, intent_text, model, effort, state)
+  end
+
+  defp plan_from_ls_files(%Opts{} = opts, intent_text) do
+    with {:ok, files} <- repository_file_list(opts) do
+      {model, effort} = Map.get(opts.models, :planner, opts.models.strong)
+
+      exchange_request = %ExchangeRequest{
+        stage: :plan,
+        turn: 1,
+        model: model,
+        effort: effort,
+        instructions: PlanShellPrompts.planner_system(),
+        items: [Codec.user_item(PlanShellPrompts.planner_input(intent_text, files))],
+        tool_names: [],
+        remaining_ms: min(opts.limits.wall_ms, @plan_shell_request_timeout_ms)
+      }
+
+      case Exchange.respond(opts, exchange_request) do
+        {:ok, %ModelResponse{tool_calls: [], text: text, usage: usage}} ->
+          plan_usage = Usage.zero() |> Codec.usage(usage) |> Usage.to_map()
+
+          {:ok,
+           %Plan{
+             text: text,
+             usage: plan_usage,
+             builder_addendum: PlanShellPrompts.builder_addendum(text)
+           }}
+
+        {:ok, %ModelResponse{}} ->
+          error(:plan_tools_not_allowed, "The one-shot ls-files planner returned a tool call.")
+
+        {:error, reason} ->
+          {:error, reason}
+      end
+    end
+  end
+
+  defp repository_file_list(%Opts{} = opts) do
+    log_dir = Path.join(opts.run_dir, "logs")
+
+    log_path =
+      Path.join(
+        log_dir,
+        "plan-shell-ls-files-#{System.unique_integer([:positive, :monotonic])}.log"
+      )
+
+    with :ok <- File.mkdir_p(log_dir),
+         {:ok, %ProcResult{exit_status: 0, timed_out: false, log_path: output_path}}
+         when is_binary(output_path) <-
+           opts.proc_mod.run(["git", "ls-files"],
+             cd: opts.workdir,
+             env: opts.env,
+             timeout_ms: @plan_shell_file_list_timeout_ms,
+             log_path: log_path
+           ),
+         {:ok, files} <- File.read(output_path) do
+      {:ok, files}
+    else
+      {:ok, %ProcResult{timed_out: true}} ->
+        error(:plan_file_list_timeout, "git ls-files exceeded its 120-second timeout.")
+
+      {:ok, %ProcResult{exit_status: status}} ->
+        error(:plan_file_list_failed, "git ls-files exited with status #{inspect(status)}.")
+
+      {:error, %Error{} = reason} ->
+        {:error, reason}
+
+      {:error, reason} ->
+        error(:plan_file_list_failed, "Could not read git ls-files output: #{inspect(reason)}.")
+    end
   end
 
   @spec review(Opts.t(), String.t(), String.t(), map()) :: {:ok, Review.t()} | {:error, term()}

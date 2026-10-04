@@ -14,6 +14,7 @@ defmodule Kogen.Harness.Opts do
     :changed_paths,
     :phase_recorder,
     builder_tools: :full,
+    planner_mode: :read_only_tools,
     changed?: nil,
     env: %{},
     before_gate: nil,
@@ -41,6 +42,7 @@ defmodule Kogen.Harness.Opts do
           before_gate: (-> :ok | {:error, term()}) | nil,
           flake_excused_test_ids: [String.t()],
           builder_tools: :full | :shell,
+          planner_mode: :read_only_tools | :ls_files,
           models: %{
             required(:builder) => model(),
             required(:strong) => model(),
@@ -73,9 +75,9 @@ defmodule Kogen.Harness.Plan do
   @moduledoc "One strong-model implementation plan, scoped to its Intent."
 
   @enforce_keys [:text, :usage]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [builder_addendum: nil]
 
-  @type t :: %__MODULE__{text: String.t(), usage: map()}
+  @type t :: %__MODULE__{text: String.t(), usage: map(), builder_addendum: String.t() | nil}
 end
 
 defmodule Kogen.Harness.Review do
