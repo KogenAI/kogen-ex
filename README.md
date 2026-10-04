@@ -9,6 +9,7 @@ This repository is the single Mix application that forms Kogen's core. Current w
 - [Contracts](lib/kogen/contracts.ex) defines the shared structs and ports.
 - [Domain facades](lib/kogen/) own the dependency map and document each domain.
 - [Makefile](Makefile) owns the local quality gate and fast domain loop.
+- [Distribution and local installation](docs/distribution.md) describes the installed launcher and its pinned runtime.
 - [Custom Credo checks](tools/kogen_checks/) owns Kogen-specific static checks.
 
 ## Repository map

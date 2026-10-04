@@ -3,6 +3,7 @@ SHELL := /bin/sh
 MAKEFLAGS += -j
 M := mise exec --
 KOGEN_PLT_DIR ?= $(HOME)/.kogen/plt
+KOGEN_INSTALL_HOME ?= $(HOME)
 export KOGEN_PLT_DIR
 
 TEST_ENV = GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_AUTHOR_NAME='Kogen Test' GIT_AUTHOR_EMAIL=test@kogen.invalid GIT_COMMITTER_NAME='Kogen Test' GIT_COMMITTER_EMAIL=test@kogen.invalid TZ=Europe/Sarajevo LC_ALL=C
@@ -66,16 +67,20 @@ integration: check-full
 
 install-local:
 	$(M) mix escript.build
-	@home="$(HOME)"; gen_root="$$home/.kogen/gen"; gen_sha="$$(git rev-parse HEAD)"; gen_dir="$$gen_root/$$gen_sha"; installed="$$gen_dir/kogen"; link="$$home/.local/bin/kogen"; \
+	@home="$(KOGEN_INSTALL_HOME)"; gen_root="$$home/.kogen/gen"; gen_sha="$$(git rev-parse HEAD)"; gen_dir="$$gen_root/$$gen_sha"; installed="$$gen_dir/kogen"; archive="$$gen_dir/kogen.escript"; link="$$home/.local/bin/kogen"; \
+	runtime_escript="$$($(M) sh -c 'command -v escript')"; \
+	case "$$runtime_escript" in /*) ;; *) echo "could not find an absolute escript path in the build toolchain" >&2; exit 1;; esac; \
 	mkdir -p "$$gen_root" "$$home/.local/bin"; \
 	if [ -d "$$gen_dir" ]; then \
-	  if [ -f "$$installed" ] && python3 -c 'import sys,zipfile; a,b=sys.argv[1:]; same=open(a,"rb").read()[:61]==open(b,"rb").read()[:61]; left=zipfile.ZipFile(a); right=zipfile.ZipFile(b); same=same and [(i.filename,left.read(i)) for i in left.infolist()]==[(i.filename,right.read(i)) for i in right.infolist()]; sys.exit(0 if same else 1)' kogen "$$installed"; then \
+	  if [ -f "$$installed" ] && [ -f "$$archive" ] && python3 -c 'import shlex,sys,zipfile; build,archive,launcher,runtime=sys.argv[1:]; same=open(build,"rb").read()[:61]==open(archive,"rb").read()[:61]; left=zipfile.ZipFile(build); right=zipfile.ZipFile(archive); same=same and [(i.filename,left.read(i)) for i in left.infolist()]==[(i.filename,right.read(i)) for i in right.infolist()]; expected="#!/bin/sh\nexec "+shlex.quote(runtime)+" "+shlex.quote(archive)+" \"$$@\"\n"; same=same and open(launcher,encoding="utf-8").read()==expected; sys.exit(0 if same else 1)' kogen "$$archive" "$$installed" "$$runtime_escript"; then \
 	    :; \
 	  else \
 	    echo "refusing differing generation directory: $$gen_dir" >&2; exit 1; \
 	  fi; \
 	else \
-	  mkdir "$$gen_dir"; cp kogen "$$installed"; chmod 755 "$$installed"; \
+	  mkdir "$$gen_dir"; cp kogen "$$archive"; \
+	  python3 -c 'import shlex,sys; runtime,archive,launcher=sys.argv[1:]; open(launcher,"w",encoding="utf-8").write("#!/bin/sh\nexec "+shlex.quote(runtime)+" "+shlex.quote(archive)+" \"$$@\"\n")' "$$runtime_escript" "$$archive" "$$installed"; \
+	  chmod 755 "$$installed"; chmod 644 "$$archive"; \
 	fi; \
 	if [ -L "$$link" ]; then rm "$$link"; elif [ -e "$$link" ]; then \
 	  echo "refusing to replace non-symlink: $$link" >&2; exit 1; \
