@@ -14,7 +14,10 @@ defmodule Kogen.Kernel.CLITest do
   test "project commands default to the current directory" do
     assert {:ok, args} = Arguments.parse(["status"])
     assert Path.type(args.project) == :absolute
-    assert args.origin == args.project
+    assert args.origin == nil
+
+    assert {:ok, explicit} = Arguments.parse(["status", "--origin", "/tmp/kogen-origin"])
+    assert explicit.origin == "/tmp/kogen-origin"
   end
 
   test "build accepts only the built-in recipes and defaults to staged" do

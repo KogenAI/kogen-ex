@@ -165,8 +165,11 @@ defmodule Kogen.Kernel.CLI.Arguments do
 
   defp project_paths(project, options) do
     project = Path.expand(project)
-    origin = options |> Keyword.get(:origin, project) |> Path.expand()
+    origin = options |> Keyword.get(:origin) |> expand_optional_path()
     base = Keyword.get(options, :base, "main")
     {:ok, project, origin, base}
   end
+
+  defp expand_optional_path(nil), do: nil
+  defp expand_optional_path(path), do: Path.expand(path)
 end

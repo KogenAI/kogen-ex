@@ -52,6 +52,9 @@ defmodule Kogen.Workspace do
   @spec destroy(Path.t()) :: :ok | {:error, term()}
   def destroy(path), do: Checkout.destroy(path)
 
+  @spec remote_url(Path.t(), String.t(), git_env()) :: {:ok, String.t()} | {:error, term()}
+  def remote_url(repo, remote, git_env), do: Refs.remote_url(repo, remote, git_env)
+
   @spec ref_read(Path.t(), String.t(), git_env()) ::
           {:ok, String.t()} | {:error, :missing | term()}
   def ref_read(repo, ref, git_env), do: Refs.ref_read(repo, ref, git_env)

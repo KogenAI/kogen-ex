@@ -3,6 +3,24 @@ defmodule Kogen.Workspace.Refs do
 
   alias Kogen.Workspace.Git
 
+  @spec remote_url(Path.t(), String.t(), %{String.t() => String.t()}) ::
+          {:ok, String.t()} | {:error, :missing | term()}
+  def remote_url(repo, remote, git_env) when is_binary(remote) do
+    case Git.run(repo, ["config", "--local", "--get", "remote.#{remote}.url"], git_env) do
+      {:ok, 0, url} ->
+        case Git.trim_line(url) do
+          "" -> {:error, :missing}
+          value -> {:ok, value}
+        end
+
+      {:ok, _status, _output} ->
+        {:error, :missing}
+
+      {:error, reason} ->
+        {:error, reason}
+    end
+  end
+
   @spec ref_read(Path.t(), String.t(), %{String.t() => String.t()}) ::
           {:ok, String.t()} | {:error, :missing | term()}
   def ref_read(repo, ref, git_env) do

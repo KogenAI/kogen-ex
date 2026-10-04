@@ -47,7 +47,7 @@ defmodule Kogen.Kernel.Types.BuildOptions do
   @type t :: %__MODULE__{
           slug: String.t(),
           project_root: Path.t(),
-          origin: Path.t(),
+          origin: Path.t() | nil,
           base: String.t(),
           model: String.t(),
           effort: String.t(),

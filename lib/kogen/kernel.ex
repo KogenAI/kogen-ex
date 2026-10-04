@@ -31,6 +31,7 @@ defmodule Kogen.Kernel do
   alias Kogen.Engine.Runtime
   alias Kogen.Kernel.Approval
   alias Kogen.Kernel.Approval.Request, as: ApprovalRequest
+  alias Kogen.Kernel.Origin
   alias Kogen.Kernel.RuntimeDiscovery
   alias Kogen.Kernel.StateView
   alias Kogen.Kernel.Types.ApprovalPreview
@@ -78,11 +79,13 @@ defmodule Kogen.Kernel do
     end
   end
 
-  @spec approval_preview(String.t(), Path.t(), Path.t(), String.t(), String.t()) ::
+  @spec approval_preview(String.t(), Path.t(), Path.t() | nil, String.t(), String.t()) ::
           {:ok, ApprovalPreview.t()} | {:error, term()}
   def approval_preview(slug, project_root, origin, base, by) do
     with {:ok, runtime} <- runtime(),
          {:ok, process_env} <- project_environment(project_root, runtime),
+         {:ok, origin} <-
+           Origin.resolve(project_root, origin, Runtime.git_environment(process_env)),
          {:ok, home} <- runtime_home(runtime) do
       Approval.prepare(%ApprovalRequest{
         slug: slug,
@@ -100,7 +103,7 @@ defmodule Kogen.Kernel do
   @spec approve(ApprovalPreview.t()) :: {:ok, String.t()} | {:error, term()}
   def approve(%ApprovalPreview{} = preview), do: Approval.commit(preview)
 
-  @spec build(String.t(), Path.t(), Path.t(), String.t(), String.t(), String.t()) ::
+  @spec build(String.t(), Path.t(), Path.t() | nil, String.t(), String.t(), String.t()) ::
           {:ok, Result.t()} | {:error, term()}
   def build(slug, project_root, origin, base, model, effort) do
     build(%BuildOptions{
@@ -119,6 +122,12 @@ defmodule Kogen.Kernel do
          {:ok, process_env} <- project_environment(options.project_root, runtime),
          {:ok, provider_config, source, label} <-
            provider_config(borrow: options.borrow, label: options.label),
+         {:ok, origin} <-
+           Origin.resolve(
+             options.project_root,
+             options.origin,
+             Runtime.git_environment(process_env)
+           ),
          {:ok, home} <- runtime_home(runtime) do
       runtime = Runtime.for_project(runtime, process_env)
 
@@ -127,7 +136,7 @@ defmodule Kogen.Kernel do
         home: home,
         project_root: options.project_root,
         workspace_root: Workspaces.root(options.project_root, home),
-        origin: options.origin,
+        origin: origin,
         base: options.base,
         model: options.model,
         effort: options.effort,
@@ -186,23 +195,27 @@ defmodule Kogen.Kernel do
     end
   end
 
-  @spec status(Path.t(), Path.t(), String.t()) :: {:ok, [IntentStatus.t()]} | {:error, term()}
+  @spec status(Path.t(), Path.t() | nil, String.t()) ::
+          {:ok, [IntentStatus.t()]} | {:error, term()}
   def status(project_root, origin, base) do
     with {:ok, runtime} <- runtime(),
-         {:ok, process_env} <- project_environment(project_root, runtime),
-         {:ok, home} <- runtime_home(runtime) do
-      git_env = Runtime.git_environment(process_env)
+         {:ok, home} <- runtime_home(runtime),
+         {:ok, origin} <-
+           Origin.resolve(project_root, origin, Runtime.git_environment(runtime.base_env)) do
+      git_env = Runtime.git_environment(runtime.base_env)
       root = Workspaces.root(project_root, home)
       Kogen.Kernel.Status.list(project_root, root, origin, base, git_env)
     end
   end
 
-  @spec report(String.t(), Path.t(), Path.t(), String.t()) :: {:ok, binary()} | {:error, term()}
+  @spec report(String.t(), Path.t(), Path.t() | nil, String.t()) ::
+          {:ok, binary()} | {:error, term()}
   def report(slug, project_root, origin, base) do
     with {:ok, runtime} <- runtime(),
-         {:ok, process_env} <- project_environment(project_root, runtime),
-         {:ok, home} <- runtime_home(runtime) do
-      git_env = Runtime.git_environment(process_env)
+         {:ok, home} <- runtime_home(runtime),
+         {:ok, origin} <-
+           Origin.resolve(project_root, origin, Runtime.git_environment(runtime.base_env)) do
+      git_env = Runtime.git_environment(runtime.base_env)
 
       with {:ok, root} <-
              StateView.preferred_root(
@@ -215,11 +228,13 @@ defmodule Kogen.Kernel do
     end
   end
 
-  @spec reconcile(String.t(), Path.t(), Path.t(), String.t()) ::
+  @spec reconcile(String.t(), Path.t(), Path.t() | nil, String.t()) ::
           {:ok, :crashed | :landed | :unchanged} | {:error, term()}
   def reconcile(run_id, project_root, origin, base) do
     with {:ok, runtime} <- runtime(),
          {:ok, process_env} <- project_environment(project_root, runtime),
+         {:ok, origin} <-
+           Origin.resolve(project_root, origin, Runtime.git_environment(process_env)),
          {:ok, home} <- runtime_home(runtime) do
       git_env = Runtime.git_environment(process_env)
 

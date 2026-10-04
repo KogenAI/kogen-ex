@@ -2,6 +2,7 @@ defmodule Kogen.Kernel.Report do
   @moduledoc false
 
   alias Kogen.Kernel.StateView
+  alias Kogen.State
   alias Kogen.State.Event
   alias Kogen.State.Run
   alias Kogen.Workspace
@@ -12,29 +13,27 @@ defmodule Kogen.Kernel.Report do
     with {:ok, runs} <- StateView.runs(state_root, slug),
          {:ok, %Run{} = run} <- StateView.latest(runs),
          {:ok, events} <- StateView.events(run),
-         {:ok, landed_sha} <- landed_sha(run, origin, base, git_env) do
-      encode(run, events, landed_sha)
+         status = State.status(origin, state_root, slug, base, git_env),
+         {:ok, landed_sha} <- landed_sha(status, origin, base, slug, git_env) do
+      encode(run, events, status, landed_sha)
     else
       {:ok, nil} -> {:error, :missing_run}
       error -> error
     end
+  rescue
+    ArgumentError -> {:error, :report_unavailable}
   end
 
-  defp landed_sha(%Run{landing: nil}, _origin, _base, _git_env), do: {:ok, nil}
+  defp landed_sha(:landed, origin, base, slug, git_env),
+    do: Workspace.intent_commit(origin, base, slug, git_env)
 
-  defp landed_sha(%Run{landing: landing}, origin, base, git_env) do
-    with {:ok, branch_sha} <- Workspace.rev_parse(origin, "refs/heads/#{base}", git_env) do
-      if Workspace.ancestor?(origin, landing.candidate_commit, branch_sha, git_env),
-        do: {:ok, landing.candidate_commit},
-        else: {:ok, nil}
-    end
-  end
+  defp landed_sha(_status, _origin, _base, _slug, _git_env), do: {:ok, nil}
 
-  defp encode(%Run{} = run, events, landed_sha) do
+  defp encode(%Run{} = run, events, status, landed_sha) do
     report =
       json_object([
         {"slug", run.slug},
-        {"status", Atom.to_string(run.status)},
+        {"status", Atom.to_string(status)},
         {"recipe", nullable(event_value(events, :recipe))},
         {"roles", event_value(events, :roles) || %{}},
         {"approval", nullable(run.approval_commit)},

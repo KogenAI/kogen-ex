@@ -8,6 +8,7 @@ defmodule Kogen.Kernel.CLI.Runner do
   alias Kogen.Kernel.Approval
   alias Kogen.Kernel.CLI.Args
   alias Kogen.Kernel.CLI.ShapeJson
+  alias Kogen.Kernel.CLI.StatusOutput
   alias Kogen.Kernel.Types.ApprovalPreview
   alias Kogen.Kernel.Types.BuildOptions
 
@@ -183,7 +184,7 @@ defmodule Kogen.Kernel.CLI.Runner do
   defp status(args) do
     with :ok <- project_directory(args),
          {:ok, statuses} <- Kogen.Kernel.status(args.project, args.origin, args.base) do
-      output = if args.json, do: status_json(statuses), else: status_text(statuses)
+      output = if args.json, do: StatusOutput.json(statuses), else: StatusOutput.text(statuses)
       {0, output}
     else
       {:error, reason} -> command_error(reason)
@@ -193,7 +194,12 @@ defmodule Kogen.Kernel.CLI.Runner do
   defp report(args) do
     with :ok <- project_directory(args),
          {:ok, json} <-
-           Kogen.Kernel.report(hd(args.positionals), args.project, args.origin, args.base) do
+           Kogen.Kernel.report(
+             hd(args.positionals),
+             args.project,
+             args.origin,
+             args.base
+           ) do
       {0, json <> "\n"}
     else
       {:error, reason} -> command_error(reason)
@@ -203,7 +209,12 @@ defmodule Kogen.Kernel.CLI.Runner do
   defp reconcile(args) do
     with :ok <- project_directory(args),
          {:ok, result} <-
-           Kogen.Kernel.reconcile(hd(args.positionals), args.project, args.origin, args.base) do
+           Kogen.Kernel.reconcile(
+             hd(args.positionals),
+             args.project,
+             args.origin,
+             args.base
+           ) do
       {0, "reconcile: #{result}\n"}
     else
       {:error, reason} -> command_error(reason)
@@ -248,32 +259,6 @@ defmodule Kogen.Kernel.CLI.Runner do
         command_error(reason)
     end
   end
-
-  defp status_text([]), do: "no Intents\n"
-
-  defp status_text(statuses) do
-    Enum.map_join(statuses, "", fn status ->
-      "#{status.slug} #{status.status} run=#{value(status.run_id)} landed=#{value(status.landed_sha)}\n"
-    end)
-  end
-
-  defp status_json(statuses) do
-    records =
-      Enum.map(statuses, fn status ->
-        Map.new([
-          {"slug", status.slug},
-          {"status", Atom.to_string(status.status)},
-          {"run_id", json_value(status.run_id)},
-          {"landed_sha", json_value(status.landed_sha)}
-        ])
-      end)
-
-    json = records |> :json.encode() |> IO.iodata_to_binary()
-    json <> "\n"
-  end
-
-  defp json_value(nil), do: :null
-  defp json_value(value), do: value
 
   defp approval_screen(preview) do
     intent = preview.intent
@@ -385,7 +370,4 @@ defmodule Kogen.Kernel.CLI.Runner do
     do: "repair: provider retry limit reached; check credentials or service availability\n"
 
   defp repair_guidance(_failure), do: ""
-
-  defp value(nil), do: "-"
-  defp value(value), do: value
 end
