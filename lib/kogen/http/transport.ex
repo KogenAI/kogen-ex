@@ -1,5 +1,7 @@
-defmodule Kogen.Provider.ChatGPT.Transport do
+defmodule Kogen.Http.Transport do
   @moduledoc false
+
+  alias Kogen.Http.Transport.Proxy
 
   defmodule Response do
     @moduledoc false
@@ -16,37 +18,45 @@ defmodule Kogen.Provider.ChatGPT.Transport do
 
   @max_response_bytes 16_000_000
 
-  @spec post_form(String.t(), [{String.t(), String.t()}], pos_integer()) ::
-          {:ok, pos_integer(), binary()} | {:error, :timeout | :transport}
-  def post_form(url, fields, timeout_ms)
-      when is_binary(url) and is_list(fields) and is_integer(timeout_ms) do
+  @spec post_form(String.t(), [{String.t(), String.t()}], pos_integer(), keyword()) ::
+          {:ok, pos_integer(), binary()}
+          | {:error, :timeout | :transport | :invalid_proxy | :proxy_auth_unsupported}
+  def post_form(url, fields, timeout_ms, opts \\ [])
+      when is_binary(url) and is_list(fields) and is_integer(timeout_ms) and is_list(opts) do
     body = URI.encode_query(fields)
     request = {String.to_charlist(url), [], ~c"application/x-www-form-urlencoded", body}
-    request_small(:post, request, url, timeout_ms)
+    request_small(:post, request, url, timeout_ms, opts)
   end
 
-  @spec get(String.t(), pos_integer()) ::
-          {:ok, pos_integer(), binary()} | {:error, :timeout | :transport}
-  def get(url, timeout_ms) when is_binary(url) and is_integer(timeout_ms) do
-    request_small(:get, {String.to_charlist(url), []}, url, timeout_ms)
+  @spec get(String.t(), pos_integer(), keyword()) ::
+          {:ok, pos_integer(), binary()}
+          | {:error, :timeout | :transport | :invalid_proxy | :proxy_auth_unsupported}
+  def get(url, timeout_ms, opts \\ [])
+      when is_binary(url) and is_integer(timeout_ms) and is_list(opts) do
+    request_small(:get, {String.to_charlist(url), []}, url, timeout_ms, opts)
   end
 
-  @spec post_stream(String.t(), [{String.t(), String.t()}], binary(), pos_integer()) ::
-          {:ok, Response.t()} | {:error, :timeout | :transport | :too_large}
-  def post_stream(url, headers, body, timeout_ms)
-      when is_binary(url) and is_list(headers) and is_binary(body) and is_integer(timeout_ms) do
+  @spec post_stream(String.t(), [{String.t(), String.t()}], binary(), pos_integer(), keyword()) ::
+          {:ok, Response.t()}
+          | {:error,
+             :timeout | :transport | :too_large | :invalid_proxy | :proxy_auth_unsupported}
+  def post_stream(url, headers, body, timeout_ms, opts \\ [])
+      when is_binary(url) and is_list(headers) and is_binary(body) and is_integer(timeout_ms) and
+             is_list(opts) do
     with {:ok, _apps} <- Application.ensure_all_started(:inets),
          {:ok, _apps} <- Application.ensure_all_started(:ssl) do
-      request(url, headers, body, timeout_ms)
+      Proxy.with_profile(url, Keyword.get(opts, :proxy_env, %{}), fn profile ->
+        request(profile, url, headers, body, timeout_ms, opts)
+      end)
     else
       {:error, _reason} -> {:error, :transport}
     end
   end
 
-  defp request(url, headers, body, timeout_ms) do
+  defp request(profile, url, headers, body, timeout_ms, opts) do
     request = {String.to_charlist(url), charlist_headers(headers), ~c"application/json", body}
 
-    case :httpc.request(:post, request, http_options(url),
+    case httpc_request(profile, :post, request, http_options(url, opts),
            sync: false,
            stream: :self,
            full_result: true
@@ -55,7 +65,8 @@ defmodule Kogen.Provider.ChatGPT.Transport do
         receive_response(
           ref,
           System.monotonic_time(:millisecond) + timeout_ms,
-          %State{}
+          %State{},
+          profile
         )
 
       {:error, _reason} ->
@@ -63,27 +74,35 @@ defmodule Kogen.Provider.ChatGPT.Transport do
     end
   end
 
-  defp request_small(method, request, url, timeout_ms) do
+  defp request_small(method, request, url, timeout_ms, opts) do
     with {:ok, _apps} <- Application.ensure_all_started(:inets),
          {:ok, _apps} <- Application.ensure_all_started(:ssl) do
-      case :httpc.request(method, request, small_http_options(url, timeout_ms),
-             body_format: :binary
-           ) do
-        {:ok, {{_version, status, _reason}, _headers, body}} -> {:ok, status, body}
-        {:error, reason} -> {:error, transport_reason(reason)}
-      end
+      Proxy.with_profile(url, Keyword.get(opts, :proxy_env, %{}), fn profile ->
+        case httpc_request(profile, method, request, small_http_options(url, timeout_ms, opts),
+               body_format: :binary
+             ) do
+          {:ok, {{_version, status, _reason}, _headers, body}} -> {:ok, status, body}
+          {:error, reason} -> {:error, transport_reason(reason)}
+        end
+      end)
     else
       {:error, _reason} -> {:error, :transport}
     end
   end
 
-  defp small_http_options(url, timeout_ms) do
+  defp httpc_request(nil, method, request, http_options, request_options),
+    do: :httpc.request(method, request, http_options, request_options)
+
+  defp httpc_request(profile, method, request, http_options, request_options),
+    do: :httpc.request(method, request, http_options, request_options, profile)
+
+  defp small_http_options(url, timeout_ms, opts) do
     [
       timeout: timeout_ms,
       connect_timeout: min(timeout_ms, 30_000),
       autoredirect: false,
       autoretry: 0,
-      ssl: ssl_options(url)
+      ssl: ssl_options(url, opts)
     ]
   end
 
@@ -97,22 +116,22 @@ defmodule Kogen.Provider.ChatGPT.Transport do
     end)
   end
 
-  defp http_options(url) do
+  defp http_options(url, opts) do
     [
       timeout: :infinity,
       connect_timeout: 30_000,
       autoredirect: false,
       autoretry: 0,
-      ssl: ssl_options(url)
+      ssl: ssl_options(url, opts)
     ]
   end
 
-  defp ssl_options(url) do
+  defp ssl_options(url, opts) do
     case URI.parse(url) do
       %URI{scheme: "https", host: host} when is_binary(host) ->
         [
           verify: :verify_peer,
-          cacerts: :public_key.cacerts_get(),
+          cacerts: Keyword.get(opts, :cacerts, :public_key.cacerts_get()),
           depth: 4,
           server_name_indication: String.to_charlist(host),
           customize_hostname_check: [
@@ -125,22 +144,22 @@ defmodule Kogen.Provider.ChatGPT.Transport do
     end
   end
 
-  defp receive_response(ref, deadline, %State{} = state) do
+  defp receive_response(ref, deadline, %State{} = state, profile) do
     remaining = deadline - System.monotonic_time(:millisecond)
 
     if remaining <= 0 do
-      cancel(ref)
+      cancel(ref, profile)
       {:error, :timeout}
     else
       receive do
         {:http, {^ref, :stream_start, _headers}} ->
-          receive_response(ref, deadline, %{state | status: 200})
+          receive_response(ref, deadline, %{state | status: 200}, profile)
 
         {:http, {^ref, :stream_start, _headers, _handler}} ->
-          receive_response(ref, deadline, %{state | status: 200})
+          receive_response(ref, deadline, %{state | status: 200}, profile)
 
         {:http, {^ref, :stream, chunk}} when is_binary(chunk) ->
-          append_chunk(ref, deadline, state, chunk)
+          append_chunk(ref, deadline, state, chunk, profile)
 
         {:http, {^ref, :stream_end, _headers}} ->
           finish_stream(state)
@@ -152,20 +171,25 @@ defmodule Kogen.Provider.ChatGPT.Transport do
           transport_error(reason)
       after
         remaining ->
-          cancel(ref)
+          cancel(ref, profile)
           {:error, :timeout}
       end
     end
   end
 
-  defp append_chunk(ref, deadline, state, chunk) do
+  defp append_chunk(ref, deadline, state, chunk, profile) do
     size = state.size + byte_size(chunk)
 
     if size > @max_response_bytes do
-      cancel(ref)
+      cancel(ref, profile)
       {:error, :too_large}
     else
-      receive_response(ref, deadline, %{state | chunks: [chunk | state.chunks], size: size})
+      receive_response(
+        ref,
+        deadline,
+        %{state | chunks: [chunk | state.chunks], size: size},
+        profile
+      )
     end
   end
 
@@ -196,8 +220,10 @@ defmodule Kogen.Provider.ChatGPT.Transport do
   defp timeout_reason?(list) when is_list(list), do: Enum.any?(list, &timeout_reason?/1)
   defp timeout_reason?(_reason), do: false
 
-  defp cancel(ref) do
-    :httpc.cancel_request(ref)
+  defp cancel(ref, nil), do: :httpc.cancel_request(ref)
+
+  defp cancel(ref, profile) do
+    :httpc.cancel_request(ref, profile)
     :ok
   end
 end

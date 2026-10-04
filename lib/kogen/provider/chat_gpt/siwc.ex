@@ -2,6 +2,7 @@ defmodule Kogen.Provider.ChatGPT.SIWC do
   @moduledoc false
 
   alias Kogen.Contracts.ProviderError
+  alias Kogen.Http.Transport
   alias Kogen.Provider.ChatGPT.CredentialStore
   alias Kogen.Provider.ChatGPT.CredentialStore.Profile
   alias Kogen.Provider.ChatGPT.HostId
@@ -10,7 +11,6 @@ defmodule Kogen.Provider.ChatGPT.SIWC do
   alias Kogen.Provider.ChatGPT.OIDC
   alias Kogen.Provider.ChatGPT.PKCE
   alias Kogen.Provider.ChatGPT.SIWC.TokenResponse
-  alias Kogen.Provider.ChatGPT.Transport
 
   defmodule LoginFlow do
     @moduledoc false
@@ -55,6 +55,9 @@ defmodule Kogen.Provider.ChatGPT.SIWC do
 
       {:error, %ProviderError{} = provider_error} ->
         {:error, provider_error}
+
+      {:error, reason} when reason in [:proxy_auth_unsupported, :invalid_proxy] ->
+        error(:transport, transport_message(reason))
 
       {:error, reason} ->
         error(:login, message(reason))
@@ -179,7 +182,9 @@ defmodule Kogen.Provider.ChatGPT.SIWC do
       {"resource", @resource}
     ]
 
-    case Transport.post_form(url, body, @timeout_ms) do
+    case Transport.post_form(url, body, @timeout_ms,
+           proxy_env: Keyword.get(opts, :proxy_env, %{})
+         ) do
       {:ok, status, response} when status in 200..299 -> TokenResponse.decode(response)
       {:ok, status, _response} -> {:error, {:token_exchange_failed, status}}
       {:error, reason} -> {:error, reason}
@@ -272,14 +277,14 @@ defmodule Kogen.Provider.ChatGPT.SIWC do
   defp revoke(credentials, opts) do
     case OIDC.discovery(oidc_options(opts)) do
       {:ok, %OIDC.Discovery{revocation_endpoint: endpoint}} when is_binary(endpoint) ->
-        revoke_at(endpoint, credentials)
+        revoke_at(endpoint, credentials, opts)
 
       _unavailable ->
         false
     end
   end
 
-  defp revoke_at(endpoint, credentials) do
+  defp revoke_at(endpoint, credentials, opts) do
     case Transport.post_form(
            endpoint,
            [
@@ -287,7 +292,8 @@ defmodule Kogen.Provider.ChatGPT.SIWC do
              {"token_type_hint", "refresh_token"},
              {"client_id", credentials.client_id}
            ],
-           @timeout_ms
+           @timeout_ms,
+           proxy_env: Keyword.get(opts, :proxy_env, %{})
          ) do
       {:ok, 200, _body} -> true
       _unconfirmed -> false
@@ -297,7 +303,7 @@ defmodule Kogen.Provider.ChatGPT.SIWC do
   defp notice_shown?(%Profile{notice_shown: true}), do: true
   defp notice_shown?(_profile), do: false
 
-  defp oidc_options(opts), do: Keyword.take(opts, [:discovery_url])
+  defp oidc_options(opts), do: Keyword.take(opts, [:discovery_url, :proxy_env])
 
   defp normalize_authorizer(:ok), do: :ok
   defp normalize_authorizer({:error, _reason} = error), do: error
@@ -324,6 +330,13 @@ defmodule Kogen.Provider.ChatGPT.SIWC do
   defp message(:lock_timeout), do: "Timed out waiting for the ChatGPT credential lock."
   defp message(:invalid_account_label), do: "Invalid ChatGPT account label."
   defp message(_reason), do: "ChatGPT sign-in failed. Check the callback and try again."
+
+  defp transport_message(:proxy_auth_unsupported),
+    do:
+      "HTTPS proxy URLs with credentials are not supported; configure a proxy URL without credentials."
+
+  defp transport_message(:invalid_proxy),
+    do: "HTTPS proxy configuration is invalid; use an http://host:port URL without credentials."
 
   defp error(class, message), do: {:error, %ProviderError{class: class, message: message}}
 end

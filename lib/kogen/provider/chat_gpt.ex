@@ -5,11 +5,11 @@ defmodule Kogen.Provider.ChatGPT do
   alias Kogen.Contracts.ModelRequest
   alias Kogen.Contracts.ModelResponse
   alias Kogen.Contracts.ProviderError
+  alias Kogen.Http.Transport
   alias Kogen.Provider.ChatGPT.Auth
   alias Kogen.Provider.ChatGPT.Codec
   alias Kogen.Provider.ChatGPT.CredentialStore
   alias Kogen.Provider.ChatGPT.Refresh
-  alias Kogen.Provider.ChatGPT.Transport
 
   @responses_endpoint "https://api.openai.com/v1/responses"
   @codex_endpoint "https://chatgpt.com/backend-api/codex/responses"
@@ -18,7 +18,7 @@ defmodule Kogen.Provider.ChatGPT do
 
   defmodule Config do
     @moduledoc false
-    @derive {Inspect, except: [:access_token, :account_id]}
+    @derive {Inspect, except: [:access_token, :account_id, :proxy_env]}
     @enforce_keys [:endpoint, :timeout_ms]
     defstruct source: :custom,
               label: "custom",
@@ -28,7 +28,8 @@ defmodule Kogen.Provider.ChatGPT do
               credential_root: nil,
               backend: nil,
               access_token: nil,
-              account_id: nil
+              account_id: nil,
+              proxy_env: %{}
 
     @type t :: %__MODULE__{
             source: :kogen_owned | :codex_borrowed | :custom,
@@ -39,7 +40,8 @@ defmodule Kogen.Provider.ChatGPT do
             credential_root: Path.t() | nil,
             backend: :file | :keychain | nil,
             access_token: String.t() | nil,
-            account_id: String.t() | nil
+            account_id: String.t() | nil,
+            proxy_env: %{String.t() => String.t()}
           }
   end
 
@@ -133,11 +135,15 @@ defmodule Kogen.Provider.ChatGPT do
                    config.credential_root,
                    config.backend,
                    config.label,
-                   token
+                   token,
+                   proxy_env: config.proxy_env
                  ),
                {:ok, response, _body} <- execute(config, request, refreshed.access_token, nil) do
             {:ok, response}
           else
+            {:error, reason} when reason in [:invalid_proxy, :proxy_auth_unsupported] ->
+              transport_error(reason)
+
             {:error, _reason} ->
               login_error("ChatGPT rejected this session; run `kogen provider login chatgpt`.")
           end
@@ -152,10 +158,14 @@ defmodule Kogen.Provider.ChatGPT do
     case Refresh.access_token(
            config.credential_root,
            config.backend,
-           config.label
+           config.label,
+           proxy_env: config.proxy_env
          ) do
       {:ok, credentials} ->
         {:ok, credentials.access_token, nil}
+
+      {:error, reason} when reason in [:invalid_proxy, :proxy_auth_unsupported] ->
+        transport_error(reason)
 
       {:error, _reason} ->
         login_error("ChatGPT login is unavailable; run `kogen provider login chatgpt`.")
@@ -195,11 +205,15 @@ defmodule Kogen.Provider.ChatGPT do
              config.endpoint,
              headers(config, token, account_id),
              body,
-             config.timeout_ms
+             config.timeout_ms,
+             proxy_env: config.proxy_env
            ) do
       handle_response(response)
     else
       {:error, reason} when reason in [:timeout, :transport, :too_large] ->
+        transport_error(reason)
+
+      {:error, reason} when reason in [:invalid_proxy, :proxy_auth_unsupported] ->
         transport_error(reason)
 
       {:error, %ProviderError{} = error} ->
@@ -307,6 +321,20 @@ defmodule Kogen.Provider.ChatGPT do
 
   defp transport_error(:transport),
     do: provider_error(:transport, "ChatGPT request could not connect.")
+
+  defp transport_error(:proxy_auth_unsupported),
+    do:
+      provider_error(
+        :transport,
+        "HTTPS proxy URLs with credentials are not supported; configure a proxy URL without credentials."
+      )
+
+  defp transport_error(:invalid_proxy),
+    do:
+      provider_error(
+        :transport,
+        "HTTPS proxy configuration is invalid; use an http://host:port URL without credentials."
+      )
 
   defp provider_error(class, message),
     do: {:error, %ProviderError{class: class, message: message}}

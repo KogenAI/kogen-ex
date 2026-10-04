@@ -1,11 +1,11 @@
 defmodule Kogen.Provider.ChatGPT.Refresh do
   @moduledoc false
 
+  alias Kogen.Http.Transport
   alias Kogen.Provider.ChatGPT.CredentialStore
   alias Kogen.Provider.ChatGPT.Lock
   alias Kogen.Provider.ChatGPT.Refresh.Codec
   alias Kogen.Provider.ChatGPT.Refresh.TokenResponse
-  alias Kogen.Provider.ChatGPT.Transport
 
   @token_endpoint "https://auth.openai.com/api/accounts/oauth/token"
   @resource "https://api.openai.com/v1"
@@ -69,7 +69,10 @@ defmodule Kogen.Provider.ChatGPT.Refresh do
 
     url = Keyword.get(opts, :token_endpoint, @token_endpoint)
 
-    with {:ok, 200, body} <- Transport.post_form(url, fields, @timeout_ms),
+    with {:ok, 200, body} <-
+           Transport.post_form(url, fields, @timeout_ms,
+             proxy_env: Keyword.get(opts, :proxy_env, %{})
+           ),
          {:ok, response} <- Codec.decode(body),
          {:ok, updated} <- refreshed(current, response),
          :ok <- CredentialStore.save(root, backend, label, updated) do

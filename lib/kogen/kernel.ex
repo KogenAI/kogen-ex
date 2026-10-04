@@ -284,6 +284,7 @@ defmodule Kogen.Kernel do
   def provider_login(label) when is_binary(label) do
     with {:ok, root} <- RuntimeDiscovery.provider_root() do
       SIWC.login(root, RuntimeDiscovery.credential_backend(), label,
+        proxy_env: RuntimeDiscovery.proxy_environment(),
         authorize: fn url ->
           IO.puts("Continue with ChatGPT")
           IO.puts(url)
@@ -298,7 +299,9 @@ defmodule Kogen.Kernel do
           {:ok, %{label: String.t(), remote_revoked?: boolean()}} | {:error, ProviderError.t()}
   def provider_logout(label) when is_binary(label) do
     with {:ok, root} <- RuntimeDiscovery.provider_root() do
-      SIWC.logout(root, RuntimeDiscovery.credential_backend(), label)
+      SIWC.logout(root, RuntimeDiscovery.credential_backend(), label,
+        proxy_env: RuntimeDiscovery.proxy_environment()
+      )
     end
   end
 

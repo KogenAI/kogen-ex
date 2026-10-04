@@ -26,9 +26,10 @@ This repository is the single Mix application that forms Kogen's core. Current w
 | --- | --- | --- |
 | Contracts | Shared value types and port behaviours | — |
 | Proc | Bounded operating-system process execution | Contracts |
+| HTTP | Bounded OTP HTTP requests and HTTPS proxy tunnelling | — |
 | Project | Project configuration and check definitions | Contracts |
 | Intent | Human-authored Intent loading and validation | Contracts |
-| Provider | Model-provider requests and responses | Contracts, Proc |
+| Provider | Model-provider requests and responses | Contracts, HTTP, Proc |
 | Build | Developer loop and candidate lifecycle | Contracts |
 | Workspace | Isolated checkout and worktree operations | Contracts, Proc |
 | State | Persisted build state and receipts | Contracts, Workspace |

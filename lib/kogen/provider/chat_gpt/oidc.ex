@@ -15,8 +15,8 @@ defmodule Kogen.Provider.ChatGPT.OIDC do
   @moduledoc false
 
   alias Kogen.Contracts.JSON
+  alias Kogen.Http.Transport
   alias Kogen.Provider.ChatGPT.OIDC.Discovery
-  alias Kogen.Provider.ChatGPT.Transport
 
   @discovery_url "https://auth.openai.com/.well-known/openid-configuration"
   @timeout_ms 15_000
@@ -25,7 +25,8 @@ defmodule Kogen.Provider.ChatGPT.OIDC do
   def discovery(opts \\ []) do
     url = Keyword.get(opts, :discovery_url, @discovery_url)
 
-    with {:ok, 200, body} <- Transport.get(url, @timeout_ms),
+    with {:ok, 200, body} <-
+           Transport.get(url, @timeout_ms, proxy_env: Keyword.get(opts, :proxy_env, %{})),
          {:ok, discovery} <- decode_object(body),
          issuer when is_binary(issuer) <- discovery["issuer"],
          true <- issuer == "https://auth.openai.com",

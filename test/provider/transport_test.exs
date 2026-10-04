@@ -1,5 +1,5 @@
 defmodule Kogen.Provider.ChatGPT.TransportTest do
-  use Kogen.Testkit.Case
+  use ExUnit.Case, async: true
 
   alias Kogen.Contracts.ModelRequest
   alias Kogen.Contracts.ProviderError
@@ -69,6 +69,18 @@ defmodule Kogen.Provider.ChatGPT.TransportTest do
     assert {:error, %ProviderError{class: :timeout}} = ChatGPT.respond(config, request())
     send(server, :release)
     assert_receive {:captured_request, _request}
+  end
+
+  test "proxy URLs with credentials fail with a clear transport error" do
+    config = %{
+      config("https://chatgpt.com/responses")
+      | proxy_env: %{"https_proxy" => "http://test-user:test-password@127.0.0.1:8080"}
+    }
+
+    assert {:error, %ProviderError{class: :transport, message: message}} =
+             ChatGPT.respond(config, request())
+
+    assert message =~ "proxy URLs with credentials are not supported"
   end
 
   defp config(url) do

@@ -11,6 +11,33 @@ defmodule Kogen.Kernel.RuntimeTest do
     assert environment["PATH"] == "/mise/bin:/target/bin"
   end
 
+  test "proxy variables reach agent processes and git checks in both cases" do
+    proxy_env = %{
+      "https_proxy" => "http://lower.example:8080",
+      "HTTPS_PROXY" => "http://upper.example:8080",
+      "all_proxy" => "http://all-lower.example:8080",
+      "ALL_PROXY" => "http://all-upper.example:8080",
+      "http_proxy" => "http://http-lower.example:8080",
+      "HTTP_PROXY" => "http://http-upper.example:8080",
+      "no_proxy" => "localhost,.internal.example",
+      "NO_PROXY" => "example.com"
+    }
+
+    runtime =
+      Runtime.new(
+        Map.put(proxy_env, "PATH", "/system/bin"),
+        "/mise/bin/mise",
+        nil,
+        "/erts",
+        "/erts/bin"
+      )
+
+    process_env = Runtime.process_env(runtime, %{})
+
+    assert Map.take(process_env, Map.keys(proxy_env)) == proxy_env
+    assert Map.take(runtime.git_env, Map.keys(proxy_env)) == proxy_env
+  end
+
   test "escript path markers resolve symlinks to their immutable generation", %{
     tmp_dir: tmp_dir
   } do

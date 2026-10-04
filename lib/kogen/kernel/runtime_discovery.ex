@@ -7,6 +7,8 @@ defmodule Kogen.Kernel.RuntimeDiscovery do
   alias Kogen.Proc
   alias Kogen.Provider.ChatGPT
 
+  @proxy_environment_keys ~w(https_proxy HTTPS_PROXY all_proxy ALL_PROXY http_proxy HTTP_PROXY no_proxy NO_PROXY)
+
   @spec runtime() ::
           {:ok, Runtime.t()}
           | {:error,
@@ -88,6 +90,9 @@ defmodule Kogen.Kernel.RuntimeDiscovery do
     end
   end
 
+  @spec proxy_environment() :: %{String.t() => String.t()}
+  def proxy_environment, do: Map.take(System.get_env(), @proxy_environment_keys)
+
   @spec open_browser(String.t()) :: :ok | {:error, term()}
   def open_browser(url) when is_binary(url) do
     executable =
@@ -122,7 +127,10 @@ defmodule Kogen.Kernel.RuntimeDiscovery do
     end
   end
 
-  defp with_source({:ok, config}, source, label), do: {:ok, config, source, label}
+  defp with_source({:ok, config}, source, label) do
+    {:ok, %{config | proxy_env: proxy_environment()}, source, label}
+  end
+
   defp with_source({:error, %ProviderError{}} = error, _source, _label), do: error
 
   defp browser_environment do

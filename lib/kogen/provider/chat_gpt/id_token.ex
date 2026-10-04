@@ -2,8 +2,8 @@ defmodule Kogen.Provider.ChatGPT.IDToken do
   @moduledoc false
 
   alias Kogen.Contracts.JSON
+  alias Kogen.Http.Transport
   alias Kogen.Provider.ChatGPT.OIDC
-  alias Kogen.Provider.ChatGPT.Transport
 
   @issuer "https://auth.openai.com"
 
@@ -16,7 +16,7 @@ defmodule Kogen.Provider.ChatGPT.IDToken do
     with {:ok, header, claims, signing_input, signature} <- token_parts(token),
          %{"alg" => "RS256", "kid" => kid} <- header,
          {:ok, discovery} <- OIDC.discovery(oidc_options(opts)),
-         {:ok, keys} <- keys(discovery.jwks_uri),
+         {:ok, keys} <- keys(discovery.jwks_uri, Keyword.get(opts, :proxy_env, %{})),
          {:ok, key} <- signing_key(keys, kid),
          true <- :public_key.verify(signing_input, :sha256, signature, key),
          :ok <- validate_claims(claims, client_id, nonce) do
@@ -54,10 +54,10 @@ defmodule Kogen.Provider.ChatGPT.IDToken do
     end
   end
 
-  defp oidc_options(opts), do: Keyword.take(opts, [:discovery_url])
+  defp oidc_options(opts), do: Keyword.take(opts, [:discovery_url, :proxy_env])
 
-  defp keys(url) when is_binary(url) do
-    case Transport.get(url, 15_000) do
+  defp keys(url, proxy_env) when is_binary(url) do
+    case Transport.get(url, 15_000, proxy_env: proxy_env) do
       {:ok, 200, body} ->
         with {:ok, %{"keys" => keys}} <- decode_object(body), true <- is_list(keys) do
           {:ok, keys}

@@ -32,7 +32,7 @@ defmodule KogenChecks.GateWiringTest do
           Kogen.E2e
         ],
         Kogen.Workspace => [Kogen.Proc],
-        Kogen.Provider => [Kogen.Proc],
+        Kogen.Provider => [Kogen.Http, Kogen.Proc],
         Kogen.State => [Kogen.Workspace],
         Kogen.Checks => [Kogen.Proc, Kogen.Workspace, Kogen.Project],
         Kogen.Harness => [
