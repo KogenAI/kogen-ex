@@ -34,7 +34,9 @@ defmodule Kogen.State.Event do
     :credential_source,
     :credential_label,
     :tokens,
-    :wall_ms
+    :wall_ms,
+    :setup_key,
+    :saved_wall_ms
   ]
 
   @type t :: %__MODULE__{
@@ -69,6 +71,8 @@ defmodule Kogen.State.Event do
           credential_source: String.t() | nil,
           credential_label: String.t() | nil,
           tokens: term(),
-          wall_ms: non_neg_integer() | nil
+          wall_ms: non_neg_integer() | nil,
+          setup_key: String.t() | nil,
+          saved_wall_ms: non_neg_integer() | nil
         }
 end

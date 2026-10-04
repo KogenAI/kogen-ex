@@ -5,7 +5,7 @@ defmodule Kogen.Project.Loader do
   alias Kogen.Contracts.Project
   alias Kogen.Contracts.Yaml
 
-  @project_keys ~w(name checks format acceptance_checks setup fix diagnose protected_paths domains env sandbox)
+  @project_keys ~w(name checks format acceptance_checks setup setup_outputs fix diagnose protected_paths domains env sandbox)
   @env_name ~r/\A[A-Za-z_][A-Za-z0-9_]*\z/
 
   @type error :: %{line: pos_integer() | nil, message: String.t()}
@@ -51,6 +51,7 @@ defmodule Kogen.Project.Loader do
       check_specs(document, "acceptance_checks", false)
 
     {setup, setup_errors} = check_specs(document, "setup", false)
+    {setup_outputs, setup_output_errors} = setup_outputs(document)
     {fix, fix_errors} = check_specs(document, "fix", false)
     {diagnose, diagnose_errors} = diagnostics(document)
     {protected_paths, protected_errors} = protected_paths(document)
@@ -61,6 +62,7 @@ defmodule Kogen.Project.Loader do
       format: format,
       acceptance_checks: acceptance_checks,
       setup: setup,
+      setup_outputs: setup_outputs,
       fix: fix,
       diagnose: diagnose,
       protected_paths: protected_paths,
@@ -72,6 +74,7 @@ defmodule Kogen.Project.Loader do
       format_errors,
       acceptance_check_errors,
       setup_errors,
+      setup_output_errors,
       fix_errors,
       diagnose_errors,
       protected_errors,
@@ -99,6 +102,54 @@ defmodule Kogen.Project.Loader do
     {sandbox, sandbox_errors} = sandbox(document)
     {[env: env, sandbox: sandbox], env_errors ++ sandbox_errors}
   end
+
+  defp setup_outputs(document) do
+    case Map.fetch(document, "setup_outputs") do
+      {:ok, paths} when is_list(paths) -> validate_setup_outputs(paths)
+      {:ok, _value} -> {[], [issue("`setup_outputs` must be a list of relative paths")]}
+      :error -> {[], []}
+    end
+  end
+
+  defp validate_setup_outputs(paths) do
+    {values, errors} = validate_string_list(paths, "setup_outputs", "project", false)
+
+    path_errors =
+      paths
+      |> Enum.reject(&safe_setup_output_path?/1)
+      |> Enum.map(&issue("project.setup_outputs contains unsafe path #{inspect(&1)}"))
+
+    duplicate_errors =
+      if length(values) == length(Enum.uniq(values)),
+        do: [],
+        else: [issue("project.setup_outputs must not contain duplicate paths")]
+
+    overlap_errors = setup_output_overlap_errors(values)
+    {values, errors ++ path_errors ++ duplicate_errors ++ overlap_errors}
+  end
+
+  defp setup_output_overlap_errors(paths) do
+    overlaps =
+      for parent <- paths,
+          child <- paths,
+          parent != child,
+          String.starts_with?(child, parent <> "/"),
+          do: {parent, child}
+
+    Enum.map(overlaps, fn {parent, child} ->
+      issue("project.setup_outputs paths overlap: #{inspect(parent)} and #{inspect(child)}")
+    end)
+  end
+
+  defp safe_setup_output_path?(path) when is_binary(path) do
+    parts = String.split(path, "/")
+
+    path != "" and Path.type(path) == :relative and not String.contains?(path, <<0>>) and
+      not String.contains?(path, ["\n", "\r"]) and
+      Enum.all?(parts, &(&1 not in ["", ".", "..", ".git"]))
+  end
+
+  defp safe_setup_output_path?(_path), do: false
 
   defp project_result([], attributes), do: {:ok, struct(Project, attributes)}
   defp project_result(errors, _attributes), do: {:error, errors}

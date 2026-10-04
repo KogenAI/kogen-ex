@@ -31,6 +31,7 @@ defmodule Kogen.Kernel.Approval do
   alias Kogen.Intent
   alias Kogen.Kernel.Approval.Request
   alias Kogen.Kernel.Types.ApprovalPreview
+  alias Kogen.Kernel.Workspaces
   alias Kogen.Proc
   alias Kogen.Proc.Sandbox
   alias Kogen.Project
@@ -187,10 +188,20 @@ defmodule Kogen.Kernel.Approval do
     run_dir = approval_run_dir(env, request.slug)
     sandbox = approval_sandbox(request, project, run_dir, env)
     root = request.project_root
+    git_env = Runtime.git_environment(env)
 
     with {:ok, created?} <- stage_candidate(root, relative, bytes) do
       result =
-        with :ok <- Setup.run(project.setup, root, run_dir, env, Proc, sandbox) do
+        with {:ok, setup_result} <-
+               Project.run_setup(
+                 project,
+                 root,
+                 setup_cache_root(root, request.home),
+                 base_tree_sha(root, git_env),
+                 env,
+                 fn -> Setup.run(project.setup, root, run_dir, env, Proc, sandbox) end
+               ),
+             :ok <- Project.record_setup_reuse(run_dir, setup_result) do
           run_acceptance_checks(project.acceptance_checks, root, relative, env)
         end
 
@@ -220,6 +231,18 @@ defmodule Kogen.Kernel.Approval do
       "#{System.monotonic_time(:microsecond)}-#{System.unique_integer([:positive, :monotonic])}"
 
     Path.join([Runtime.temporary_directory(env), "kogen-approval", slug, run_id])
+  end
+
+  defp setup_cache_root(_project_root, nil), do: nil
+
+  defp setup_cache_root(project_root, home),
+    do: Path.join(Workspaces.root(project_root, home), "setup-cache")
+
+  defp base_tree_sha(project_root, git_env) do
+    case Workspace.rev_parse(project_root, "HEAD^{tree}", git_env) do
+      {:ok, sha} -> sha
+      {:error, _reason} -> nil
+    end
   end
 
   defp stage_candidate(root, relative, bytes) do

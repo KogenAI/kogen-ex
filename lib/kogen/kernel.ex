@@ -33,6 +33,7 @@ defmodule Kogen.Kernel do
   alias Kogen.Kernel.Approval.Request, as: ApprovalRequest
   alias Kogen.Kernel.Origin
   alias Kogen.Kernel.RuntimeDiscovery
+  alias Kogen.Kernel.ShapePaths
   alias Kogen.Kernel.StateView
   alias Kogen.Kernel.Types.ApprovalPreview
   alias Kogen.Kernel.Types.BuildOptions
@@ -339,7 +340,7 @@ defmodule Kogen.Kernel do
   end
 
   defp shape_environment(slug, project_root, runtime, project) do
-    run_dir = shape_run_dir(runtime.base_env, slug)
+    run_dir = ShapePaths.run_dir(runtime.base_env, slug)
 
     runtime =
       runtime
@@ -357,6 +358,11 @@ defmodule Kogen.Kernel do
   end
 
   defp shape_request(%ShapeInputs{} = inputs) do
+    git_env = Runtime.git_environment(inputs.process_env)
+
+    {setup_cache_root, base_tree_sha} =
+      ShapePaths.setup_cache(inputs.project_root, inputs.home, git_env)
+
     %ShapeRequest{
       workdir: inputs.project_root,
       slug: inputs.slug,
@@ -366,8 +372,10 @@ defmodule Kogen.Kernel do
       provider_mod: ChatGPT,
       provider_config: inputs.provider_config,
       env: inputs.process_env,
-      git_env: Runtime.git_environment(inputs.process_env),
+      git_env: git_env,
       run_dir: inputs.run_dir,
+      setup_cache_root: setup_cache_root,
+      base_tree_sha: base_tree_sha,
       sandbox: %Sandbox{
         enabled:
           inputs.project.sandbox and not Runtime.sandboxed?(inputs.process_env) and
@@ -381,17 +389,5 @@ defmodule Kogen.Kernel do
         workspace_is_project: true
       }
     }
-  end
-
-  defp shape_run_dir(process_env, slug) do
-    run_id =
-      "#{System.monotonic_time(:microsecond)}-#{System.unique_integer([:positive, :monotonic])}"
-
-    Path.join([
-      Runtime.temporary_directory(process_env),
-      "kogen-shaper",
-      slug,
-      run_id
-    ])
   end
 end

@@ -14,6 +14,7 @@ defmodule Kogen.Shaper.Runner do
   alias Kogen.Shaper.Request
   alias Kogen.Shaper.Result
   alias Kogen.Shaper.Runner.State
+  alias Kogen.Shaper.Setup
   alias Kogen.Shaper.ShapeWarnings
   alias Kogen.Shaper.Validation
 
@@ -25,52 +26,9 @@ defmodule Kogen.Shaper.Runner do
          {:ok, project} <- ProjectDomain.load(request.workdir),
          {:ok, opts} <- harness_options(request, project),
          :ok <- ShapeWarnings.clear(request.workdir, request.slug),
-         :ok <- setup_project(request, project) do
+         :ok <- Setup.run(request, project) do
       deadline = System.monotonic_time(:millisecond) + request.limits.wall_ms
       attempt(%State{request: request, project: project, opts: opts, deadline: deadline})
-    end
-  end
-
-  defp setup_project(request, %Project{} = project) do
-    env = Map.merge(request.env, project.env)
-
-    case File.mkdir_p(Path.join(request.run_dir, "logs")) do
-      :ok ->
-        Enum.reduce_while(Enum.with_index(project.setup, 1), :ok, fn {spec, index}, :ok ->
-          run_setup(spec, request, env, index)
-        end)
-
-      {:error, reason} ->
-        {:error, failure(:environment, :setup_log_failed, inspect(reason))}
-    end
-  end
-
-  defp run_setup(spec, request, env, index) do
-    log_path = Path.join([request.run_dir, "logs", "shape-setup-#{index}-#{spec.name}.log"])
-
-    case Proc.run(spec.argv,
-           cd: request.workdir,
-           env: env,
-           timeout_ms: spec.timeout_ms,
-           log_path: log_path
-         ) do
-      {:ok, %{exit_status: 0, timed_out: false}} ->
-        {:cont, :ok}
-
-      {:ok, result} ->
-        detail =
-          "Setup #{spec.name} failed (status=#{inspect(result.exit_status)}, timed_out=#{result.timed_out}).\n#{result.output_tail}"
-
-        {:halt, {:error, failure(:environment, :setup_failed, detail)}}
-
-      {:error, reason} ->
-        {:halt,
-         {:error,
-          failure(
-            :environment,
-            :setup_failed,
-            "Setup #{spec.name} could not run: #{inspect(reason)}"
-          )}}
     end
   end
 

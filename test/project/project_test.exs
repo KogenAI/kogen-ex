@@ -24,6 +24,7 @@ defmodule Kogen.Project.ProjectTest do
       - name: assets
         argv: [npm, ci]
         timeout_ms: 120000
+    setup_outputs: [deps, _build]
     diagnose:
       - glob: "lib/**/*.ex"
         argv: [mix, compile]
@@ -51,6 +52,8 @@ defmodule Kogen.Project.ProjectTest do
              %CheckSpec{name: "assets", argv: ["npm", "ci"], timeout_ms: 120_000}
            ]
 
+    assert project.setup_outputs == ["deps", "_build"]
+
     assert project.fix == [
              %CheckSpec{name: "format", argv: ["mix", "format", "--force"], timeout_ms: 12_000}
            ]
@@ -68,6 +71,7 @@ defmodule Kogen.Project.ProjectTest do
     assert project.format == nil
     assert project.fix == []
     assert project.setup == []
+    assert project.setup_outputs == []
     assert project.diagnose == []
     assert project.protected_paths == []
     assert project.domains == %{}
@@ -170,6 +174,18 @@ defmodule Kogen.Project.ProjectTest do
 
     assert {:error, [%{message: message}]} = Kogen.Project.load(root)
     assert message =~ "setup[1].argv must not be empty"
+  end
+
+  test "setup outputs must be safe, distinct, non-overlapping relative paths", %{tmp_dir: root} do
+    write_config(root, "name: tiny-app\nchecks: []\nsetup_outputs: [../outside]\n")
+
+    assert {:error, [%{message: message}]} = Kogen.Project.load(root)
+    assert message =~ "unsafe path"
+
+    write_config(root, "name: tiny-app\nchecks: []\nsetup_outputs: [deps, deps/cache]\n")
+
+    assert {:error, [%{message: message}]} = Kogen.Project.load(root)
+    assert message =~ "paths overlap"
   end
 
   test "validates argv, timeout, protected paths, diagnoses, and domain roots", %{tmp_dir: root} do

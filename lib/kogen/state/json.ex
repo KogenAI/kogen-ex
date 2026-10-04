@@ -46,6 +46,8 @@ defmodule Kogen.State.Json do
     finished_at: "finished_at",
     tokens: "tokens",
     wall_ms: "wall_ms",
+    setup_key: "setup_key",
+    saved_wall_ms: "saved_wall_ms",
     credential_source: "credential_source",
     credential_label: "credential_label",
     tokens: "tokens"

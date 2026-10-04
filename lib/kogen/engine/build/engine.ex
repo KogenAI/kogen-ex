@@ -178,19 +178,12 @@ defmodule Kogen.Engine.Build.Engine do
   defp start_candidate(prepared, path, project, process_env) do
     session = candidate_session(prepared, path, project, process_env)
 
-    case Setup.run(
-           project.setup,
-           path,
-           prepared.run.dir,
-           process_env,
-           Kogen.Proc,
-           session.sandbox
-         ) do
+    case Setup.run_cached(session) do
       :ok ->
         start_cycle(session)
 
-      {:error, %Failure{} = failure} ->
-        fail_candidate_setup(prepared.request, prepared.run, path, failure)
+      {:error, reason} ->
+        fail_candidate_setup(prepared.request, prepared.run, path, reason)
     end
   end
 

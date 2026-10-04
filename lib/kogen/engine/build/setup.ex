@@ -5,6 +5,11 @@ defmodule Kogen.Engine.Build.Setup do
   alias Kogen.Contracts.CommandExit
   alias Kogen.Contracts.Failure
   alias Kogen.Contracts.ProcResult
+  alias Kogen.Engine.Build.Lifecycle
+  alias Kogen.Engine.Build.Session
+  alias Kogen.Proc.Sandbox
+  alias Kogen.Project, as: ProjectDomain
+  alias Kogen.Workspace
 
   @spec run([CheckSpec.t()], Path.t(), Path.t(), %{String.t() => String.t()}, module()) ::
           :ok | {:error, Failure.t()}
@@ -19,7 +24,7 @@ defmodule Kogen.Engine.Build.Setup do
           Path.t(),
           %{String.t() => String.t()},
           module(),
-          Kogen.Proc.Sandbox.t() | nil
+          Sandbox.t() | nil
         ) :: :ok | {:error, Failure.t()}
   def run([], _workdir, _run_dir, _env, _proc_mod, _sandbox), do: :ok
 
@@ -30,6 +35,38 @@ defmodule Kogen.Engine.Build.Setup do
 
       {:error, reason} ->
         {:error, failure(:setup_failed, "cannot prepare setup logs: #{inspect(reason)}")}
+    end
+  end
+
+  @spec run_cached(Session.t()) :: :ok | {:error, term()}
+  def run_cached(%Session{} = session) do
+    cache_root = Path.join(session.request.workspace_root, "setup-cache")
+
+    base_tree_sha =
+      case Workspace.rev_parse(session.workdir, "HEAD^{tree}", session.git_env) do
+        {:ok, sha} -> sha
+        {:error, _reason} -> nil
+      end
+
+    with {:ok, setup_result} <-
+           ProjectDomain.run_setup(
+             session.project,
+             session.workdir,
+             cache_root,
+             base_tree_sha,
+             session.process_env,
+             fn ->
+               run(
+                 session.project.setup,
+                 session.workdir,
+                 session.run_dir,
+                 session.process_env,
+                 Kogen.Proc,
+                 session.sandbox
+               )
+             end
+           ) do
+      Lifecycle.record_setup_reuse(session.run, setup_result)
     end
   end
 

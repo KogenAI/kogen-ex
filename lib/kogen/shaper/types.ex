@@ -15,7 +15,8 @@ defmodule Kogen.Shaper.Request do
     :git_env,
     :run_dir
   ]
-  defstruct @enforce_keys ++ [sandbox: nil, limits: @default_limits]
+  defstruct @enforce_keys ++
+              [sandbox: nil, setup_cache_root: nil, base_tree_sha: nil, limits: @default_limits]
 
   @spec validate(t()) :: :ok | {:error, atom()}
   def validate(%__MODULE__{} = request) do
@@ -83,6 +84,8 @@ defmodule Kogen.Shaper.Request do
           env: %{String.t() => String.t()},
           git_env: %{String.t() => String.t()},
           run_dir: Path.t(),
+          setup_cache_root: Path.t() | nil,
+          base_tree_sha: String.t() | nil,
           sandbox: Kogen.Proc.Sandbox.t() | nil,
           limits: limits()
         }

@@ -252,6 +252,18 @@ elif isinstance(raw_setup, dict) and isinstance(raw_setup.get("argv"), list):
 else:
     setup_argv = []
 
+if isinstance(raw_setup, str):
+    setup_text = raw_setup
+elif isinstance(raw_setup, list):
+    setup_text = " ".join(str(part) for part in raw_setup)
+elif isinstance(raw_setup, dict) and isinstance(raw_setup.get("argv"), list):
+    setup_text = " ".join(str(part) for part in raw_setup["argv"])
+else:
+    setup_text = ""
+
+if setup_argv and re.search(r"(?<![A-Za-z0-9_])mix(?=\s|$)", setup_text):
+    lines.append("setup_outputs: [deps, _build]")
+
 if setup_argv:
     setup_argv = timed("setup:task-setup", setup_argv)
     lines += [

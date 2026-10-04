@@ -23,6 +23,10 @@ defmodule Kogen.Workspace do
   @spec tree_hash(Path.t(), git_env()) :: {:ok, String.t()} | {:error, term()}
   def tree_hash(path, git_env), do: Checkout.tree_hash(path, git_env)
 
+  @spec copy_on_write(Path.t(), Path.t()) :: :ok | {:error, term()}
+  def copy_on_write(source, destination),
+    do: Kogen.Workspace.Copy.copy_on_write(source, destination)
+
   @spec diff(Path.t(), String.t(), git_env()) :: {:ok, binary()} | {:error, term()}
   def diff(path, base_sha, git_env), do: Kogen.Workspace.Diff.diff(path, base_sha, git_env)
 
