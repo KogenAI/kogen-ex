@@ -85,6 +85,11 @@ elif isinstance(raw_env, list):
 else:
     env = {}
 
+# Kogen forwards only an allow-list of controller variables; copy named extras into the project env.
+for key in os.environ.get("KOGEN_BENCH_ENV_PASSTHROUGH", "").split():
+    if re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key) and key in os.environ:
+        env.setdefault(key, os.environ[key])
+
 if any(not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_]*", key) for key in env):
     raise SystemExit("task.json env keys must be environment variable names")
 
