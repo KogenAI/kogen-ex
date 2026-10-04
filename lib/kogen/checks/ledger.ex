@@ -7,6 +7,7 @@ defmodule Kogen.Checks.Ledger do
   alias Kogen.Contracts.CommandExit
   alias Kogen.Contracts.Failure
   alias Kogen.Contracts.Intent
+  alias Kogen.Contracts.MiseEnvironment
   alias Kogen.Contracts.ProcResult
   alias Kogen.Proc
   alias Kogen.Proc.Sandbox
@@ -217,16 +218,11 @@ defmodule Kogen.Checks.Ledger do
 
   defp tool_missing_failure(run_dir, exit_status) do
     output = acceptance_output(Path.join([run_dir, "logs", "acceptance.log"]))
+    tool = missing_runtime_tool(output) || "a required tool"
 
     detail =
-      case missing_runtime_tool(output) do
-        tool when is_binary(tool) ->
-          "Acceptance test runner could not find #{tool}.\nOutput (first 20 lines):\n#{output}"
-
-        nil ->
-          "Acceptance test runner could not find a required tool (exit status #{exit_status}).\n" <>
-            "Output (first 20 lines):\n#{output}"
-      end
+      "Acceptance test runner could not find #{tool} (exit #{exit_status}).\n" <>
+        "Output (first 20 lines):\n#{output}"
 
     {:error, failure(:environment, :tool_missing, detail)}
   end
@@ -322,14 +318,7 @@ defmodule Kogen.Checks.Ledger do
       Path.relative_to(test_path, workdir)
     ]
 
-    if mise_config?(env), do: ["mise", "exec", "--" | argv], else: argv
-  end
-
-  defp mise_config?(env) do
-    case Map.get(env, "MISE_CONFIG_FILE") do
-      path when is_binary(path) -> String.trim(path) != ""
-      _missing -> false
-    end
+    if MiseEnvironment.configured?(env), do: ["mise", "exec", "--" | argv], else: argv
   end
 
   defp process_result(result) do

@@ -1,6 +1,14 @@
 defmodule Kogen.Contracts.MiseEnvironment do
   @moduledoc "Pure helpers for configuring mise through process environment values."
 
+  @spec configured?(map()) :: boolean()
+  def configured?(env) do
+    case Map.get(env, "MISE_CONFIG_FILE") do
+      path when is_binary(path) -> String.trim(path) != ""
+      _missing -> false
+    end
+  end
+
   @spec trust_workspace(map(), Path.t()) :: map()
   def trust_workspace(env, path) when is_map(env) and is_binary(path),
     do: Map.put(env, "MISE_TRUSTED_CONFIG_PATHS", path)
