@@ -24,6 +24,11 @@ defmodule Kogen.Provider.ChatGPT.SIWCCCodec do
       "stream" => true
     }
 
+    body =
+      if is_binary(request.prompt_cache_key),
+        do: Map.put(body, "prompt_cache_key", request.prompt_cache_key),
+        else: body
+
     {:ok, body |> :json.encode() |> IO.iodata_to_binary()}
   rescue
     ErlangError -> Errors.malformed()

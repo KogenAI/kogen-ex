@@ -34,11 +34,12 @@ defmodule Kogen.Harness.Exchange do
   alias Kogen.Harness.Codec
   alias Kogen.Harness.Exchange.Request
   alias Kogen.Harness.Opts
+  alias Kogen.Harness.PromptCacheKey
   alias Kogen.Harness.Recording
 
   @spec respond(Opts.t(), Request.t()) :: {:ok, ModelResponse.t()} | {:error, term()}
   def respond(%Opts{} = opts, %Request{} = exchange_request) do
-    request = build_request(exchange_request)
+    request = build_request(opts, exchange_request)
 
     with :ok <-
            Recording.append(
@@ -53,14 +54,17 @@ defmodule Kogen.Harness.Exchange do
     end
   end
 
-  defp build_request(request) do
-    Codec.request(
-      request.model,
-      request.effort,
-      request.instructions,
-      request.items,
-      request.tool_names
-    )
+  defp build_request(opts, request) do
+    %{
+      Codec.request(
+        request.model,
+        request.effort,
+        request.instructions,
+        request.items,
+        request.tool_names
+      )
+      | prompt_cache_key: PromptCacheKey.for_run_stage(opts.run_dir, request.stage)
+    }
   end
 
   defp provider_call(_opts, _request, remaining_ms) when remaining_ms <= 0, do: timeout_error()

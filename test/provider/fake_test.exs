@@ -61,6 +61,16 @@ defmodule Kogen.Provider.FakeTest do
     assert message =~ "No recorded provider response"
   end
 
+  test "cache routing keys do not change fixture fingerprints" do
+    request = request()
+    assert {:ok, original} = Codec.request_fingerprint(request)
+
+    assert {:ok, with_cache_key} =
+             Codec.request_fingerprint(%{request | prompt_cache_key: String.duplicate("b", 64)})
+
+    assert with_cache_key == original
+  end
+
   test "replays provider error events with their classified error", %{tmp_dir: tmp_dir} do
     error = %{"type" => "error", "error" => %{"code" => "usage_limit_reached"}}
     path = fixture(tmp_dir, "error.jsonl", request(), [error])

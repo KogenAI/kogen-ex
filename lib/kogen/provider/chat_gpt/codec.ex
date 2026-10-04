@@ -59,7 +59,8 @@ defmodule Kogen.Provider.ChatGPT.Codec do
   @spec request_fingerprint(ModelRequest.t()) :: {:ok, String.t()} | {:error, ProviderError.t()}
   def request_fingerprint(%ModelRequest{} = request) do
     with true <- valid_request?(request),
-         {:ok, encoded} <- request |> request_body() |> encode_json() do
+         {:ok, encoded} <-
+           request |> Map.put(:prompt_cache_key, nil) |> request_body() |> encode_json() do
       digest = :sha256 |> :crypto.hash(encoded) |> Base.encode16(case: :lower)
       {:ok, digest}
     else
@@ -99,7 +100,8 @@ defmodule Kogen.Provider.ChatGPT.Codec do
     is_binary(request.model) and request.model != "" and is_binary(request.effort) and
       request.effort != "" and is_binary(request.instructions) and is_list(request.input) and
       is_list(request.tools) and
-      (is_nil(request.previous_response_id) or is_binary(request.previous_response_id))
+      (is_nil(request.previous_response_id) or is_binary(request.previous_response_id)) and
+      (is_nil(request.prompt_cache_key) or is_binary(request.prompt_cache_key))
   end
 
   defp request_body(request) do
@@ -120,8 +122,13 @@ defmodule Kogen.Provider.ChatGPT.Codec do
         response_id -> Map.put(body, "previous_response_id", response_id)
       end
 
-    case_result
+    maybe_put_prompt_cache_key(case_result, request.prompt_cache_key)
   end
+
+  defp maybe_put_prompt_cache_key(body, cache_key) when is_binary(cache_key),
+    do: Map.put(body, "prompt_cache_key", cache_key)
+
+  defp maybe_put_prompt_cache_key(body, _cache_key), do: body
 
   defp encode_json(value) do
     {:ok, value |> :json.encode() |> IO.iodata_to_binary()}

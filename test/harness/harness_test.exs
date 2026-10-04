@@ -9,7 +9,9 @@ defmodule Kogen.Harness.Tests do
   alias Kogen.Harness
   alias Kogen.Harness.Opts
   alias Kogen.Harness.Plan
+  alias Kogen.Harness.PromptCacheKey
   alias Kogen.Harness.Review
+  alias Kogen.Provider.ChatGPT.Codec, as: ChatGPTCodec
   alias Kogen.Testkit.HarnessScriptedProvider, as: ScriptedProvider
 
   @intent """
@@ -41,6 +43,60 @@ defmodule Kogen.Harness.Tests do
     assert transcript =~ "tool_call"
     assert transcript =~ "tool_result"
     assert transcript =~ "function_call_output"
+  end
+
+  test "model turns reuse a stage cache key and byte-stable request prefix", %{
+    tmp_dir: tmp_dir
+  } do
+    provider =
+      ScriptedProvider.start([
+        read_call("README.md"),
+        read_call("README.md"),
+        message("Done.")
+      ])
+
+    opts = options(tmp_dir, provider)
+
+    assert {:ok, result} = Harness.develop(opts, @intent, nil, nil)
+    assert result.turns == 3
+
+    requests = ScriptedProvider.requests(provider)
+    bodies = Enum.map(requests, &encode_provider_request!/1)
+    cache_keys = Enum.map(requests, & &1.prompt_cache_key)
+
+    assert [cache_key | remaining_cache_keys] = cache_keys
+    assert remaining_cache_keys == [cache_key, cache_key]
+    assert cache_key == PromptCacheKey.for_run_stage(opts.run_dir, :develop)
+    refute cache_key == PromptCacheKey.for_run_stage(opts.run_dir, :shape)
+    refute cache_key == PromptCacheKey.for_run_stage(Path.join(tmp_dir, "other-run"), :develop)
+
+    Enum.each(requests, fn request ->
+      assert request.previous_response_id == nil
+      assert request.instructions == hd(requests).instructions
+      assert request.tools == hd(requests).tools
+    end)
+
+    Enum.each(bodies, fn body ->
+      assert String.contains?(body, ~s("prompt_cache_key":) <> encode_json(cache_key))
+      assert body =~ ~s("store":false)
+      refute body =~ ~s("previous_response_id")
+
+      assert String.contains?(
+               body,
+               ~s("instructions":) <> encode_json(hd(requests).instructions)
+             )
+
+      assert String.contains?(body, ~s("tools":) <> encode_json(hd(requests).tools))
+    end)
+
+    requests
+    |> Enum.zip(tl(requests))
+    |> Enum.each(fn {earlier, later} ->
+      prefix = encoded_input_prefix(earlier)
+      later_body = encode_provider_request!(later)
+      assert earlier.input != []
+      assert later_body =~ prefix
+    end)
   end
 
   test "read rejects lexical and symlink escapes from the worktree", %{tmp_dir: tmp_dir} do
@@ -324,4 +380,15 @@ defmodule Kogen.Harness.Tests do
   end
 
   defp usage, do: %{input: 10, cached_input: 0, cache_write: 0, output: 5, reasoning: 1}
+
+  defp encode_provider_request!(request) do
+    assert {:ok, encoded} = ChatGPTCodec.encode_request(request)
+    encoded
+  end
+
+  defp encoded_input_prefix(request) do
+    ~s("input":[) <> Enum.map_join(request.input, ",", &encode_json/1)
+  end
+
+  defp encode_json(value), do: value |> :json.encode() |> IO.iodata_to_binary()
 end

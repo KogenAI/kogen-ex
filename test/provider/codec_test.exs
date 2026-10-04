@@ -17,6 +17,20 @@ defmodule Kogen.Provider.ChatGPT.CodecTest do
     refute Map.has_key?(body, "max_output_tokens")
   end
 
+  test "encodes the prompt cache key for stateless ChatGPT requests" do
+    key = String.duplicate("a", 64)
+    request = %{request() | prompt_cache_key: key}
+
+    for mode <- [:codex, :siwc] do
+      assert {:ok, encoded} = Codec.encode_request(request, mode)
+      body = :json.decode(encoded)
+
+      assert body["prompt_cache_key"] == key
+      assert body["store"] == false
+      refute Map.has_key?(body, "previous_response_id")
+    end
+  end
+
   test "encodes ChatGPT plan requests with documented stateless additional tools" do
     tool = %{
       "type" => "function",
