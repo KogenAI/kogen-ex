@@ -35,6 +35,20 @@ KOGEN_BIN=${KOGEN_BIN:-$(command -v kogen || true)}
   exit 3
 }
 
+# A benchmark work_dir is a throwaway clone. Refuse shared task bases and result trees.
+case "$work_dir/" in
+  */bench/tasks/*|*/bench/night-*/*|/srv/bh/bench/tasks/*)
+    echo "work_dir must be a fresh clone, not a shared benchmark tree: $work_dir" >&2
+    exit 2
+    ;;
+esac
+case "$out_dir/" in
+  */bench/night-*/*|*/bench/tasks/*)
+    echo "out_dir must not be inside a shared benchmark tree: $out_dir" >&2
+    exit 2
+    ;;
+esac
+
 work_base=$(git -C "$work_dir" rev-parse HEAD)
 work_status=$(git -C "$work_dir" status --porcelain --untracked-files=all)
 [ -z "$work_status" ] || {
