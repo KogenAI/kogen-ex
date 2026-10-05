@@ -45,7 +45,7 @@ defmodule Kogen.Build.Recipe do
       Map.put(recipe, :escalation, %{
         model: "gpt-6.1-sol",
         effort: "high",
-        on: [:repair_cap, :unchanged, :gate_red]
+        on: [:repair_cap, :unchanged, :gate_red, :turn_cap, :wall_cap]
       })
     else
       recipe

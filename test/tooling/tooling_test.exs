@@ -1,3 +1,24 @@
+defmodule Kogen.Tooling.ToolsTest.ProcSpy do
+  @moduledoc false
+
+  alias Kogen.Contracts.ProcResult
+
+  @spec run([String.t()], keyword()) :: {:ok, ProcResult.t()}
+  def run(argv, options) do
+    send(Process.get({__MODULE__, :receiver}), {:tool_run, argv, options})
+
+    {:ok,
+     %ProcResult{
+       argv: argv,
+       exit_status: 0,
+       timed_out: false,
+       output_tail: "",
+       log_path: Keyword.fetch!(options, :log_path),
+       duration_ms: 0
+     }}
+  end
+end
+
 defmodule Kogen.Tooling.ToolsTest do
   use Kogen.Testkit.Case
 
@@ -8,6 +29,7 @@ defmodule Kogen.Tooling.ToolsTest do
   alias Kogen.Tooling.ToolArgs
   alias Kogen.Tooling.ToolResult
   alias Kogen.Tooling.Tools
+  alias Kogen.Tooling.ToolsTest.ProcSpy
 
   test "schemas and decoded calls share the Builder tool contract" do
     assert Codec.tool_names(:developer) == [:read, :search, :edit, :write, :shell]
@@ -42,6 +64,23 @@ defmodule Kogen.Tooling.ToolsTest do
 
     assert error =~ "Path escapes the worktree"
     refute error =~ "outside secret"
+  end
+
+  test "shell timeout stays fixed when a call includes a timeout override", %{tmp_dir: tmp_dir} do
+    Process.put({ProcSpy, :receiver}, self())
+    workdir = Path.join(tmp_dir, "candidate")
+    File.mkdir_p!(workdir)
+    context = %{context(workdir, Path.join(tmp_dir, "run")) | proc_mod: ProcSpy}
+
+    assert %ToolResult{is_error: false} =
+             Tools.run(
+               context,
+               call("shell", %{"cmd" => "true", "timeout_ms" => 120_000_000}),
+               [:shell]
+             )
+
+    assert_receive {:tool_run, ["sh", "-c", "true"], options}
+    assert options[:timeout_ms] == 120_000
   end
 
   defp context(workdir, run_dir) do

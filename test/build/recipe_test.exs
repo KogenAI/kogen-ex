@@ -37,7 +37,7 @@ defmodule Kogen.Build.RecipeTest do
     assert recipe.escalation == %{
              model: "gpt-6.1-sol",
              effort: "high",
-             on: [:repair_cap, :unchanged, :gate_red]
+             on: [:repair_cap, :unchanged, :gate_red, :turn_cap, :wall_cap]
            }
   end
 
@@ -64,7 +64,7 @@ defmodule Kogen.Build.RecipeTest do
     assert escalate_shell.escalation == %{
              model: "gpt-6.1-sol",
              effort: "high",
-             on: [:repair_cap, :unchanged, :gate_red]
+             on: [:repair_cap, :unchanged, :gate_red, :turn_cap, :wall_cap]
            }
   end
 end

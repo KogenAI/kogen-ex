@@ -172,7 +172,7 @@ defmodule Kogen.Build.CyclePropertyTest do
   end
 
   defp ok(:done_gate) do
-    for outcome <- [:done, :done, :gate_red, :gave_up, :bogus],
+    for outcome <- [:done, :done, :gate_red, :turn_cap, :wall_cap, :bogus],
         do: {:stage_ok, :done_gate, %{outcome: outcome}}
   end
 

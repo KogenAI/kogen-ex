@@ -3,6 +3,7 @@ defmodule Kogen.Engine.BuildEscalationTest do
 
   alias Kogen.Build.Cycle
   alias Kogen.Engine.Build.Escalation
+  alias Kogen.Engine.Build.GateSupport
   alias Kogen.Engine.Build.Request
   alias Kogen.Engine.Build.Session
   alias Kogen.Engine.Runtime
@@ -32,6 +33,7 @@ defmodule Kogen.Engine.BuildEscalationTest do
     assert {:ok, escalated} = Escalation.reset_candidate(session)
     assert escalated.workdir != luna_path
     assert escalated.attempt == :escalation
+    assert GateSupport.harness_options(escalated).limits == %{max_turns: 60, wall_ms: 1_800_000}
     assert {:ok, base_sha} = Workspace.rev_parse(escalated.workdir, "HEAD", escalated.git_env)
     assert base_sha == fixture.base_sha
     assert File.read!(Path.join(escalated.workdir, "lib/tiny_app.ex")) =~ "# revision: base"
@@ -175,7 +177,7 @@ defmodule Kogen.Engine.BuildEscalationTest do
       base: "main",
       model: "gpt-6-luna",
       effort: "max",
-      recipe: Kogen.Engine.build_recipe("direct-escalate", "gpt-6-luna", "max"),
+      recipe: Kogen.Engine.build_recipe("escalate-shell", "gpt-6-luna", "max"),
       runtime: runtime,
       provider_mod: Kogen.Provider.Fake,
       provider_config: nil,

@@ -100,7 +100,7 @@ defmodule Kogen.Harness.Result do
   @enforce_keys [:outcome, :gate, :items, :turns, :usage, :transcript_path]
   defstruct @enforce_keys
 
-  @type outcome :: :done | :gate_red | :gate_environment | :gave_up
+  @type outcome :: :done | :gate_red | :gate_environment | :turn_cap | :wall_cap
   @type t :: %__MODULE__{
           outcome: outcome(),
           gate: map() | nil,

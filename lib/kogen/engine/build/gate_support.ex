@@ -191,9 +191,14 @@ defmodule Kogen.Engine.Build.GateSupport do
     {%Failure{class: :environment, reason: :check_unavailable, detail: detail}, detail}
   end
 
-  def gate_failure(%HarnessResult{outcome: :gave_up}) do
-    detail = "Developer exhausted its turn or wall limit."
-    {%Failure{class: :candidate, reason: :developer_gave_up, detail: detail}, detail}
+  def gate_failure(%HarnessResult{outcome: reason}) when reason in [:turn_cap, :wall_cap] do
+    detail =
+      case reason do
+        :turn_cap -> "Developer exhausted its turn cap."
+        :wall_cap -> "Developer exhausted its wall-clock cap."
+      end
+
+    {%Failure{class: :candidate, reason: reason, detail: detail}, detail}
   end
 
   def gate_failure(%HarnessResult{outcome: :gate_red, gate: gate}) do

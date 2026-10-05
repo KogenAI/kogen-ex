@@ -171,8 +171,8 @@ defmodule Kogen.Build.Cycle do
         next = %{next | last_gate_findings: Escalation.findings(data)}
         repair(next, :done_gate_red, %{outcome: :gate_red, test_progress: progress})
 
-      :gave_up ->
-        finish(state, :failed, :developer_gave_up)
+      reason when reason in [:turn_cap, :wall_cap] ->
+        fail_candidate(state, reason, reason)
 
       _other ->
         fail_controller(state, :invalid_done_gate)

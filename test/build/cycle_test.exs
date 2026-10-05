@@ -239,16 +239,6 @@ defmodule Kogen.Build.CycleTest do
     refute Enum.any?(effects, &match?({:escalate, _args}, &1))
   end
 
-  test "direct-escalate does not escalate when the developer gives up" do
-    recipe = Recipe.for_build("direct-escalate", "gpt-6-luna", "max")
-    state = state_at(:done_gate, recipe: recipe)
-
-    {failed, effects} = Cycle.step(state, {:stage_ok, :done_gate, %{outcome: :gave_up}})
-
-    assert {:failed, :developer_gave_up} = failed.result
-    refute Enum.any?(effects, &match?({:escalate, _args}, &1))
-  end
-
   defp state_at(stage, overrides \\ []) do
     state = Cycle.new(%{approval: %{slug: "sample"}, repairs: 2, recipe: staged_recipe()})
 

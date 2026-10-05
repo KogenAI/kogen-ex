@@ -45,23 +45,38 @@ defmodule Kogen.Harness.DeveloperToolSetTest do
     assert request.instructions =~ "python3"
   end
 
-  test "turn cap returns gave_up after the final allowed tool turn", %{tmp_dir: tmp_dir} do
+  test "turn cap adds one system note at 80 percent and reports turn_cap", %{
+    tmp_dir: tmp_dir
+  } do
     provider =
-      ScriptedProvider.start([
-        tool_call(
-          "edit",
-          %{"path" => "README.md", "old_text" => "fixture", "new_text" => "at-cap"},
-          "edit-at-cap"
-        )
-      ])
+      ScriptedProvider.start(
+        for turn <- 1..10 do
+          tool_call("read", %{"path" => "README.md"}, "read-#{turn}")
+        end
+      )
 
     opts = options(tmp_dir, provider)
-    opts = %{opts | limits: %{max_turns: 1, wall_ms: 10_000}}
+    opts = %{opts | limits: %{max_turns: 10, wall_ms: 60_000}}
 
     assert {:ok, result} = Harness.develop(opts, @intent, nil, nil)
-    assert result.outcome == :gave_up
-    assert result.turns == 1
-    assert File.read!(Path.join(opts.workdir, "README.md")) == "at-cap\n"
+    assert result.outcome == :turn_cap
+    assert result.turns == 10
+
+    requests = ScriptedProvider.requests(provider)
+    assert length(requests) == 10
+
+    noted_requests =
+      requests
+      |> Enum.with_index(1)
+      |> Enum.filter(fn {request, _turn} ->
+        String.contains?(request.instructions, "System note:")
+      end)
+
+    assert [{note_request, 9}] = noted_requests
+    assert note_request.instructions =~ "System note: 2 turns remain."
+
+    assert note_request.instructions =~
+             "Run the targeted tests now and finish the smallest complete change."
   end
 
   defp options(tmp_dir, provider, builder_tools \\ :full) do

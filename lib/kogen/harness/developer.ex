@@ -1,36 +1,10 @@
-defmodule Kogen.Harness.DeveloperState do
-  @moduledoc false
-
-  @enforce_keys [
-    :items,
-    :usage,
-    :turns,
-    :empty_refusals,
-    :protected_restores,
-    :started_at,
-    :deadline,
-    :transcript_path
-  ]
-  defstruct @enforce_keys
-
-  @type t :: %__MODULE__{
-          items: [map()],
-          usage: Kogen.Harness.Usage.t(),
-          turns: non_neg_integer(),
-          empty_refusals: non_neg_integer(),
-          protected_restores: non_neg_integer(),
-          started_at: integer(),
-          deadline: integer(),
-          transcript_path: Path.t()
-        }
-end
-
 defmodule Kogen.Harness.Developer do
   @moduledoc false
 
   alias Kogen.Contracts.ModelResponse
   alias Kogen.Contracts.ToolCall
   alias Kogen.Harness.Codec
+  alias Kogen.Harness.Developer.Budget
   alias Kogen.Harness.DeveloperState
   alias Kogen.Harness.Exchange
   alias Kogen.Harness.Exchange.Request, as: ExchangeRequest
@@ -70,6 +44,7 @@ defmodule Kogen.Harness.Developer do
       turns: 0,
       empty_refusals: 0,
       protected_restores: 0,
+      budget_note_sent?: false,
       started_at: started_at,
       deadline: started_at + opts.limits.wall_ms,
       transcript_path: transcript_path
@@ -82,13 +57,19 @@ defmodule Kogen.Harness.Developer do
     remaining_ms = max(state.deadline - System.monotonic_time(:millisecond), 0)
 
     cond do
-      state.turns >= opts.limits.max_turns -> {:ok, result(:gave_up, nil, state)}
-      remaining_ms == 0 -> {:ok, result(:gave_up, nil, state)}
-      true -> developer_turn(opts, prompt, state, remaining_ms)
+      remaining_ms == 0 ->
+        {:ok, result(:wall_cap, nil, state)}
+
+      state.turns >= opts.limits.max_turns ->
+        {:ok, result(:turn_cap, nil, state)}
+
+      true ->
+        {state, system_note} = Budget.note(state, opts.limits.max_turns)
+        developer_turn(opts, prompt, state, remaining_ms, system_note)
     end
   end
 
-  defp developer_turn(opts, prompt, state, remaining_ms) do
+  defp developer_turn(opts, prompt, state, remaining_ms, system_note) do
     {model, effort} = opts.models.builder
     turn = state.turns + 1
 
@@ -97,7 +78,7 @@ defmodule Kogen.Harness.Developer do
       turn: turn,
       model: model,
       effort: effort,
-      instructions: prompt,
+      instructions: Budget.instructions(prompt, system_note),
       items: state.items,
       tool_names: Codec.tool_names(:developer, opts.builder_tools),
       remaining_ms: remaining_ms
@@ -108,7 +89,7 @@ defmodule Kogen.Harness.Developer do
         state = accept_response(state, response)
 
         if deadline_passed?(state),
-          do: {:ok, result(:gave_up, nil, state)},
+          do: {:ok, result(:wall_cap, nil, state)},
           else: handle_response(opts, prompt, state, response)
 
       {:error, reason} ->
