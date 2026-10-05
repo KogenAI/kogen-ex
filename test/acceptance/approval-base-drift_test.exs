@@ -26,13 +26,52 @@ defmodule Kogen.Acceptance.ApprovalBaseDriftTest do
 
   @tag intent: "approval-base-drift/A2"
   test "a changed approved test on the base refuses the Build", %{protected: result} do
-    assert result.build.status != :landed
+    assert result.build.status == :failed
+    assert result.build.failure.class == :candidate
+    assert result.claim_released
+    assert {:ok, report} = Build.report(result)
+
+    assert :json.decode(report)["failures"] |> hd() |> Map.fetch!("reason") ==
+             "approved_acceptance_changed"
+
     assert inspect(result.build) =~ "build-engine_test.exs"
   end
 
   @tag intent: "approval-base-drift/A3"
   test "an unmoved base builds and lands", %{still: result} do
     assert result.build.status == :landed
+  end
+
+  test "base changes to protected support files are used and reported", %{tmp_dir: root} do
+    seed =
+      Build.prepare_seed!(root,
+        project_config: """
+        name: tiny_app
+        checks:
+          - name: helper-current
+            argv: [sh, -c, 'test "$(cat test/support/helper.txt)" = current']
+            timeout_ms: 60000
+        fix: []
+        protected_paths: [test/support/**]
+        domains:
+          kernel: [lib]
+        """,
+        extra_files: %{"test/support/helper.txt" => "approved\n"}
+      )
+
+    result =
+      run(root, "support-drift", %Options{
+        seed_project: seed,
+        move_base_on: {:before_build_file, "test/support/helper.txt", "current\n"}
+      })
+
+    assert result.build.status == :landed
+    assert {:ok, report} = Build.report(result)
+
+    assert Enum.any?(
+             :json.decode(report)["findings"],
+             &(&1["type"] == "base_drift" and &1["path"] == "test/support/helper.txt")
+           )
   end
 
   defp run(root, name, options) do

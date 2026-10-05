@@ -23,6 +23,56 @@ defmodule Kogen.Workspace.ApprovalManifest do
     end)
   end
 
+  @spec build_base(Path.t(), String.t(), map(), map()) ::
+          {:ok, String.t(), map(), [String.t()]} | {:error, term()}
+  def build_base(origin, branch, approval, git_env) do
+    with {:ok, current} <- Workspace.ref_read(origin, "refs/heads/#{branch}", git_env),
+         {:ok, manifest, drift} <- refresh(origin, current, approval, git_env) do
+      {:ok, current, manifest, drift}
+    end
+  end
+
+  @spec refresh(Path.t(), String.t(), map(), map()) ::
+          {:ok, map(), [String.t()]} | {:error, term()}
+  def refresh(origin, current, approval, git_env) do
+    acceptance =
+      Map.keys(approval.acceptance_files) ++ ["test/acceptance/#{approval.slug}_test.exs"]
+
+    with :ok <-
+           unchanged_between(
+             origin,
+             approval.base_sha,
+             current,
+             Map.from_keys(acceptance, nil),
+             git_env
+           ) do
+      own = [".kogen/intents/#{approval.slug}/intent.md" | acceptance]
+      refresh_paths(origin, current, approval.protected_manifest, own, git_env)
+    end
+  end
+
+  defp refresh_paths(origin, current, manifest, own, git_env) do
+    manifest
+    |> Enum.reject(fn {path, _hash} -> path in own end)
+    |> Enum.sort()
+    |> Enum.reduce_while({:ok, manifest, []}, fn {path, old}, {:ok, updated, drift} ->
+      case file_at(origin, current, path, git_env) do
+        {:ok, file} ->
+          hash = digest(file)
+          drift = if hash == old, do: drift, else: drift ++ [path]
+          {:cont, {:ok, Map.put(updated, path, hash), drift}}
+
+        {:error, reason} ->
+          {:halt, {:error, reason}}
+      end
+    end)
+  end
+
+  defp digest(:missing), do: Workspace.absent_digest()
+
+  defp digest({:present, bytes}),
+    do: :sha256 |> :crypto.hash(bytes) |> Base.encode16(case: :lower)
+
   defp file_at(origin, revision, path, git_env) do
     case Workspace.read_file_at(origin, revision, path, git_env) do
       {:ok, bytes} -> {:ok, {:present, bytes}}

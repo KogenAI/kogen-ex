@@ -50,6 +50,16 @@ defmodule Kogen.Workspace do
   def approval_manifest_unchanged_between(origin, approved_sha, current_sha, manifest, git_env),
     do: ApprovalManifest.unchanged_between(origin, approved_sha, current_sha, manifest, git_env)
 
+  @spec build_base(Path.t(), String.t(), map(), git_env()) ::
+          {:ok, String.t(), map(), [String.t()]} | {:error, term()}
+  def build_base(origin, branch, approval, git_env),
+    do: ApprovalManifest.build_base(origin, branch, approval, git_env)
+
+  @spec refresh_manifest(Path.t(), String.t(), map(), git_env()) ::
+          {:ok, map(), [String.t()]} | {:error, term()}
+  def refresh_manifest(origin, current, approval, git_env),
+    do: ApprovalManifest.refresh(origin, current, approval, git_env)
+
   @spec tree_hash(Path.t(), git_env()) :: {:ok, String.t()} | {:error, term()}
   def tree_hash(path, git_env), do: Checkout.tree_hash(path, git_env)
 

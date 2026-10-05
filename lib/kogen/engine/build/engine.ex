@@ -24,19 +24,36 @@ defmodule Kogen.Engine.Build.Engine do
           {:started, Session.t(), [term()]} | {:ok, Result.t()} | {:error, term()}
   def start(%Request{} = request) do
     with {:ok, approval_commit, approval} <- approved(request),
-         {:ok, base_sha} <- current_base(request, approval),
          {:ok, intent, intent_text} <- approved_intent(approval),
          {:ok, _project} <- Project.load(request.project_root),
          {:ok, run} <- State.start_run(state_root(request), approval) do
-      begin_run(%Prepared{
+      prepare_run(%Prepared{
         request: request,
         run: run,
         approval: approval,
         approval_commit: approval_commit,
         intent: intent,
         intent_text: intent_text,
-        base_sha: base_sha
+        base_sha: approval.base_sha
       })
+    end
+  end
+
+  defp prepare_run(%Prepared{} = prepared) do
+    request = prepared.request
+
+    with {:ok, base, manifest, drift} <-
+           Workspace.build_base(
+             request.origin,
+             request.base,
+             prepared.approval,
+             request.runtime.git_env
+           ),
+         :ok <- RunEvents.base_drift(prepared.run, drift, base) do
+      approval = %{prepared.approval | protected_manifest: manifest}
+      begin_run(%{prepared | base_sha: base, approval: approval})
+    else
+      {:error, reason} -> Finish.setup_failure(request, prepared.run, reason, false)
     end
   end
 
@@ -78,43 +95,6 @@ defmodule Kogen.Engine.Build.Engine do
       {:error, :missing} -> {:error, :intent_not_approved}
       {:error, reason} -> {:error, reason}
     end
-  end
-
-  defp current_base(request, %Approval{} = approval) do
-    approved_sha = approval.base_sha
-
-    case Workspace.ref_read(request.origin, "refs/heads/#{request.base}", request.runtime.git_env) do
-      {:ok, ^approved_sha} ->
-        {:ok, approved_sha}
-
-      {:ok, current} ->
-        with true <-
-               Workspace.ancestor?(request.origin, approved_sha, current, request.runtime.git_env),
-             :ok <-
-               Workspace.approval_manifest_unchanged_between(
-                 request.origin,
-                 approved_sha,
-                 current,
-                 approved_base_manifest(approval),
-                 request.runtime.git_env
-               ) do
-          {:ok, current}
-        else
-          false -> {:error, {:base_moved, approved_sha, current}}
-          {:error, reason} -> {:error, reason}
-        end
-
-      {:error, :missing} ->
-        {:error, {:base_moved, approved_sha, nil}}
-
-      {:error, reason} ->
-        {:error, reason}
-    end
-  end
-
-  defp approved_base_manifest(%Approval{} = a) do
-    p = ".kogen/acceptance/#{a.slug}_test.exs"
-    Map.put(a.protected_manifest, p, Intent.hash(Map.fetch!(a.acceptance_files, p)))
   end
 
   defp approved_intent(%Approval{} = approval) do

@@ -38,6 +38,21 @@ defmodule Kogen.Queue.DrainTest do
     refute File.exists?(Path.join(tmp_dir, "queue.pid"))
   end
 
+  test "a changed approved acceptance test fails only its Intent", %{tmp_dir: tmp_dir} do
+    {:ok, states} = Agent.start_link(fn -> %{"a" => {:approved, 1}, "b" => {:approved, 2}} end)
+    failed = %{outcome("a", :failed, :candidate) | reason: "approved_acceptance_changed"}
+    outcomes = %{"a" => failed, "b" => outcome("b", :landed, nil)}
+    {:ok, lines} = Agent.start_link(fn -> [] end)
+
+    assert {:ok, %{builds: [^failed, %{slug: "b", status: :landed}], stop: :empty}} =
+             Drain.run(tmp_dir, hooks(states, outcomes, lines))
+
+    assert "failed a: candidate/approved_acceptance_changed (Build run-a)\n" in Agent.get(
+             lines,
+             & &1
+           )
+  end
+
   test "stops on an environment failure", %{tmp_dir: tmp_dir} do
     {:ok, states} = Agent.start_link(fn -> %{"a" => {:approved, 1}, "b" => {:approved, 2}} end)
     outcomes = %{"a" => outcome("a", :failed, :environment)}

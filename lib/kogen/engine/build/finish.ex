@@ -138,7 +138,7 @@ defmodule Kogen.Engine.Build.Finish do
        run_id: run.id,
        run_dir: run.dir,
        landed_sha: nil,
-       lines: ["setup: failed (#{failure.class}/#{failure.reason})"]
+       lines: ["setup: failed (#{failure.class}/#{failure.reason}): #{failure.detail}"]
      }}
   end
 
@@ -283,6 +283,13 @@ defmodule Kogen.Engine.Build.Finish do
       class: :environment,
       reason: :base_moved,
       detail: "Approved base changed; approve the Intent again."
+    }
+
+  defp normalize_setup_failure({:approved_protected_file_changed, path}),
+    do: %Failure{
+      class: :candidate,
+      reason: :approved_acceptance_changed,
+      detail: "Approved acceptance test #{path} changed on the base after approval."
     }
 
   defp normalize_setup_failure(:intent_not_approved),

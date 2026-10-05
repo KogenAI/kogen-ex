@@ -30,4 +30,19 @@ defmodule Kogen.Engine.Build.RunEvents do
       escalation: Recipe.escalation(request.recipe)
     })
   end
+
+  @spec base_drift(Run.t(), [String.t()], String.t()) :: :ok | {:error, term()}
+  def base_drift(run, paths, base) do
+    Enum.reduce_while(paths, :ok, fn path, :ok ->
+      case State.record(run, %{
+             event: :base_drift,
+             path: path,
+             base_sha: base,
+             detail: "Using protected file #{path} from current base #{base}."
+           }) do
+        :ok -> {:cont, :ok}
+        error -> {:halt, error}
+      end
+    end)
+  end
 end

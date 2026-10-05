@@ -199,7 +199,8 @@ defmodule Kogen.Queue.Report do
   end
 
   defp findings(events) do
-    for %Event{event: type} = event <- events, type in ["scope_warning", "landing_warning"] do
+    for %Event{event: type} = event <- events,
+        type in ["scope_warning", "landing_warning", "base_drift"] do
       json_object([
         {"type", type},
         {"path", event.path},

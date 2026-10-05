@@ -320,6 +320,7 @@ defmodule Kogen.E2e.Build do
   defp provider_hook(_fixture, nil), do: nil
   defp provider_hook(_fixture, :before_build), do: nil
   defp provider_hook(_fixture, :before_build_protected), do: nil
+  defp provider_hook(_fixture, {:before_build_file, _path, _bytes}), do: nil
 
   defp provider_hook(%Fixture{} = fixture, {:lock_base, stage}),
     do: Origin.lock_base_hook(fixture.origin, stage)
@@ -341,6 +342,17 @@ defmodule Kogen.E2e.Build do
 
     _commit =
       Git.git!(fixture.project_root, ["commit", "--quiet", "-m", "Edit approved test on base"])
+
+    _push = Git.git!(fixture.project_root, ["push", "--quiet", "origin", "main"])
+    :ok
+  end
+
+  defp before_build!(fixture, {:before_build_file, path, bytes}) do
+    File.write!(Path.join(fixture.project_root, path), bytes)
+    _add = Git.git!(fixture.project_root, ["add", "--all"])
+
+    _commit =
+      Git.git!(fixture.project_root, ["commit", "--quiet", "-m", "Change protected base file"])
 
     _push = Git.git!(fixture.project_root, ["push", "--quiet", "origin", "main"])
     :ok
