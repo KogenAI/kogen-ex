@@ -18,7 +18,8 @@ defmodule Kogen.Project do
   @spec effective_build_settings(map() | nil, map() | nil) :: %{
           recipe: String.t(),
           roles: map(),
-          wall_minutes: pos_integer() | nil
+          wall_minutes: pos_integer() | nil,
+          edge_tests: boolean()
         }
   def effective_build_settings(machine, project), do: BuildSettings.effective(machine, project)
 

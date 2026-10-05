@@ -13,7 +13,7 @@ defmodule Kogen.E2e.ScriptedProvider.Step do
   @enforce_keys [:stage, :text, :calls]
   defstruct @enforce_keys ++ [model: nil, effort: nil, error: nil, usage: nil]
 
-  @type stage :: :context | :plan | :develop | :review | :audit | :shape
+  @type stage :: :context | :plan | :develop | :review | :audit | :shape | :edge
   @type t :: %__MODULE__{
           stage: stage(),
           text: String.t(),
@@ -57,7 +57,7 @@ defmodule Kogen.E2e.ScriptedProvider do
   alias Kogen.E2e.ScriptedProvider.Step
 
   @zero_usage %{input: 0, cached_input: 0, cache_write: 0, output: 0, reasoning: 0}
-  @known_stages [:context, :plan, :develop, :review, :audit, :shape]
+  @known_stages [:context, :plan, :develop, :review, :audit, :shape, :edge]
   @call_timeout_ms 5_000
 
   @spec answer(Step.stage(), String.t()) :: Step.t()
@@ -176,6 +176,9 @@ defmodule Kogen.E2e.ScriptedProvider do
 
       String.contains?(instructions, "acceptance test auditor") ->
         {:ok, :audit}
+
+      String.contains?(instructions, "edge-test writer") ->
+        {:ok, :edge}
 
       String.contains?(instructions, "read-only Context Pack stage") ->
         {:ok, :context}

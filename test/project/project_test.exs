@@ -136,6 +136,30 @@ defmodule Kogen.Project.ProjectTest do
     assert effective.roles.planner == %{model: "machine-planner", effort: "high"}
   end
 
+  test "edge tests are opted into by build.edge_tests or a +edge ladder recipe", %{tmp_dir: root} do
+    write_config(root, "name: tiny-app\nchecks: []\nbuild:\n  edge_tests: true\n")
+    assert {:ok, project} = ProjectLoader.load(root)
+    machine = %{recipe: "ladder-luna", roles: %{}, wall_minutes: nil, edge_tests: false}
+
+    assert %{recipe: "ladder-luna", edge_tests: true} =
+             ProjectLoader.effective_build_settings(machine, project.build)
+
+    assert ProjectLoader.effective_build_settings(nil, nil).edge_tests == false
+    assert ProjectLoader.effective_build_settings(%{edge_tests: true}, nil).edge_tests == true
+
+    write_config(root, "name: tiny-app\nchecks: []\nbuild:\n  recipe: ladder-luna+edge\n")
+    assert {:ok, %{build: %{recipe: "ladder-luna+edge"}}} = ProjectLoader.load(root)
+
+    write_config(root, "name: tiny-app\nchecks: []\nbuild:\n  recipe: direct+edge\n")
+
+    assert {:error, [%{message: "build.recipe must be one of " <> _rest}]} =
+             ProjectLoader.load(root)
+
+    write_config(root, "name: tiny-app\nchecks: []\nbuild:\n  edge_tests: sometimes\n")
+    assert {:error, [%{message: message}]} = ProjectLoader.load(root)
+    assert message == ~s(build.edge_tests must be true or false; got "sometimes")
+  end
+
   test "a project commits no account; the machine chooses it", %{tmp_dir: root} do
     write_config(root, "name: tiny-app\nchecks: []\n")
     assert {:ok, project} = ProjectLoader.load(root)

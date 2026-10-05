@@ -19,6 +19,7 @@ defmodule Kogen.Build.Cycle do
           {:run, run_stage(), map()}
           | {:escalate, map()}
           | {:parallel, map()}
+          | {:edge, map()}
           | {:adopt, State.attempt()}
           | {:record, map()}
           | {:finish, terminal(), term()}
@@ -124,14 +125,16 @@ defmodule Kogen.Build.Cycle do
 
     case winner.status do
       :green ->
-        next = %{next | stage: :commit, pending_land: false}
-        {next, effects ++ [run(:commit, stage_args(next, %{findings: []}))]}
+        commit(next, effects)
 
       _red ->
         {after_red, more} = fail_candidate(next, winner.reason, :parallel_red)
         {after_red, effects ++ more}
     end
   end
+
+  def step(%State{stage: :edge} = state, {:edge_done, attempt}),
+    do: commit(%{state | attempt: attempt}, [])
 
   def step(%State{stage: :check} = state, {:stage_failed, :check, %Failure{} = failure})
       when failure.class == :candidate and failure.reason == :acceptance_red do
@@ -247,6 +250,16 @@ defmodule Kogen.Build.Cycle do
     repair(state, :review_revise, %{findings: findings})
   end
 
+  # A green Candidate goes to commit; with the edge probe on, it meets edge tests first.
+  defp commit(state, effects) do
+    if Recipe.edge_tests?(state.recipe) and state.stage != :edge do
+      {%{state | stage: :edge}, effects ++ [{:edge, %{}}]}
+    else
+      next = %{state | stage: :commit, pending_land: false}
+      {next, effects ++ [run(:commit, stage_args(next, %{findings: []}))]}
+    end
+  end
+
   defp commit_succeeded(state, data) do
     case next_recipe_stage(state, :commit) do
       :land ->
@@ -274,11 +287,12 @@ defmodule Kogen.Build.Cycle do
       :commit when state.sub? ->
         finish(state, :green, :green)
 
-      next_stage when next_stage in [:plan, :develop, :fix, :check, :review, :commit] ->
-        next = %{state | stage: next_stage}
-        args = if next_stage == :commit, do: %{findings: []}, else: %{}
+      :commit ->
+        commit(state, [stage_success_record(completed_stage)])
 
-        {next, [stage_success_record(completed_stage), run(next_stage, stage_args(next, args))]}
+      next_stage when next_stage in [:plan, :develop, :fix, :check, :review] ->
+        next = %{state | stage: next_stage}
+        {next, [stage_success_record(completed_stage), run(next_stage, stage_args(next))]}
 
       _other ->
         fail_controller(state, :invalid_recipe_sequence)
@@ -355,26 +369,7 @@ defmodule Kogen.Build.Cycle do
     finish(state, :failed, {:controller, reason})
   end
 
-  defp finish(%State{sub?: true} = state, status, reason) do
-    {%{state | stage: status, result: {status, reason}, pending_land: false},
-     [{:finish, status, reason}]}
-  end
-
-  defp finish(state, status, reason) do
-    next = %{state | stage: status, result: {status, reason}, pending_land: false}
-
-    {next,
-     [
-       record(:finished, %{
-         status: status,
-         reason: reason,
-         attempt: state.attempt,
-         gate_summary: state.last_gate_summary,
-         stop: Stop.summary(state, reason)
-       }),
-       {:finish, status, reason}
-     ]}
-  end
+  defp finish(state, status, reason), do: Stop.finish(state, status, reason)
 
   defp stage_args(state, extra \\ %{}) do
     Map.merge(

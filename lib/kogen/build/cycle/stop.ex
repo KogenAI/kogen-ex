@@ -1,6 +1,30 @@
 defmodule Kogen.Build.Cycle.Stop do
   @moduledoc false
 
+  alias Kogen.Build.Cycle.State
+
+  @doc "Ends the attempt; a main Build also records why it finished."
+  @spec finish(State.t(), atom(), term()) :: {State.t(), [term()]}
+  def finish(%State{sub?: true} = state, status, reason) do
+    {%{state | stage: status, result: {status, reason}, pending_land: false},
+     [{:finish, status, reason}]}
+  end
+
+  def finish(%State{} = state, status, reason) do
+    next = %{state | stage: status, result: {status, reason}, pending_land: false}
+
+    finished = %{
+      event: :finished,
+      status: status,
+      reason: reason,
+      attempt: state.attempt,
+      gate_summary: state.last_gate_summary,
+      stop: summary(state, reason)
+    }
+
+    {next, [{:record, finished}, {:finish, status, reason}]}
+  end
+
   @spec summary(map(), term()) :: map()
   def summary(state, reason) when is_map(state) do
     gate = Map.get(state, :last_gate_summary) || %{}

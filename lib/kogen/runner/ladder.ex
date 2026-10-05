@@ -3,16 +3,19 @@ defmodule Kogen.Runner.Ladder do
 
   # Runs ladder rungs on fresh Candidates: records each rung's time and cost, keeps every red
   # Candidate for the selector, enforces the whole-Build wall budget, and runs parallel
-  # members side by side, cross-checking green members against each other's tests.
+  # members side by side, cross-checking green members against each other's tests. With the
+  # edge probe on, the first green Candidates also face black-box edge tests before landing.
 
   alias Kogen.Build.Cycle
   alias Kogen.Build.Demotion
   alias Kogen.Build.Recipe
+  alias Kogen.Build.Selector
   alias Kogen.Contracts.Failure
   alias Kogen.Engine.Build.CandidateSnapshot
   alias Kogen.Engine.Build.Escalation
   alias Kogen.Engine.Build.Session
   alias Kogen.Runner.CrossCheck
+  alias Kogen.Runner.EdgeProbe
   alias Kogen.State
 
   @spec escalate(Session.t(), map()) ::
@@ -115,10 +118,36 @@ defmodule Kogen.Runner.Ladder do
 
     _recorded = if cross_check, do: State.record(session.run, cross_check)
 
+    {session, pairs} =
+      EdgeProbe.run(session, Enum.zip(outcomes, finished), edge_repair(session, run_member))
+
+    {outcomes, finished} = Enum.unzip(pairs)
+
     lines =
       Enum.flat_map(finished, fn member -> Enum.map(member.lines, &"[#{label(member)}] #{&1}") end)
 
     {:ok, %{session | parallel_members: finished, lines: session.lines ++ lines}, outcomes}
+  end
+
+  @doc """
+  The edge probe before a sequential rung's green Candidate is committed. When a repaired
+  copy competes, the selector's pick continues the Build and the other is kept as a
+  candidate. Returns the session and the attempt that continues.
+  """
+  @spec edge(Session.t(), (Session.t() -> {atom(), term(), Session.t()})) ::
+          {:ok, Session.t(), term()} | {:error, Session.t(), Failure.t()}
+  def edge(%Session{} = session, run_member) do
+    current = snapshot_outcome(session.cycle.rung, session.attempt, :green, :green, session)
+
+    case EdgeProbe.run(session, [{current, session}], edge_repair(session, run_member)) do
+      {probed, [_current]} ->
+        {:ok, probed, session.attempt}
+
+      {probed, pairs} ->
+        winner = Selector.best(Enum.map(pairs, &elem(&1, 0)))
+        members = Enum.map(pairs, &elem(&1, 1))
+        adopt_edge(%{probed | parallel_members: members}, session, winner.attempt)
+    end
   end
 
   @doc "Continues the Build with the chosen member; the others are kept as candidates."
@@ -135,6 +164,60 @@ defmodule Kogen.Runner.Ladder do
           {:halt, {:error, acc, controller(:candidate_snapshot_failed, reason)}}
       end
     end)
+  end
+
+  defp adopt_edge(session, original, attempt) do
+    _recorded =
+      if attempt != original.attempt, do: rung_finished(original, :green, :not_selected)
+
+    case adopt(session, attempt) do
+      {:ok, adopted} when attempt == original.attempt ->
+        {:ok, %{adopted | rung_started_at: original.rung_started_at}, attempt}
+
+      {:ok, adopted} ->
+        {:ok, adopted, attempt}
+
+      {:error, failed, failure} ->
+        {:error, failed, failure}
+    end
+  end
+
+  # One repair round on a copy of a green Candidate, fed the edge findings, while the Build has
+  # budget left. The copy continues the Candidate's builder session and may not repair again.
+  defp edge_repair(session, run_member) do
+    fn {_outcome, member} = pair, findings ->
+      if remaining_ms(session) != 0 and is_map(member.rung) and member.last_harness != nil,
+        do: run_edge_repair(session, pair, findings, run_member)
+    end
+  end
+
+  defp run_edge_repair(session, {outcome, member}, findings, run_member) do
+    attempt = "#{label(member)}-edge"
+
+    case Escalation.copy_candidate(member, build_id(session, attempt)) do
+      {:ok, copy} ->
+        spec = %{
+          index: outcome.index,
+          attempt: attempt,
+          rung: %{member.rung | name: "#{member.rung.name}-edge"}
+        }
+
+        repair = member(copy, spec, session)
+        cycle = %{repair.cycle | repairs_left: 0, repair_cap: 0}
+
+        repair = %{
+          repair
+          | cycle: cycle,
+            last_harness: member.last_harness,
+            failure_text: findings
+        }
+
+        result = run_member.(repair)
+        {outcome({spec, repair}, result), elem(result, 2)}
+
+      {:error, _session, _failure} ->
+        nil
+    end
   end
 
   defp next_rung(session, args) do
@@ -185,7 +268,10 @@ defmodule Kogen.Runner.Ladder do
 
   defp outcome({spec, _member}, {status, reason, finished}) do
     _recorded = rung_finished(finished, status, reason)
+    snapshot_outcome(spec.index, spec.attempt, status, reason, finished)
+  end
 
+  defp snapshot_outcome(index, attempt, status, reason, finished) do
     diff =
       case CandidateSnapshot.diff(finished) do
         {:ok, diff} -> diff
@@ -193,8 +279,8 @@ defmodule Kogen.Runner.Ladder do
       end
 
     %{
-      index: spec.index,
-      attempt: spec.attempt,
+      index: index,
+      attempt: attempt,
       status: if(status == :green, do: :green, else: :failed),
       reason: reason,
       findings: finished.cycle.last_gate_findings,
@@ -213,6 +299,7 @@ defmodule Kogen.Runner.Ladder do
         candidates: session.candidates,
         parallel_members: [],
         rung_started_at: nil,
+        edge: session.edge,
         demoted: demoted,
         audited: Enum.reduce(others, chosen.audited, &Map.merge(&1.audited, &2)),
         project: Demotion.exclude(chosen.project, session.approval.slug, added)

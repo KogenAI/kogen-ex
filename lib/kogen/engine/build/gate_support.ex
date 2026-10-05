@@ -175,18 +175,18 @@ defmodule Kogen.Engine.Build.GateSupport do
 
   @doc """
   Runs `argv` with the gate's sandbox and environment in a scratch copy of the Candidate's
-  checkout with `files` added. The copy is removed afterwards.
+  checkout with `files` added. The copy is removed afterwards; `name` labels it and its log.
   """
-  @spec scratch_test(Session.t(), %{String.t() => binary()}, [String.t()], pos_integer()) ::
+  @spec scratch_test(Session.t(), map(), [String.t()], pos_integer(), String.t()) ::
           {:ok, ProcResult.t()} | {:error, term()}
-  def scratch_test(%Session{} = session, files, argv, timeout_ms) do
+  def scratch_test(%Session{} = session, files, argv, timeout_ms, name \\ "cross-check") do
     id = "#{session.run.id}-#{System.unique_integer([:positive, :monotonic])}"
-    path = Path.join([session.request.home, ".kogen", "workspaces", "cross-check", id])
+    path = Path.join([session.request.home, ".kogen", "workspaces", name, id])
 
     result =
       with :ok <- Workspace.copy_on_write(session.workdir, path),
            :ok <- Workspace.insert_files(path, files) do
-        run_base_command(session, path, argv, timeout_ms, "cross-check")
+        run_base_command(session, path, argv, timeout_ms, name)
       end
 
     base_test_result(result, Workspace.destroy(path))

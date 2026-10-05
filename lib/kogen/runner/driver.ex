@@ -89,6 +89,13 @@ defmodule Kogen.Runner.Driver do
     apply_effect_event(updated, {:parallel_done, outcomes}, rest, mode)
   end
 
+  defp run_effects(session, [{:edge, _data} | rest], mode) do
+    case Ladder.edge(session, &run_member/1) do
+      {:ok, updated, attempt} -> apply_effect_event(updated, {:edge_done, attempt}, rest, mode)
+      {:error, updated, failure} -> {:done, terminal_failure(updated, failure, mode)}
+    end
+  end
+
   defp run_effects(session, [{:adopt, attempt} | rest], mode) do
     case Ladder.adopt(session, attempt) do
       {:ok, updated} -> run_effects(updated, rest, mode)

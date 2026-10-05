@@ -15,10 +15,25 @@ esac
 script_dir=$(cd "$(dirname "$script_path")" && pwd -P)
 format_check_script="$script_dir/kogen-format-check"
 recipe=${KOGEN_BENCH_RECIPE:-ladder}
+edge_tests=${KOGEN_BENCH_EDGE_TESTS:-0}
+case "$edge_tests" in
+  0|1) ;;
+  *) echo "KOGEN_BENCH_EDGE_TESTS must be 0 or 1" >&2; exit 2 ;;
+esac
+# A ladder recipe with a +edge suffix runs the edge probe, like KOGEN_BENCH_EDGE_TESTS=1.
 case "$recipe" in
   ladder|ladder-diverse|ladder-luna|ladder-sol-medium|staged|plan-shell|direct|direct-shell|direct-escalate|escalate-shell) ;;
-  *) echo "KOGEN_BENCH_RECIPE must be ladder, ladder-diverse, ladder-luna, ladder-sol-medium, staged, plan-shell, direct, direct-shell, direct-escalate, or escalate-shell" >&2; exit 2 ;;
+  ladder+edge|ladder-diverse+edge|ladder-luna+edge|ladder-sol-medium+edge)
+    recipe=${recipe%+edge}
+    edge_tests=1
+    ;;
+  *) echo "KOGEN_BENCH_RECIPE must be ladder, ladder-diverse, ladder-luna, ladder-sol-medium (each optionally with +edge), staged, plan-shell, direct, direct-shell, direct-escalate, or escalate-shell" >&2; exit 2 ;;
 esac
+case "$edge_tests:$recipe" in
+  1:ladder|1:ladder-diverse|1:ladder-luna|1:ladder-sol-medium|0:*) ;;
+  *) echo "KOGEN_BENCH_EDGE_TESTS=1 needs a ladder recipe" >&2; exit 2 ;;
+esac
+export KOGEN_BENCH_EDGE_TESTS="$edge_tests"
 format_scope=${KOGEN_BENCH_FORMAT_SCOPE:-changed}
 case "$format_scope" in
   changed|all) ;;
@@ -212,12 +227,14 @@ PY
 python3 - "$out_dir/usage.json" "$recipe" "$builder_model" "$builder_effort" \
   "$shape_model" "$shape_effort" "$intent_source" <<'PY'
 import json
+import os
 import sys
 
 path, recipe, model, effort, shape_model, shape_effort, intent_source = sys.argv[1:]
 with open(path, "w", encoding="utf-8") as output:
     json.dump({
         "recipe": recipe,
+        "edge_tests": os.environ.get("KOGEN_BENCH_EDGE_TESTS") == "1",
         "intent_source": intent_source,
         "builder": {"model": model, "effort": effort},
         "shape": {"model": shape_model, "effort": shape_effort, "wall_ms": None},
@@ -325,6 +342,7 @@ lines = [
     "    timeout_ms: 300000",
     "build:",
     "  recipe: " + quote(recipe),
+] + (["  edge_tests: true"] if os.environ.get("KOGEN_BENCH_EDGE_TESTS") == "1" else []) + [
     "  roles:",
     "    builder:",
     "      model: " + quote(builder_model),
@@ -718,6 +736,7 @@ phases = [
 totals = {name: sum(stage["tokens"][name] for stage in stages) for name in token_names}
 result = {
     "recipe": recipe,
+    "edge_tests": os.environ.get("KOGEN_BENCH_EDGE_TESTS") == "1",
     "intent_source": intent_source,
     "builder": {"model": builder_model, "effort": builder_effort},
     "run_status": "failed",
@@ -1110,6 +1129,8 @@ phases = [
 totals = {name: sum(stage["tokens"][name] for stage in stages) for name in token_names}
 result = {
     "recipe": recipe,
+    "edge_tests": os.environ.get("KOGEN_BENCH_EDGE_TESTS") == "1",
+    "edge_probe": report.get("edge_probe"),
     "intent_source": intent_source,
     "slug": shape.get("slug") or slug,
     "run_status": "complete",

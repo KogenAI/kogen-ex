@@ -16,6 +16,7 @@ case "$1 ${2:-}" in
     shape_dir="${TMPDIR:-/tmp}/kogen-shaper/$slug/fake-shape"
     mkdir -p "$shape_dir"
     printf '%s\n' '{"stage":"shape","outcome":"ok","retries":0}' > "$shape_dir/requests.jsonl"
+    [ -z "${FAKE_KOGEN_PROJECT_COPY:-}" ] || cp "$project/.kogen/project.yaml" "$FAKE_KOGEN_PROJECT_COPY"
     [ -z "${FAKE_KOGEN_SHAPE_EXIT:-}" ] || exit "$FAKE_KOGEN_SHAPE_EXIT"
     mkdir -p "$project/.kogen/intents/$slug"
     printf '%s\n' 'shaped Intent' > "$project/.kogen/intents/$slug/intent.md"

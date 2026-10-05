@@ -3,8 +3,10 @@ defmodule Kogen.Project.BuildSettings do
 
   alias Kogen.Contracts.Yaml
 
-  @recipes ~w(ladder ladder-diverse ladder-luna ladder-sol-medium staged plan-shell direct) ++
-             ~w(direct-shell direct-escalate escalate-shell)
+  @ladders ~w(ladder ladder-diverse ladder-luna ladder-sol-medium)
+  @recipes @ladders ++
+             ~w(staged plan-shell direct direct-shell direct-escalate escalate-shell) ++
+             Enum.map(@ladders, &(&1 <> "+edge"))
   @roles %{
     "builder" => :builder,
     "planner" => :planner,
@@ -18,14 +20,16 @@ defmodule Kogen.Project.BuildSettings do
   def parse(nil), do: {:ok, nil}
 
   def parse(value) when is_map(value) do
-    unknown = unknown_keys(value, ~w(recipe roles wall_minutes), "build")
+    unknown = unknown_keys(value, ~w(recipe roles wall_minutes edge_tests), "build")
     {recipe, recipe_errors} = recipe(value)
     {roles, role_errors} = roles(value)
     {wall_minutes, wall_errors} = wall_minutes(value)
-    errors = unknown ++ recipe_errors ++ role_errors ++ wall_errors
+    {edge_tests, edge_errors} = edge_tests(value)
+    errors = unknown ++ recipe_errors ++ role_errors ++ wall_errors ++ edge_errors
 
     if errors == [],
-      do: {:ok, %{recipe: recipe, roles: roles, wall_minutes: wall_minutes}},
+      do:
+        {:ok, %{recipe: recipe, roles: roles, wall_minutes: wall_minutes, edge_tests: edge_tests}},
       else: {:error, errors}
   end
 
@@ -45,7 +49,8 @@ defmodule Kogen.Project.BuildSettings do
   @spec effective(map() | nil, map() | nil) :: %{
           recipe: String.t(),
           roles: map(),
-          wall_minutes: pos_integer() | nil
+          wall_minutes: pos_integer() | nil,
+          edge_tests: boolean()
         }
   def effective(machine, project) do
     machine = machine || %{}
@@ -61,7 +66,8 @@ defmodule Kogen.Project.BuildSettings do
     %{
       recipe: Map.get(project, :recipe) || Map.get(machine, :recipe) || "ladder",
       roles: roles,
-      wall_minutes: Map.get(project, :wall_minutes) || Map.get(machine, :wall_minutes)
+      wall_minutes: Map.get(project, :wall_minutes) || Map.get(machine, :wall_minutes),
+      edge_tests: edge_setting(project, machine)
     }
   end
 
@@ -112,6 +118,30 @@ defmodule Kogen.Project.BuildSettings do
 
       :error ->
         {nil, []}
+    end
+  end
+
+  # `build.edge_tests: true` turns on a ladder's edge probe, like a `+edge` recipe suffix.
+  defp edge_tests(value) do
+    case Map.fetch(value, "edge_tests") do
+      {:ok, enabled} when enabled in [true, "true"] ->
+        {true, []}
+
+      {:ok, disabled} when disabled in [false, "false"] ->
+        {false, []}
+
+      {:ok, other} ->
+        {nil, [issue("build.edge_tests must be true or false; got #{inspect(other)}")]}
+
+      :error ->
+        {nil, []}
+    end
+  end
+
+  defp edge_setting(project, machine) do
+    case {Map.get(project, :edge_tests), Map.get(machine, :edge_tests)} do
+      {project_value, _machine} when is_boolean(project_value) -> project_value
+      {nil, machine_value} -> machine_value == true
     end
   end
 

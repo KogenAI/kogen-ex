@@ -55,7 +55,10 @@ defmodule Kogen.State.Event do
     :failing,
     :experimental,
     :partial,
-    :matrix
+    :matrix,
+    :generated,
+    :kept,
+    :repair
   ]
 
   @type t :: %__MODULE__{
@@ -111,6 +114,9 @@ defmodule Kogen.State.Event do
           failing: map() | nil,
           experimental: boolean() | nil,
           partial: boolean() | nil,
-          matrix: [map()] | nil
+          matrix: [map()] | nil,
+          generated: non_neg_integer() | nil,
+          kept: non_neg_integer() | nil,
+          repair: map() | nil
         }
 end

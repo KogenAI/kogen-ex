@@ -95,6 +95,34 @@ defmodule Kogen.E2e.KogenBenchTest do
     assert usage["recipe"] == "ladder-diverse", output
   end
 
+  test "turns on the edge probe for a +edge ladder recipe or KOGEN_BENCH_EDGE_TESTS=1", %{
+    tmp_dir: tmp_dir
+  } do
+    copy = Path.join(tmp_dir, "project.yaml")
+
+    env = %{"KOGEN_BENCH_RECIPE" => "ladder-luna+edge", "FAKE_KOGEN_PROJECT_COPY" => copy}
+    {_status, output, paths} = run_bench!(subdir(tmp_dir, "suffix"), env)
+    usage = paths.out_dir |> Path.join("usage.json") |> File.read!() |> :json.decode()
+    assert {usage["recipe"], usage["edge_tests"]} == {"ladder-luna", true}, output
+    assert File.read!(copy) =~ ~s(build:\n  recipe: "ladder-luna"\n  edge_tests: true\n)
+
+    env = %{"KOGEN_BENCH_EDGE_TESTS" => "1"}
+    {_status, output, paths} = run_bench!(subdir(tmp_dir, "knob"), env)
+    usage = paths.out_dir |> Path.join("usage.json") |> File.read!() |> :json.decode()
+    assert {usage["recipe"], usage["edge_tests"]} == {"ladder", true}, output
+
+    env = %{"KOGEN_BENCH_EDGE_TESTS" => "1", "KOGEN_BENCH_RECIPE" => "direct"}
+    {status, output, _paths} = run_bench!(subdir(tmp_dir, "direct"), env)
+    assert status == 2
+    assert output =~ "KOGEN_BENCH_EDGE_TESTS=1 needs a ladder recipe"
+  end
+
+  defp subdir(tmp_dir, name) do
+    path = Path.join(tmp_dir, name)
+    File.mkdir_p!(path)
+    path
+  end
+
   defp run_bench!(tmp_dir, extra_env) do
     task_dir = Path.join(tmp_dir, "task")
     out_dir = Path.join(tmp_dir, "out")

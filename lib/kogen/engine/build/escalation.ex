@@ -47,6 +47,21 @@ defmodule Kogen.Engine.Build.Escalation do
     end
   end
 
+  @doc "A new Candidate whose checkout is a copy of `session`'s, changes included."
+  @spec copy_candidate(Session.t(), String.t()) ::
+          {:ok, Session.t()} | {:error, Session.t(), Failure.t()}
+  def copy_candidate(%Session{} = session, build_id) do
+    path = Path.join(session.request.workspace_root, build_id)
+
+    case Workspace.copy_on_write(session.workdir, path) do
+      :ok ->
+        prepare_new_candidate(session, path)
+
+      {:error, reason} ->
+        cleanup_candidate(path, session, failure(:candidate_copy_failed, reason))
+    end
+  end
+
   defp prepare_new_candidate(session, path) do
     approval = session.approval
 

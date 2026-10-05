@@ -312,7 +312,13 @@ defmodule Kogen.Kernel do
       model: model,
       effort: effort,
       recipe:
-        Engine.build_recipe(build_config.recipe, model, effort, roles, wall_ms(build_config)),
+        Engine.build_recipe(
+          recipe_name(build_config),
+          model,
+          effort,
+          roles,
+          wall_ms(build_config)
+        ),
       runtime: runtime,
       provider_mod: ChatGPT,
       provider_config: provider_config,
@@ -323,6 +329,13 @@ defmodule Kogen.Kernel do
 
   defp wall_ms(%{wall_minutes: minutes}) when is_integer(minutes), do: minutes * 60_000
   defp wall_ms(_build_config), do: nil
+
+  # `build.edge_tests: true` is the same as a `+edge` recipe suffix.
+  defp recipe_name(%{recipe: recipe, edge_tests: true}) do
+    if String.ends_with?(recipe, "+edge"), do: recipe, else: recipe <> "+edge"
+  end
+
+  defp recipe_name(%{recipe: recipe}), do: recipe
 
   @doc false
   @spec effective_base(String.t() | nil, String.t() | nil, Path.t(), Path.t(), map()) ::

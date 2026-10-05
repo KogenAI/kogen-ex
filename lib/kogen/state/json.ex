@@ -23,7 +23,7 @@ defmodule Kogen.State.Json do
     approval_commit approved_by base_sha ledger receipts candidate_diff excluded_paths
     red_checks acceptance_items model effort started_at finished_at tokens wall_ms setup_key
     saved_wall_ms credential_source credential_label commit metrics branch item verdict rung
-    outcomes attempts failing experimental matrix
+    outcomes attempts failing experimental matrix generated kept repair
   )a
   @event_fields Enum.map(@event_field_names, &{&1, Atom.to_string(&1)})
 

@@ -37,6 +37,8 @@ defmodule Kogen.Build.Recipe do
   limit or lost login pauses the Build for `pause_ms` at a time, outside the budget, for at
   most `pause_cap_ms`. Rungs marked `experimental` are reported as such. When two or more
   parallel rungs are green, each runs the others' tests; `cross_check_ms` bounds that in total.
+  With `edge_tests: true`, the first green Candidates also run black-box edge tests written from
+  the verbatim Request before landing; `edge_ms` bounds those test runs in total.
   """
   @type ladder :: %{
           required(:rungs) => [rung()],
@@ -47,7 +49,9 @@ defmodule Kogen.Build.Recipe do
           required(:on_hard) => :parallel | :skip_first,
           required(:pause_ms) => pos_integer(),
           required(:pause_cap_ms) => pos_integer(),
-          optional(:cross_check_ms) => pos_integer()
+          optional(:cross_check_ms) => pos_integer(),
+          optional(:edge_tests) => boolean(),
+          optional(:edge_ms) => pos_integer()
         }
 
   @type escalation :: %{
@@ -76,8 +80,10 @@ defmodule Kogen.Build.Recipe do
     repeat_from: 2,
     pause_ms: 300_000,
     pause_cap_ms: 86_400_000,
-    cross_check_ms: 300_000
+    cross_check_ms: 300_000,
+    edge_ms: 180_000
   }
+  @edge_suffix "+edge"
 
   @luna_rungs [
     %{name: "builder", builder: @luna_max, input: :plan},
@@ -90,9 +96,24 @@ defmodule Kogen.Build.Recipe do
   @plan_shell_stages [:plan, :develop, :done_gate, :fix, :check, :commit, :land]
   @direct_stages [:develop, :done_gate, :fix, :check, :commit, :land]
 
+  @doc """
+  The named recipe. A `+edge` suffix (for example `ladder-luna+edge`) turns on the ladder's edge
+  probe; recipes without a ladder ignore it.
+  """
   @spec for_build(String.t(), String.t(), String.t()) :: t()
-  def for_build(name, builder_model, builder_effort)
-      when name in @names and is_binary(builder_model) and is_binary(builder_effort) do
+  def for_build(name, builder_model, builder_effort) when is_binary(name) do
+    if String.ends_with?(name, @edge_suffix) do
+      name
+      |> String.replace_suffix(@edge_suffix, "")
+      |> recipe(builder_model, builder_effort)
+      |> with_edge_tests(true)
+    else
+      recipe(name, builder_model, builder_effort)
+    end
+  end
+
+  defp recipe(name, builder_model, builder_effort)
+       when name in @names and is_binary(builder_model) and is_binary(builder_effort) do
     builder = {builder_model, builder_effort}
 
     recipe = %{
@@ -244,4 +265,14 @@ defmodule Kogen.Build.Recipe do
     do: %{recipe | ladder: %{ladder | wall_ms: wall_ms}}
 
   def with_wall_ms(recipe, _wall_ms), do: recipe
+
+  @doc "Turns the ladder's edge probe on or off; recipes without a ladder are unchanged."
+  @spec with_edge_tests(t(), boolean()) :: t()
+  def with_edge_tests(%{ladder: ladder} = recipe, enabled) when is_boolean(enabled),
+    do: %{recipe | ladder: Map.put(ladder, :edge_tests, enabled)}
+
+  def with_edge_tests(recipe, _enabled), do: recipe
+
+  @spec edge_tests?(t()) :: boolean()
+  def edge_tests?(recipe), do: match?(%{edge_tests: true}, ladder(recipe))
 end
