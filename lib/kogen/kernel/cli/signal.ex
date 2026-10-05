@@ -4,6 +4,7 @@ defmodule Kogen.Kernel.CLI.Signal do
 
   alias Kogen.Cli.Args
   alias Kogen.Cli.Arguments
+  alias Kogen.Contracts.Redact
 
   @spec run([String.t()], ([String.t()] -> {non_neg_integer(), String.t()})) ::
           {non_neg_integer(), String.t()}
@@ -55,7 +56,7 @@ defmodule Kogen.Kernel.CLI.Signal do
 
       {:DOWN, ^monitor, :process, ^worker, reason} ->
         restore()
-        {1, "kogen: command failed: #{inspect(reason)}\n"}
+        {1, "kogen: command failed: #{Redact.inspect(reason)}\n"}
 
       {__MODULE__, :sigterm} ->
         Process.exit(worker, :kill)

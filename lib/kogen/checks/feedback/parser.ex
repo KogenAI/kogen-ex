@@ -18,7 +18,7 @@ defmodule Kogen.Checks.Feedback.Parser do
   alias Kogen.Checks.Feedback.Parser.Compile
 
   @file_path ~r{((?:\$WORKDIR/|/)?[A-Za-z0-9_.$-]+(?:/[A-Za-z0-9_.$-]+)*\.exs?)\s*$}
-  @credo_head ~r/^\[([FWC])\]\s*(?:[↗↘→]+\s*)?(.*)$/u
+  @credo_head ~r/^\[([FWCRD])\]\s*(?:[↗↘→]+\s*)?(.*)$/u
   @exunit_test ~r/^\s*\d+\)\s+test\s+(.+?)\s+\(([^)]+)\)\s*$/
   @exunit_setup ~r/^\s*\d+\)\s+([A-Z][A-Za-z0-9_.]+): failure on setup_all callback/
   def findings(output, "mixed", workdir) do

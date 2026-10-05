@@ -19,6 +19,7 @@ defmodule Kogen.Contracts do
       ProviderError,
       ProviderPort,
       Receipt,
+      Redact,
       ShapeWarning,
       ShapeWarningCodec,
       ToolCall,

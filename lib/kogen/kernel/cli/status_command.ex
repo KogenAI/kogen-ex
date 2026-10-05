@@ -2,6 +2,7 @@ defmodule Kogen.Kernel.CLI.StatusCommand do
   @moduledoc false
 
   alias Kogen.Cli.Args
+  alias Kogen.Contracts.Redact
   alias Kogen.Kernel.CLI.ErrorOutput
   alias Kogen.Kernel.CLI.StatusOutput
   alias Kogen.Queue.Status
@@ -29,7 +30,7 @@ defmodule Kogen.Kernel.CLI.StatusCommand do
     case view(args) do
       {:ok, view} ->
         text = render(view, args)
-        if text != last, do: IO.write(if(last, do: "\n" <> text, else: text))
+        if text != last, do: IO.write(Redact.text(if(last, do: "\n" <> text, else: text)))
 
         if idle?(view) do
           {watch_code(view), ""}

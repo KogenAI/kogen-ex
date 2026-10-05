@@ -7,6 +7,7 @@ defmodule Kogen.Kernel.CLI do
   alias Kogen.Cli.Args
   alias Kogen.Cli.Arguments
   alias Kogen.Cli.Help
+  alias Kogen.Contracts.Redact
   alias Kogen.Kernel.CLI.Runner
 
   @spec main([String.t()]) :: no_return()
@@ -18,8 +19,9 @@ defmodule Kogen.Kernel.CLI do
   @spec main([String.t()], ([String.t()] -> {non_neg_integer(), String.t()})) :: no_return()
   def main(argv, executor) do
     preload_modules()
+    :ok = Redact.install_log_filter()
     {status, output} = Kogen.Kernel.CLI.Signal.run(argv, executor)
-    IO.write(output)
+    IO.write(Redact.text(output))
     System.halt(status)
   end
 

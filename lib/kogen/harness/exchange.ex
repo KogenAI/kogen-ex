@@ -37,6 +37,7 @@ defmodule Kogen.Harness.Exchange do
   alias Kogen.Harness.PromptCacheKey
   alias Kogen.Harness.Recording
   alias Kogen.Resilience.Policy
+  alias Kogen.Resilience.ProviderCall
   alias Kogen.Resilience.RequestLog
   alias Kogen.Resilience.Retry
   alias Kogen.Tooling.Error
@@ -235,53 +236,9 @@ defmodule Kogen.Harness.Exchange do
     }
   end
 
-  defp provider_call(_opts, _request, remaining_ms, _probe)
-       when is_integer(remaining_ms) and remaining_ms <= 0, do: timeout_error()
-
   defp provider_call(opts, %ModelRequest{} = request, remaining_ms, probe) do
-    caller = self()
-    result_ref = make_ref()
     request = %{request | on_first_byte: RequestLog.first_byte_marker(probe)}
-
-    {worker, monitor} =
-      spawn_monitor(fn ->
-        send(caller, {result_ref, opts.provider_mod.respond(opts.provider_config, request)})
-      end)
-
-    await_provider(result_ref, worker, monitor, remaining_ms)
-  end
-
-  defp await_provider(result_ref, worker, monitor, remaining_ms) do
-    receive do
-      {^result_ref, {:ok, %ModelResponse{} = response}} ->
-        Process.demonitor(monitor, [:flush])
-        {:ok, response}
-
-      {^result_ref, {:error, %ProviderError{} = error}} ->
-        Process.demonitor(monitor, [:flush])
-        {:error, error}
-
-      {^result_ref, _invalid} ->
-        Process.demonitor(monitor, [:flush])
-        provider_error(:malformed, "Provider returned an invalid response.")
-
-      {:DOWN, ^monitor, :process, ^worker, reason} ->
-        provider_error(:transport, "Provider process failed: #{inspect(reason)}")
-    after
-      remaining_ms ->
-        stop_worker(worker, monitor)
-        timeout_error()
-    end
-  end
-
-  defp stop_worker(worker, monitor) do
-    Process.exit(worker, :kill)
-
-    receive do
-      {:DOWN, ^monitor, :process, ^worker, _reason} -> :ok
-    after
-      0 -> Process.demonitor(monitor, [:flush])
-    end
+    ProviderCall.run(opts.provider_mod, opts.provider_config, request, remaining_ms)
   end
 
   defp record_response(opts, request, {:ok, %ModelResponse{} = response}) do
@@ -297,10 +254,4 @@ defmodule Kogen.Harness.Exchange do
       {:error, error}
     end
   end
-
-  defp timeout_error,
-    do: provider_error(:timeout, "Harness wall deadline reached during provider request.")
-
-  defp provider_error(class, message),
-    do: {:error, %ProviderError{class: class, message: message}}
 end

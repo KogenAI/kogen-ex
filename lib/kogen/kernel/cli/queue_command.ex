@@ -2,6 +2,7 @@ defmodule Kogen.Kernel.CLI.QueueCommand do
   @moduledoc false
 
   alias Kogen.Cli.Args
+  alias Kogen.Contracts.Redact
   alias Kogen.Kernel.CLI.ErrorOutput
 
   @spec start(Args.t()) :: {non_neg_integer(), String.t()}
@@ -17,7 +18,7 @@ defmodule Kogen.Kernel.CLI.QueueCommand do
 
   def start(%Args{} = args) do
     with :ok <- project_directory(args) do
-      say = fn line -> IO.write(line) end
+      say = fn line -> IO.write(Redact.text(line)) end
 
       case Kogen.Kernel.queue_start(args.project, args.origin, args.base, say) do
         {:ok, summary} -> {exit_code(summary), summary_line(summary)}

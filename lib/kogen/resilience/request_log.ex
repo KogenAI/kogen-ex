@@ -10,6 +10,7 @@ defmodule Kogen.Resilience.RequestLog do
 
   alias Kogen.Contracts.ModelResponse
   alias Kogen.Contracts.ProviderError
+  alias Kogen.Contracts.Redact
 
   @file_name "requests.jsonl"
   @token_names [:input, :cached_input, :output, :reasoning, :cache_write]
@@ -73,7 +74,7 @@ defmodule Kogen.Resilience.RequestLog do
   @spec append(Path.t(), map()) :: :ok | {:error, term()}
   def append(run_dir, record) do
     with :ok <- File.mkdir_p(run_dir) do
-      line = [:json.encode(record), "\n"]
+      line = [record |> :json.encode() |> IO.iodata_to_binary() |> Redact.text(), "\n"]
       File.write(Path.join(run_dir, @file_name), line, [:append])
     end
   end

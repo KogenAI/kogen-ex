@@ -1,6 +1,7 @@
 defmodule Kogen.Harness.Recording do
   @moduledoc false
 
+  alias Kogen.Contracts.Redact
   alias Kogen.Harness.Codec
   alias Kogen.Harness.Opts
   alias Kogen.Harness.ToolingContext
@@ -43,6 +44,6 @@ defmodule Kogen.Harness.Recording do
     end
   end
 
-  defp append_line(path, line), do: File.write(path, line <> "\n", [:append])
+  defp append_line(path, line), do: File.write(path, Redact.text(line) <> "\n", [:append])
   defp error(reason, detail), do: {:error, %Error{reason: reason, detail: detail}}
 end

@@ -5,6 +5,7 @@ defmodule Kogen.Shaper.Runner do
   alias Kogen.Checks.ShapeValidation
   alias Kogen.Contracts.Failure
   alias Kogen.Contracts.Project
+  alias Kogen.Contracts.Redact
   alias Kogen.Contracts.ShapeWarning
   alias Kogen.Harness
   alias Kogen.Harness.Opts
@@ -370,7 +371,7 @@ defmodule Kogen.Shaper.Runner do
   end
 
   defp progress(request, attempt_number, message) do
-    line = "attempt=#{attempt_number} #{message}"
+    line = Redact.text("attempt=#{attempt_number} #{message}")
     log_path = Path.join([request.run_dir, "logs", "shaper.log"])
     _ = File.write(log_path, line <> "\n", [:append])
     IO.puts(:stderr, "shaper #{line}")
