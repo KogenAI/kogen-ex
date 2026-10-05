@@ -89,9 +89,6 @@ defmodule Kogen.Workspace.WorkspaceTest do
              Workspace.read_file_at(candidate, commit_sha, "missing.txt", @git_env)
 
     assert Workspace.ancestor?(candidate, base_sha, commit_sha, @git_env)
-
-    assert {:error, :branch_checked_out} =
-             Workspace.land(candidate, source, "main", base_sha, "run-checked-out", @git_env)
   end
 
   test "ref helpers create once and compare old values atomically", %{tmp_dir: tmp_dir} do
@@ -246,7 +243,9 @@ defmodule Kogen.Workspace.WorkspaceTest do
 
     File.write!(Path.join(candidate, "README.md"), "landed\n")
 
-    assert :ok = Workspace.land(candidate, origin, "main", base_sha, "run-success", @git_env)
+    assert {:ok, []} =
+             Workspace.land(candidate, origin, "main", base_sha, "run-success", @git_env)
+
     assert {:ok, ^commit_sha} = Workspace.ref_read(origin, "refs/heads/main", @git_env)
 
     assert {:error, :missing} =

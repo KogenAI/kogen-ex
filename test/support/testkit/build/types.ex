@@ -31,6 +31,7 @@ defmodule Kogen.E2e.Build.Options do
   defstruct [
     :seed_project,
     :move_base_on,
+    :origin_checkout,
     recipe: "staged",
     builder_model: "scripted-model",
     builder_effort: "medium"
@@ -38,7 +39,8 @@ defmodule Kogen.E2e.Build.Options do
 
   @type t :: %__MODULE__{
           seed_project: Path.t(),
-          move_base_on: atom() | nil,
+          move_base_on: atom() | {:lock_base, atom()} | nil,
+          origin_checkout: :clean | :dirty | nil,
           recipe: String.t(),
           builder_model: String.t(),
           builder_effort: String.t()

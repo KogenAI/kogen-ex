@@ -5,6 +5,7 @@ defmodule Kogen.E2e.Build do
   alias Kogen.E2e.Build.Environment
   alias Kogen.E2e.Build.Fixture
   alias Kogen.E2e.Build.Options
+  alias Kogen.E2e.Build.Origin
   alias Kogen.E2e.Build.Result
   alias Kogen.E2e.ScriptedProvider
   alias Kogen.E2e.ScriptedProvider.Config
@@ -30,7 +31,7 @@ defmodule Kogen.E2e.Build do
 
   @spec run!(Path.t(), [ScriptedProvider.Step.t()], Options.t()) :: Result.t()
   def run!(parent, steps, %Options{} = options) do
-    fixture = create_fixture!(parent, options.seed_project)
+    fixture = create_fixture!(parent, options.seed_project, options.origin_checkout)
     before_build!(fixture, options.move_base_on)
 
     {:ok, server} =
@@ -139,7 +140,7 @@ defmodule Kogen.E2e.Build do
     end
   end
 
-  defp create_fixture!(parent, seed_project) do
+  defp create_fixture!(parent, seed_project, checkout \\ nil) do
     project = Path.join(parent, "project")
     home = Path.join(parent, "test-home")
     origin = Path.join(parent, "origin.git")
@@ -148,6 +149,7 @@ defmodule Kogen.E2e.Build do
 
     Git.copy_tree!(seed_project, project)
     Git.copy_tree!(Path.join([Path.dirname(seed_project), "approved-origin.git"]), origin)
+    origin = Origin.checked_out!(origin, parent, checkout)
     link_external_runs(project, workspace_root)
     _remote = Git.git!(project, ["remote", "set-url", "origin", origin])
 
@@ -333,6 +335,9 @@ defmodule Kogen.E2e.Build do
   defp provider_hook(_fixture, nil), do: nil
   defp provider_hook(_fixture, :before_build), do: nil
   defp provider_hook(_fixture, :before_build_protected), do: nil
+
+  defp provider_hook(%Fixture{} = fixture, {:lock_base, stage}),
+    do: Origin.lock_base_hook(fixture.origin, stage)
 
   defp provider_hook(%Fixture{} = fixture, stage) do
     fn

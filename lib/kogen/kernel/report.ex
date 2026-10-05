@@ -188,11 +188,11 @@ defmodule Kogen.Kernel.Report do
   end
 
   defp findings(events) do
-    for %Event{event: "scope_warning"} = event <- events do
+    for %Event{event: type} = event <- events, type in ["scope_warning", "landing_warning"] do
       json_object([
-        {"type", "scope_warning"},
+        {"type", type},
         {"path", event.path},
-        {"declared_domains", event.declared_domains},
+        {"declared_domains", nullable(event.declared_domains)},
         {"message", event.detail}
       ])
     end

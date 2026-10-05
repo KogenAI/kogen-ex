@@ -90,7 +90,7 @@ defmodule Kogen.Workspace do
   def rebase(path, origin, base_sha, git_env), do: Rebase.run(path, origin, base_sha, git_env)
 
   @spec land(Path.t(), Path.t(), String.t(), String.t(), String.t(), git_env()) ::
-          :ok | {:error, term()}
+          {:ok, [%{path: Path.t(), detail: String.t()}]} | {:error, term()}
   def land(path, origin, branch, expected_old_sha, run_id, git_env),
     do: Landing.land(path, origin, branch, expected_old_sha, run_id, git_env)
 

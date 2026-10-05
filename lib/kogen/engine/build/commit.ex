@@ -53,26 +53,78 @@ defmodule Kogen.Engine.Build.Commit do
   end
 
   defp do_land(args, %Session{} = session) do
-    expected = Map.fetch!(args, :expected_parent)
-    candidate = Map.fetch!(args, :candidate_commit)
+    case workspace_land(args, session) do
+      {:ok, warnings} -> landed(session, Map.fetch!(args, :candidate_commit), warnings)
+      {:error, :base_moved} -> reland(session)
+      {:error, reason} -> landing_failure(session, reason)
+    end
+  end
 
-    case Workspace.land(
-           session.workdir,
-           session.request.origin,
-           session.request.base,
-           expected,
-           session.run.id,
-           session.git_env
-         ) do
-      :ok ->
-        {:ok, %{session | landed_sha: candidate}, [{:landed, candidate}]}
+  # The base moved between the commit stage and the compare-and-swap: rebase and re-verify
+  # through the commit stage, then retry the swap once. Never involves the model.
+  defp reland(session) do
+    case do_run(session) do
+      {:ok, session, [{:stage_ok, :commit, identity}]} ->
+        case State.put_landing(session.run, identity) do
+          :ok -> relanded(session, identity)
+          {:error, reason} -> landing_failure(session, {:landing_record, reason})
+        end
 
-      {:error, :base_moved} ->
+      {:base_moved, session} ->
         {:base_moved, session}
 
-      {:error, reason} ->
-        fail(session, :land, candidate_failure(:landing_failed, inspect(reason)))
+      {:error, session, %Failure{class: :candidate}} ->
+        {:base_moved, session}
+
+      {:error, session, %Failure{} = failure} ->
+        {:error, session, failure}
     end
+  end
+
+  defp relanded(session, identity) do
+    case workspace_land(identity, session) do
+      {:ok, warnings} -> landed(session, identity.candidate_commit, warnings)
+      {:error, :base_moved} -> {:base_moved, session}
+      {:error, reason} -> landing_failure(session, reason)
+    end
+  end
+
+  defp workspace_land(identity, session) do
+    Workspace.land(
+      session.workdir,
+      session.request.origin,
+      session.request.base,
+      Map.fetch!(identity, :expected_parent),
+      session.run.id,
+      session.git_env
+    )
+  end
+
+  defp landed(session, candidate, warnings) do
+    session = Enum.reduce(warnings, session, &record_landing_warning(&2, &1))
+    {:ok, %{session | landed_sha: candidate}, [{:landed, candidate}]}
+  end
+
+  defp record_landing_warning(session, %{path: path, detail: detail}) do
+    # The landing already happened, so a lost journal line must not turn it into a failure.
+    _recorded =
+      State.record(session.run, %{event: :landing_warning, path: path, detail: detail})
+
+    %{session | lines: session.lines ++ ["land: warning: #{detail}"]}
+  end
+
+  @controller_landing_reasons [:tree_mismatch, :not_fast_forward, :missing_head]
+
+  defp landing_failure(session, reason) do
+    class = if reason in @controller_landing_reasons, do: :controller, else: :environment
+
+    failure = %Failure{
+      class: class,
+      reason: :landing_failed,
+      detail: "landing failed (#{class}): #{inspect(reason)}"
+    }
+
+    fail(session, :land, failure)
   end
 
   defp squash_to_base(session) do

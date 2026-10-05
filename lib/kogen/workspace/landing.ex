@@ -1,26 +1,34 @@
 defmodule Kogen.Workspace.Landing do
   @moduledoc false
 
+  alias Kogen.Workspace.CheckedOut
   alias Kogen.Workspace.Checkout
   alias Kogen.Workspace.Git
   alias Kogen.Workspace.Refs
 
   @spec land(Path.t(), Path.t(), String.t(), String.t(), String.t(), %{String.t() => String.t()}) ::
-          :ok | {:error, term()}
+          {:ok, [CheckedOut.warning()]} | {:error, term()}
   def land(path, origin, branch, expected_old_sha, run_id, git_env) do
     branch_ref = "refs/heads/#{branch}"
     incoming_ref = "refs/kogen/incoming/#{run_id}"
 
     with :ok <- validate_inputs(path, origin, branch, run_id, git_env),
          :ok <- branch_unlocked(origin, branch_ref),
-         :ok <- branch_not_checked_out(origin, branch, git_env),
+         {:ok, checkouts} <- CheckedOut.worktrees(origin, branch, git_env),
          :ok <- origin_at_expected(origin, branch_ref, expected_old_sha, git_env),
          {:ok, new_sha} <- head_sha(path, git_env),
          :ok <- single_expected_parent(path, new_sha, expected_old_sha, git_env),
          :ok <- commit_tree_matches_working_tree(path, new_sha, git_env),
          :ok <- ref_missing(origin, incoming_ref, git_env),
          :ok <- push_incoming(path, origin, new_sha, incoming_ref, git_env) do
-      land_pushed(origin, branch_ref, incoming_ref, new_sha, expected_old_sha, git_env)
+      target = %{
+        branch: branch,
+        branch_ref: branch_ref,
+        incoming_ref: incoming_ref,
+        checkouts: checkouts
+      }
+
+      land_pushed(origin, target, new_sha, expected_old_sha, git_env)
     end
   end
 
@@ -93,30 +101,6 @@ defmodule Kogen.Workspace.Landing do
     if File.exists?(lock_path), do: {:error, :ref_locked}, else: :ok
   end
 
-  @spec branch_not_checked_out(Path.t(), String.t(), %{String.t() => String.t()}) ::
-          :ok | {:error, :branch_checked_out | term()}
-  defp branch_not_checked_out(origin, branch, git_env) do
-    case Git.run(origin, ["worktree", "list", "--porcelain"], git_env) do
-      {:ok, 0, output} ->
-        if checked_out_branch?(output, branch), do: {:error, :branch_checked_out}, else: :ok
-
-      {:ok, _status, _output} ->
-        {:error, :git_failed}
-
-      {:error, reason} ->
-        {:error, reason}
-    end
-  end
-
-  @spec checked_out_branch?(binary(), String.t()) :: boolean()
-  defp checked_out_branch?(output, branch) do
-    expected = "branch refs/heads/#{branch}"
-
-    output
-    |> String.split("\n\n")
-    |> Enum.any?(fn block -> expected in String.split(block, "\n") end)
-  end
-
   @spec origin_at_expected(Path.t(), String.t(), String.t(), %{String.t() => String.t()}) ::
           :ok | {:error, :base_moved | term()}
   defp origin_at_expected(origin, branch_ref, expected, git_env) do
@@ -174,11 +158,11 @@ defmodule Kogen.Workspace.Landing do
     end
   end
 
-  @spec land_pushed(Path.t(), String.t(), String.t(), String.t(), String.t(), %{
-          String.t() => String.t()
-        }) ::
-          :ok | {:error, term()}
-  defp land_pushed(origin, branch_ref, incoming_ref, new_sha, expected_old_sha, git_env) do
+  @spec land_pushed(Path.t(), map(), String.t(), String.t(), %{String.t() => String.t()}) ::
+          {:ok, [CheckedOut.warning()]} | {:error, term()}
+  defp land_pushed(origin, target, new_sha, expected_old_sha, git_env) do
+    %{branch: branch, branch_ref: branch_ref, incoming_ref: incoming_ref} = target
+
     cas_result =
       Git.run(
         origin,
@@ -187,10 +171,16 @@ defmodule Kogen.Workspace.Landing do
       )
 
     cas_outcome = cas_outcome(origin, branch_ref, cas_result)
+
+    warnings =
+      if cas_outcome == :ok,
+        do: CheckedOut.update(target.checkouts, branch, expected_old_sha, new_sha, git_env),
+        else: []
+
     delete_outcome = delete_temp_ref(origin, incoming_ref, new_sha, git_env)
 
     case {cas_outcome, delete_outcome} do
-      {:ok, :ok} -> :ok
+      {:ok, :ok} -> {:ok, warnings}
       {{:error, _reason} = error, :ok} -> error
       {_result, {:error, _reason} = error} -> error
     end
