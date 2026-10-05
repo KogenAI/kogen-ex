@@ -21,22 +21,29 @@ defmodule Kogen.Build.Recipe do
   @type rung :: %{
           required(:name) => String.t(),
           required(:builder) => :builder | {String.t(), String.t()},
-          required(:input) => :plan | :raw_request
+          required(:input) => :plan | :raw_request,
+          optional(:experimental) => boolean()
         }
 
   @typedoc """
   Rungs run in order until one Candidate is green. When the planner rates the task hard, the
-  first `parallel_on_hard` rungs run at once. Each rung repairs while its failure count falls,
+  first `parallel_on_hard` rungs run at once (with `on_hard: :skip_first` the Build starts at
+  the second rung instead). Each rung repairs while its failure count falls,
   at most `repair_cap` times; `wall_ms` bounds the whole Build. After the last rung, fresh
   attempts cycle through the rungs from index `repeat_from` (named `<rung>-2`, `<rung>-3`, ...)
-  until the budget is spent; `repeat_from: nil` ends the ladder after its last rung.
+  until the budget is spent; `repeat_from: nil` ends the ladder after its last rung. A usage
+  limit or lost login pauses the Build for `pause_ms` at a time, outside the budget, for at
+  most `pause_cap_ms`. Rungs marked `experimental` are reported as such.
   """
   @type ladder :: %{
           required(:rungs) => [rung()],
           required(:parallel_on_hard) => non_neg_integer(),
           required(:repair_cap) => pos_integer(),
           required(:wall_ms) => pos_integer(),
-          required(:repeat_from) => non_neg_integer() | nil
+          required(:repeat_from) => non_neg_integer() | nil,
+          required(:on_hard) => :parallel | :skip_first,
+          required(:pause_ms) => pos_integer(),
+          required(:pause_cap_ms) => pos_integer()
         }
 
   @type escalation :: %{
@@ -57,13 +64,21 @@ defmodule Kogen.Build.Recipe do
   @sol_high {"gpt-6.1-sol", "high"}
   @sol_medium {"gpt-6.1-sol", "medium"}
   @luna_max {"gpt-6-luna", "max"}
-  @ladder_policy %{parallel_on_hard: 2, repair_cap: 6, wall_ms: 3_600_000, repeat_from: 2}
+  @ladder_policy %{
+    parallel_on_hard: 2,
+    on_hard: :parallel,
+    repair_cap: 6,
+    wall_ms: 3_600_000,
+    repeat_from: 2,
+    pause_ms: 300_000,
+    pause_cap_ms: 86_400_000
+  }
 
   @luna_rungs [
     %{name: "builder", builder: @luna_max, input: :plan},
     %{name: "fresh-2", builder: @luna_max, input: :plan},
     %{name: "fresh-3", builder: @luna_max, input: :plan},
-    %{name: "raw-request", builder: @luna_max, input: :raw_request}
+    %{name: "raw-request", builder: @luna_max, input: :raw_request, experimental: true}
   ]
 
   @staged_stages [:context, :plan, :develop, :done_gate, :fix, :check, :review, :commit, :land]
@@ -130,7 +145,7 @@ defmodule Kogen.Build.Recipe do
       %{name: "builder", builder: :builder, input: :plan},
       %{name: "sol-medium", builder: @sol_medium, input: :plan},
       %{name: "sol-high", builder: @sol_high, input: :plan},
-      %{name: "raw-request", builder: @sol_high, input: :raw_request}
+      %{name: "raw-request", builder: @sol_high, input: :raw_request, experimental: true}
     ]
   end
 

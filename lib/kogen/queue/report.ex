@@ -94,6 +94,7 @@ defmodule Kogen.Queue.Report do
       json_object([
         {"attempt", event.attempt},
         {"rung", event.rung},
+        {"experimental", event.experimental == true},
         {"model", event.model},
         {"effort", event.effort},
         {"result", event.result},

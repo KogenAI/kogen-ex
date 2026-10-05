@@ -128,7 +128,8 @@ defmodule Kogen.Engine.Build.Session do
     audited: %{},
     acceptance_failures: [],
     candidates: [],
-    parallel_members: []
+    parallel_members: [],
+    paused_ms: 0
   ]
 
   @type t :: %__MODULE__{
@@ -168,6 +169,7 @@ defmodule Kogen.Engine.Build.Session do
           audited: %{String.t() => atom()},
           acceptance_failures: [String.t()],
           candidates: [map()],
-          parallel_members: [t()]
+          parallel_members: [t()],
+          paused_ms: non_neg_integer()
         }
 end

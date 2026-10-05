@@ -11,6 +11,8 @@ defmodule Kogen.Engine.Build.CheckStage do
   alias Kogen.Engine.Build.Session
   alias Kogen.State
 
+  @no_change_item_passed "no_change_item_passed"
+
   @spec verify(Session.t()) :: {:ok, map(), map()} | {:error, Failure.t() | term()}
   def verify(%Session{} = session) do
     with {:ok, checks} <-
@@ -54,11 +56,29 @@ defmodule Kogen.Engine.Build.CheckStage do
 
   @doc "Failing acceptance ids that still count after demotion."
   @spec remaining(Session.t(), map()) :: [String.t()]
-  def remaining(%Session{} = session, %{status: status}) do
-    case status do
-      :pass -> []
-      {:fail, ids} -> Demotion.remaining(ids, Enum.map(session.demoted, & &1.id))
-    end
+  def remaining(%Session{} = session, %{status: status} = acceptance) do
+    left =
+      case status do
+        :pass -> []
+        {:fail, ids} -> Demotion.remaining(ids, Enum.map(session.demoted, & &1.id))
+      end
+
+    if left == [] and session.demoted != [] and not change_item_passed?(session, acceptance),
+      do: [@no_change_item_passed],
+      else: left
+  end
+
+  @doc "Marker for a Candidate that passes no non-demoted change item; it can never be green."
+  @spec no_change_item_passed() :: String.t()
+  def no_change_item_passed, do: @no_change_item_passed
+
+  # Demotion cannot turn a Candidate green unless it passes at least one change item (an
+  # Acceptance item verified by a test that was red on the base).
+  defp change_item_passed?(session, acceptance) do
+    slug = session.intent.slug
+    change = for %{verify: :test, id: id} <- session.intent.acceptance, do: "#{slug}/#{id}"
+    passed = for %{status: :passed, tag: tag} <- Map.get(acceptance, :ledger, []), do: tag
+    change == [] or Enum.any?(change, &(&1 in passed))
   end
 
   defp detail(checks, acceptance) do

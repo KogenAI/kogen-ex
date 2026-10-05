@@ -153,6 +153,7 @@ defmodule Kogen.Build.Cycle do
   defp stage_succeeded(state, :plan, data) do
     case Parallel.start(state, data) do
       {:ok, next, effects} -> {next, [stage_success_record(:plan) | effects]}
+      :skip_first -> fail_candidate(state, :hard_plan, :hard_plan)
       :sequential -> advance_and_run(state, :plan)
     end
   end
@@ -299,23 +300,25 @@ defmodule Kogen.Build.Cycle do
   end
 
   defp handle_failure(state, stage, %Failure{class: class} = failure)
-       when class in [:environment, :controller] do
+       when class in [:environment, :controller, :provider] do
     case Steer.decide(state, stage, failure) do
       {:repair, reason, detail} -> repair(state, reason, detail)
       {:next_rung, reason, trigger} -> fail_candidate(state, reason, trigger)
+      :pause -> ProviderFailure.pause(state, stage, failure.reason)
+      :provider -> provider_retry(state, stage, failure.reason)
       :stop -> finish(state, :failed, {class, failure.reason})
-    end
-  end
-
-  defp handle_failure(state, stage, %Failure{class: :provider, reason: reason}) do
-    case ProviderFailure.retry(state, stage, reason) do
-      {:retry, next, effects} -> {next, effects}
-      {:stop, result} -> fail_candidate(state, result, :provider_failed)
     end
   end
 
   defp handle_failure(state, _stage, %Failure{}),
     do: finish(state, :failed, {:controller, :unknown_failure_class})
+
+  defp provider_retry(state, stage, reason) do
+    case ProviderFailure.retry(state, stage, reason) do
+      {:retry, next, effects} -> {next, effects}
+      {:stop, result} -> fail_candidate(state, result, :provider_failed)
+    end
+  end
 
   defp repair(state, reason, detail) do
     case Repair.decide(state, reason, detail) do

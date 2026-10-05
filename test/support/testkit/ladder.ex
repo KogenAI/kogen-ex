@@ -55,6 +55,26 @@ defmodule Kogen.E2e.Ladder do
   def user_text(%{input: [%{"role" => "user", "content" => [%{"text" => text}]} | _rest]}),
     do: text
 
+  @doc "Seeds the tiny project with `tests_project/0` and a passing base test, plus `options`."
+  @spec seed!(Path.t(), keyword()) :: Path.t()
+  def seed!(root, options \\ []) do
+    base_test = """
+    defmodule TinyApp.BaseTest do
+      use ExUnit.Case, async: true
+
+      test "the module loads" do
+        assert Code.ensure_loaded?(TinyApp)
+      end
+    end
+    """
+
+    Build.prepare_seed!(
+      root,
+      [project_config: tests_project(), extra_files: %{"test/tiny_app_test.exs" => base_test}] ++
+        options
+    )
+  end
+
   @doc "A tiny project whose only check is `mix test`, so acceptance tests run in the gate."
   @spec tests_project() :: String.t()
   def tests_project do

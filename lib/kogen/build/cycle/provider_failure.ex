@@ -14,24 +14,40 @@ defmodule Kogen.Build.Cycle.ProviderFailure do
     end
   end
 
+  @doc "Waits for the provider account to work again, then reruns the stage; never a failure."
+  def pause(state, stage, reason) do
+    {state_stage, run_stage} = retry_target(stage)
+    next = %{state | stage: state_stage, pending_land: false}
+
+    {next,
+     [
+       {:pause, %{stage: stage, reason: reason, attempt: state.attempt}},
+       {:run, run_stage, args(next, %{})}
+     ]}
+  end
+
   defp retry_stage(state, stage, reason) do
     {state_stage, run_stage} = retry_target(stage)
     retries = state.provider_retries + 1
     next = %{state | stage: state_stage, provider_retries: retries, pending_land: false}
 
-    args = %{
-      approval: next.approval,
-      repairs_left: next.repairs_left,
-      provider_retries: retries,
-      attempt: next.attempt,
-      provider_retry: retries
-    }
-
     {:retry, next,
      [
        {:record, %{event: :provider_retry, stage: stage, reason: reason}},
-       {:run, run_stage, args}
+       {:run, run_stage, args(next, %{provider_retry: retries})}
      ]}
+  end
+
+  defp args(state, extra) do
+    Map.merge(
+      %{
+        approval: state.approval,
+        repairs_left: state.repairs_left,
+        provider_retries: state.provider_retries,
+        attempt: state.attempt
+      },
+      extra
+    )
   end
 
   defp retry_target(stage) when stage in [:commit, :land], do: {:commit, :commit}

@@ -77,6 +77,13 @@ defmodule Kogen.Runner.Driver do
     end
   end
 
+  defp run_effects(session, [{:pause, data} | rest], mode) do
+    case Ladder.pause(session, data) do
+      {:ok, updated} -> run_effects(updated, rest, mode)
+      {:budget_exhausted, updated} -> apply_effect_event(updated, :budget_exhausted, [], mode)
+    end
+  end
+
   defp run_effects(session, [{:parallel, data} | rest], mode) do
     {:ok, updated, outcomes} = Ladder.parallel(session, data, &run_member/1)
     apply_effect_event(updated, {:parallel_done, outcomes}, rest, mode)
@@ -149,7 +156,11 @@ defmodule Kogen.Runner.Driver do
   defp add_stage_line(session, stage, events) do
     session = %{session | lines: session.lines ++ [stage_line(stage, events)]}
 
+    # A provider failure is retried or paused, so it must not replace the repair feedback.
     case events do
+      [{:stage_failed, _stage, %Failure{class: :provider} = failure}] ->
+        %{session | failure: failure}
+
       [{:stage_failed, _stage, failure}] ->
         %{session | failure: failure, failure_text: failure.detail}
 

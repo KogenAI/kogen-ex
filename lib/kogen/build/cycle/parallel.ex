@@ -30,17 +30,21 @@ defmodule Kogen.Build.Cycle.Parallel do
 
   def difficulty(_plan), do: nil
 
-  @spec start(State.t(), map()) :: {:ok, State.t(), [term()]} | :sequential
+  @spec start(State.t(), map()) :: {:ok, State.t(), [term()]} | :skip_first | :sequential
   def start(%State{} = state, %{plan_text: text} = data),
     do: start(state, data |> Map.delete(:plan_text) |> Map.put(:difficulty, difficulty(text)))
 
   def start(%State{sub?: false, rung: 0} = state, %{difficulty: :hard}) do
-    count =
-      case Recipe.ladder(state.recipe) do
-        %{parallel_on_hard: count} -> count
-        nil -> 0
-      end
+    case Recipe.ladder(state.recipe) do
+      %{on_hard: :skip_first} -> :skip_first
+      %{parallel_on_hard: count} -> parallel(state, count)
+      nil -> :sequential
+    end
+  end
 
+  def start(_state, _data), do: :sequential
+
+  defp parallel(state, count) do
     case members(state.recipe, count) do
       [_first, _second | _rest] = members ->
         attempts = Enum.map(members, & &1.attempt)
@@ -55,8 +59,6 @@ defmodule Kogen.Build.Cycle.Parallel do
         :sequential
     end
   end
-
-  def start(_state, _data), do: :sequential
 
   @doc "Chooses the better outcome; returns the adopted state and whether it is green."
   @spec done(State.t(), [outcome()]) :: {State.t(), outcome(), [term()]}

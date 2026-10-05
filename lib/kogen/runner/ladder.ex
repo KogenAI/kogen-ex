@@ -44,6 +44,7 @@ defmodule Kogen.Runner.Ladder do
       event: :rung_finished,
       attempt: session.attempt,
       rung: session.rung.name,
+      experimental: Map.get(session.rung, :experimental, false),
       model: model,
       effort: effort,
       result: result,
@@ -51,6 +52,40 @@ defmodule Kogen.Runner.Ladder do
       wall_ms: max(System.monotonic_time(:millisecond) - (session.rung_started_at || 0), 0),
       tokens: tokens
     })
+  end
+
+  @doc """
+  Waits out a usage limit or lost login before the stage reruns. The wait is outside the wall
+  budget; after `pause_cap_ms` of waiting the Build is out of budget.
+  """
+  @spec pause(Session.t(), map()) :: {:ok, Session.t()} | {:budget_exhausted, Session.t()}
+  def pause(%Session{request: %{recipe: recipe}} = session, data) do
+    %{pause_ms: wait, pause_cap_ms: cap} = Recipe.ladder(recipe)
+
+    if session.paused_ms + wait > cap do
+      {:budget_exhausted, session}
+    else
+      _recorded =
+        State.record(session.run, %{
+          event: :paused,
+          stage: data.stage,
+          reason: data.reason,
+          attempt: session.attempt,
+          wall_ms: wait
+        })
+
+      receive do
+      after
+        wait -> :ok
+      end
+
+      {:ok,
+       %{
+         session
+         | paused_ms: session.paused_ms + wait,
+           budget_deadline: session.budget_deadline && session.budget_deadline + wait
+       }}
+    end
   end
 
   @spec remaining_ms(Session.t()) :: non_neg_integer() | :infinity

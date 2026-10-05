@@ -2,22 +2,30 @@ defmodule Kogen.Build.Cycle.Steer do
   @moduledoc false
 
   # A ladder Build steers instead of stopping: an unusable check run is fed back to the
-  # builder as a repair, and other environment or controller signals from a Candidate stage
-  # end only that rung. Signing in again, landing and Kogen's own journal stay terminal.
+  # builder as a repair, other environment or controller signals from a Candidate stage end
+  # only that rung, and a usage limit or lost login pauses the Build until the account works.
+  # Landing and Kogen's own journal stay terminal.
 
   alias Kogen.Build.Cycle.State
   alias Kogen.Build.Recipe
   alias Kogen.Contracts.Failure
 
   @candidate_stages [:plan, :develop, :fix, :check, :audit]
-  @terminal_reasons [:login, :state_write_failed, :landing_failed]
+  @terminal_reasons [:state_write_failed, :landing_failed]
 
   @spec decide(State.t(), atom(), Failure.t()) ::
-          {:repair, atom(), map()} | {:next_rung, term(), atom()} | :stop
-  def decide(%State{} = state, stage, %Failure{class: class, reason: reason})
-      when class in [:environment, :controller] do
+          {:repair, atom(), map()} | {:next_rung, term(), atom()} | :pause | :provider | :stop
+  def decide(%State{} = state, stage, %Failure{class: class, reason: reason}) do
+    ladder? = Recipe.ladder(state.recipe) != nil
+
     cond do
-      Recipe.ladder(state.recipe) == nil ->
+      ladder? and reason in [:usage_limit, :login] ->
+        :pause
+
+      class == :provider ->
+        :provider
+
+      not ladder? ->
         :stop
 
       stage not in @candidate_stages or reason in @terminal_reasons ->
@@ -30,6 +38,4 @@ defmodule Kogen.Build.Cycle.Steer do
         {:next_rung, {class, reason}, class}
     end
   end
-
-  def decide(_state, _stage, _failure), do: :stop
 end

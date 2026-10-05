@@ -21,7 +21,7 @@ defmodule Kogen.E2e.LadderTest do
   setup_all do
     root = Temp.create!()
     on_exit(fn -> File.rm_rf!(root) end)
-    {:ok, seed: Build.prepare_seed!(root, project_config: Ladder.tests_project())}
+    {:ok, seed: Ladder.seed!(root)}
   end
 
   test "stopped rungs move up the ladder on fresh Candidates until one is green", context do

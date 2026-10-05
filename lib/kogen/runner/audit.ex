@@ -26,7 +26,10 @@ defmodule Kogen.Runner.Audit do
            session.sandbox
          ) do
       {:ok, acceptance} ->
-        failing = CheckStage.remaining(session, acceptance) -- ["suite"]
+        failing =
+          CheckStage.remaining(session, acceptance) --
+            ["suite", CheckStage.no_change_item_passed()]
+
         unaudited = Enum.reject(failing, &Map.has_key?(session.audited, &1))
         session = judge(session, unaudited)
         remaining = CheckStage.remaining(session, acceptance)
@@ -107,16 +110,22 @@ defmodule Kogen.Runner.Audit do
     upheld =
       for id <- session.acceptance_failures, Map.get(session.audited, id) == :valid, do: id
 
-    case upheld do
-      [] ->
-        session.failure_text
-
-      ids ->
-        (session.failure_text || "") <>
+    upheld_note =
+      if upheld == [],
+        do: "",
+        else:
           "\n\nKogen's test auditor checked these failing acceptance items against the " <>
-          "Request and upheld them; change the implementation, not the tests: " <>
-          Enum.join(ids, ", ")
-    end
+            "Request and upheld them; change the implementation, not the tests: " <>
+            Enum.join(upheld, ", ")
+
+    zero_note =
+      if CheckStage.no_change_item_passed() in session.acceptance_failures,
+        do:
+          "\n\nNo acceptance item for the requested change passes yet; implement the " <>
+            "Request so that at least one of them does.",
+        else: ""
+
+    (session.failure_text || "") <> upheld_note <> zero_note
   end
 
   defp skipped(session, failure) do

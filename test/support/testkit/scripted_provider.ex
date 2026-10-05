@@ -11,7 +11,7 @@ defmodule Kogen.E2e.ScriptedProvider.Step do
   @moduledoc false
 
   @enforce_keys [:stage, :text, :calls]
-  defstruct @enforce_keys ++ [model: nil, effort: nil]
+  defstruct @enforce_keys ++ [model: nil, effort: nil, error: nil]
 
   @type stage :: :context | :plan | :develop | :review | :audit | :shape
   @type t :: %__MODULE__{
@@ -19,7 +19,8 @@ defmodule Kogen.E2e.ScriptedProvider.Step do
           text: String.t(),
           calls: [Kogen.E2e.ScriptedProvider.Call.t()],
           model: String.t() | nil,
-          effort: String.t() | nil
+          effort: String.t() | nil,
+          error: Kogen.Contracts.ProviderError.class() | nil
         }
 end
 
@@ -61,6 +62,11 @@ defmodule Kogen.E2e.ScriptedProvider do
   @spec answer(Step.stage(), String.t()) :: Step.t()
   def answer(stage, text) when stage in @known_stages and is_binary(text),
     do: %Step{stage: stage, text: text, calls: []}
+
+  @doc "Answers the stage's request with a provider error of `class`."
+  @spec fail(Step.stage(), ProviderError.class()) :: Step.t()
+  def fail(stage, class) when stage in @known_stages and is_atom(class),
+    do: %Step{stage: stage, text: "", calls: [], error: class}
 
   @spec write(Step.stage(), Path.t(), String.t()) :: Step.t()
   def write(stage, path, contents) when stage in @known_stages do
@@ -149,7 +155,7 @@ defmodule Kogen.E2e.ScriptedProvider do
           requests: [request | state.requests]
       }
 
-      {:reply, {:ok, response(step, next_state.sequence)}, next_state}
+      {:reply, reply(step, next_state.sequence), next_state}
     else
       {:error, %ProviderError{} = error} -> {:reply, {:error, error}, state}
     end
@@ -228,6 +234,11 @@ defmodule Kogen.E2e.ScriptedProvider do
         provider_error(:malformed, "Scripted provider hook returned #{inspect(other)}.")
     end
   end
+
+  defp reply(%Step{error: nil} = step, sequence), do: {:ok, response(step, sequence)}
+
+  defp reply(%Step{error: class}, _sequence),
+    do: provider_error(class, "Scripted provider returned #{class}.")
 
   defp response(%Step{} = step, sequence) do
     calls =

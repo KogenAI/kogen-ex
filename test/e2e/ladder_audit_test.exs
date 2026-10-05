@@ -28,15 +28,14 @@ defmodule Kogen.E2e.LadderAuditTest do
   setup_all do
     root = Temp.create!()
     on_exit(fn -> File.rm_rf!(root) end)
-    {:ok, seed: Build.prepare_seed!(root, project_config: Ladder.tests_project())}
+    {:ok, seed: Ladder.seed!(root)}
   end
 
   # The shape of benchmark task elx-12 A5: the shaped test asserts a bare entry is in a list
   # the Request says holds {entry, message} tuples, so no correct implementation passes it.
   test "the auditor demotes a contradicting acceptance test and the Candidate lands", context do
     seed =
-      Build.prepare_seed!(Path.join(context.tmp_dir, "deprecations-seed"),
-        project_config: Ladder.tests_project(),
+      Ladder.seed!(Path.join(context.tmp_dir, "deprecations-seed"),
         intent: deprecations_intent(),
         acceptance: deprecations_acceptance()
       )
@@ -87,6 +86,46 @@ defmodule Kogen.E2e.LadderAuditTest do
 
     assert %{"acceptance_demoted" => [%{"item" => "A1", "verdict" => "contradicts"}]} =
              :json.decode(report)
+  end
+
+  test "demotion never makes a Candidate green that passes no change item", context do
+    verdict =
+      ~s({"items":[{"id":"A1","verdict":"over_strict","reason":"The Request leaves it open."}]})
+
+    script = [
+      ScriptedProvider.answer(:plan, @plan),
+      write("wrong", :wrong),
+      done(),
+      ScriptedProvider.answer(:audit, verdict),
+      write("ready", :ready),
+      done()
+    ]
+
+    result = run!(context, "zero-pass", script)
+
+    assert %Result{build: %{status: :landed, landed_sha: sha}} = result
+    assert source_at(result, sha) =~ "# revision: ready"
+    assert [%{item: "A1"}] = events(result, "acceptance_demoted")
+    assert [%{reason: "done_gate_red"}] = events(result, "repair")
+
+    repair = result.provider_requests |> Enum.filter(&(&1.tools != [])) |> Enum.at(2)
+    assert inspect(repair.input) =~ "No acceptance item for the requested change passes yet"
+  end
+
+  test "a usage limit pauses the Build instead of failing it", context do
+    script = [
+      ScriptedProvider.answer(:plan, @plan),
+      ScriptedProvider.fail(:develop, :usage_limit),
+      write("after-pause", :ready),
+      done()
+    ]
+
+    result =
+      Ladder.run!(context.tmp_dir, "pause", script, context.seed, "ladder", %{pause_ms: 10})
+
+    assert %Result{build: %{status: :landed}} = result
+    assert [%{stage: "develop", reason: "usage_limit", wall_ms: 10}] = events(result, "paused")
+    assert events(result, "escalation_started") == []
   end
 
   test "a valid acceptance test is not demoted; the Candidate is repaired", context do
@@ -163,9 +202,11 @@ defmodule Kogen.E2e.LadderAuditTest do
 
     ## Acceptance
     - A1: TinyApp.deprecated/0 lists run/3 as deprecated.
+    - A2: TinyApp.deprecated/0 gives run/3 its replacement hint.
 
     ## Verify
     - A1: test
+    - A2: test
 
     ## Notes
     Keep the implementation inside lib/tiny_app.ex.
@@ -184,6 +225,11 @@ defmodule Kogen.E2e.LadderAuditTest do
       @tag intent: "build-engine/A1"
       test "lists run/3 as deprecated" do
         assert {:run, 3} in TinyApp.deprecated()
+      end
+
+      @tag intent: "build-engine/A2"
+      test "gives run/3 its replacement hint" do
+        assert {{:run, 3}, "Use TinyApp.run/2 instead"} in TinyApp.deprecated()
       end
     end
     """

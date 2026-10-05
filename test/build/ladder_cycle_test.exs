@@ -69,9 +69,9 @@ defmodule Kogen.Build.LadderCycleTest do
     assert next.attempt == "sol-medium"
     assert [_record, {:escalate, %{trigger: :controller}}, _run] = effects
 
-    login = %Failure{class: :environment, reason: :login, detail: "signed out"}
-    {stopped, _effects} = Cycle.step(next, {:stage_failed, :develop, login})
-    assert stopped.result == {:failed, {:environment, :login}}
+    landing = %Failure{class: :environment, reason: :landing_failed, detail: "locked"}
+    {stopped, _effects} = Cycle.step(%{next | stage: :land}, {:stage_failed, :land, landing})
+    assert stopped.result == {:failed, {:environment, :landing_failed}}
 
     plan_shell =
       Cycle.new(%{approval: :a, repairs: 2, recipe: Recipe.for_build("plan-shell", "m", "e")})
@@ -80,6 +80,30 @@ defmodule Kogen.Build.LadderCycleTest do
       Cycle.step(%{plan_shell | stage: :develop}, {:stage_failed, :develop, unusable})
 
     assert legacy.result == {:failed, {:environment, :check_unavailable}}
+  end
+
+  test "a usage limit or lost login pauses the Build and reruns the stage" do
+    {state, _effects} = Cycle.step(start(new()), {:stage_ok, :plan, %{}})
+
+    for failure <- [
+          %Failure{class: :provider, reason: :usage_limit, detail: "limit"},
+          %Failure{class: :environment, reason: :login, detail: "signed out"}
+        ] do
+      {paused, effects} = Cycle.step(state, {:stage_failed, :develop, failure})
+      assert {paused.stage, paused.result, paused.attempt} == {:develop, nil, :builder}
+
+      assert [{:pause, %{stage: :develop, reason: reason}}, {:run, :develop, _args}] = effects
+      assert reason == failure.reason
+    end
+  end
+
+  test "with on_hard: :skip_first a hard plan starts at the second rung" do
+    recipe = Map.update!(@recipe, :ladder, &%{&1 | on_hard: :skip_first})
+    state = start(Cycle.new(%{approval: :approval, repairs: 2, recipe: recipe}))
+
+    {state, effects} = Cycle.step(state, {:stage_ok, :plan, %{plan_text: "Difficulty: hard"}})
+    assert {state.attempt, state.rung} == {"sol-medium", 1}
+    assert [_record, {:escalate, %{trigger: :hard_plan, model: "gpt-6.1-sol"}}, _run] = effects
   end
 
   test "each stopped rung moves to a fresh next rung with earlier rungs' findings" do
