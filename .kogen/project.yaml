@@ -1,6 +1,6 @@
 name: kogen
 build:
-  recipe: plan-shell
+  recipe: ladder
 checks:
   - name: full
     argv: [make, check-full]
