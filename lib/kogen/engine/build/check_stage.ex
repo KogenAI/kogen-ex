@@ -10,6 +10,7 @@ defmodule Kogen.Engine.Build.CheckStage do
   alias Kogen.Contracts.Failure
   alias Kogen.Engine.Build.Session
   alias Kogen.State
+  alias Kogen.Workspace
 
   @no_change_item_passed "no_change_item_passed"
 
@@ -25,7 +26,10 @@ defmodule Kogen.Engine.Build.CheckStage do
              %{
                sandbox: session.sandbox,
                base: session.base_sha,
-               check_baseline: session.approval.check_baseline
+               check_baseline: session.approval.check_baseline,
+               changed_ranges: fn ->
+                 Workspace.changed_line_ranges(session.workdir, session.base_sha, session.git_env)
+               end
              }
            ),
          {:ok, acceptance} <- acceptance(session),

@@ -9,12 +9,12 @@ defmodule Kogen.Feedback.Parser do
       credo_severity: 1,
       finding: 5,
       truncate: 1,
-      truncate: 2,
       cli_line: 1,
       lines: 1,
       environment_text?: 1
     ]
 
+  alias Kogen.Feedback.ExUnitDetails
   alias Kogen.Feedback.Parser.Compile
 
   @file_path ~r{((?:\$WORKDIR/|/)?[A-Za-z0-9_.$-]+(?:/[A-Za-z0-9_.$-]+)*\.exs?)\s*$}
@@ -250,9 +250,9 @@ defmodule Kogen.Feedback.Parser do
 
     {path, line_number, col} = exunit_location(location, workdir)
     headline = exunit_headline(block)
-    left = labeled_value(block, "left:")
-    right = labeled_value(block, "right:")
-    message = assertion_message(headline, left, right)
+    left = ExUnitDetails.field(block, "left")
+    right = ExUnitDetails.field(block, "right")
+    message = ExUnitDetails.message(block, path, workdir)
     environmental? = block |> Enum.join("\n") |> environment_text?()
 
     %{
@@ -262,7 +262,7 @@ defmodule Kogen.Feedback.Parser do
       path: path,
       line: line_number,
       col: col,
-      symbol: "#{current.module} \"#{truncate(current.name, 100)}\"",
+      symbol: "#{current.module} \"#{current.name}\"",
       message:
         if(environmental?,
           do: "environment noise, not a candidate failure: " <> message,
@@ -294,20 +294,4 @@ defmodule Kogen.Feedback.Parser do
       end
     end)
   end
-
-  defp labeled_value(lines, label) do
-    Enum.find_value(lines, fn line ->
-      case String.split(String.trim(line), label, parts: 2) do
-        ["", value] -> truncate(String.trim(value), 80)
-        _other -> nil
-      end
-    end)
-  end
-
-  defp assertion_message(headline, nil, nil), do: truncate(headline)
-  defp assertion_message(headline, left, nil), do: truncate("#{headline}; left: #{left}")
-  defp assertion_message(headline, nil, right), do: truncate("#{headline}; right: #{right}")
-
-  defp assertion_message(headline, left, right),
-    do: truncate("#{headline}; left: #{left}; right: #{right}")
 end

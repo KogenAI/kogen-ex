@@ -4,6 +4,7 @@ defmodule Kogen.Quality do
     deps: [Kogen.Contracts, Kogen.Proc, Kogen.Workspace],
     exports: [Request, Source.ExternalResource, Source.MapShapes]
 
+  alias Kogen.Contracts.CheckBaseline
   alias Kogen.Quality.Analysis
   alias Kogen.Quality.Request
   alias Kogen.Quality.Source
@@ -15,10 +16,16 @@ defmodule Kogen.Quality do
   @spec augment(tuple(), Path.t(), Path.t(), map(), map() | struct() | nil) :: tuple()
   def augment({:ok, result}, workdir, run_dir, env, options) do
     options = if is_map(options), do: options, else: %{}
-    commands = commands(Request.new(workdir, run_dir, env, options))
+
+    commands =
+      workdir
+      |> Request.new(run_dir, env, options)
+      |> commands()
+      |> Enum.map(&CheckBaseline.annotate(&1, Map.get(options, :check_baseline, [])))
+
     checks = result.checks ++ commands
-    errors = Enum.filter(commands, &(&1.exit_level > 0))
-    warnings = Enum.flat_map(commands, & &1.warnings)
+    errors = Enum.filter(commands, &(&1.exit_level > 0 and not &1.base_red?))
+    warnings = Enum.flat_map(commands, &(&1.warnings ++ CheckBaseline.warning(&1)))
 
     feedback =
       [result.feedback | Enum.map(commands, & &1.output)] |> Enum.join("\n") |> String.trim()

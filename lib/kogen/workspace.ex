@@ -84,6 +84,11 @@ defmodule Kogen.Workspace do
           {:ok, [String.t()]} | {:error, term()}
   def changed_paths(path, base_sha, git_env), do: Checkout.changed_paths(path, base_sha, git_env)
 
+  @spec changed_line_ranges(Path.t(), String.t(), git_env()) ::
+          {:ok, [String.t()]} | {:error, term()}
+  def changed_line_ranges(path, base, env),
+    do: Kogen.Workspace.ChangedRanges.changed_line_ranges(path, base, env)
+
   @spec commit(Path.t(), String.t(), [{String.t(), String.t()}], git_env()) ::
           {:ok, String.t()} | {:error, term()}
   def commit(path, message, trailers, git_env),

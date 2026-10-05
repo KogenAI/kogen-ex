@@ -6,5 +6,6 @@ defmodule Kogen.Checks.Feedback do
   defdelegate gate(result, spec, paths), to: Kogen.Feedback
   defdelegate overall_exit_level(results), to: Kogen.Feedback
   defdelegate render_model_feedback(results), to: Kogen.Feedback
+  defdelegate render_model_feedback(results, changed_ranges), to: Kogen.Feedback
   defdelegate render_environment_detail(results), to: Kogen.Feedback
 end

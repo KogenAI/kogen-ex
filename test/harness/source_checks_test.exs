@@ -2,6 +2,7 @@ defmodule Kogen.Harness.SourceChecksTest do
   use Kogen.Testkit.Case
 
   alias Kogen.Checks
+  alias Kogen.Contracts.CheckBaseline
   alias Kogen.Contracts.Project
   alias Kogen.Harness.Gate
   alias Kogen.Harness.Opts
@@ -14,21 +15,64 @@ defmodule Kogen.Harness.SourceChecksTest do
     repo = fixture(tmp)
     File.write!(Path.join(repo, "lib/data.txt"), "old\n")
     File.write!(Path.join(repo, "lib/reader.ex"), reader(false))
-    opts = options(repo, tmp)
+
+    opts = %{
+      options(repo, tmp)
+      | changed_ranges: fn -> {:ok, ["lib/reader.ex: base 0 -> candidate 1-6"]} end
+    }
+
     assert {:ok, gate} = Gate.run(opts, deadline())
     assert gate.status == :fail
     assert Enum.join(gate.failures) =~ "lib/reader.ex:4:1"
     assert Enum.join(gate.failures) =~ "Declare @external_resource for lib/data.txt"
+    assert Enum.join(gate.failures) =~ "Candidate changes relative to Build base:"
+    assert Enum.join(gate.failures) =~ "lib/reader.ex: base 0 -> candidate 1-6"
 
     assert {:ok, final} =
-             Checks.run_all(repo, opts.project, Path.join(tmp, "final"), %{}, Git.env())
+             Checks.run_all(repo, opts.project, Path.join(tmp, "final"), %{}, Git.env(), %{
+               changed_ranges: opts.changed_ranges
+             })
 
     assert {:fail, ["source_checks"]} = final.status
+    assert final.feedback =~ "Candidate changes relative to Build base:"
+    assert final.feedback =~ "lib/reader.ex: base 0 -> candidate 1-6"
     File.write!(Path.join(repo, "lib/reader.ex"), reader(true))
     assert {:ok, %{status: :pass}} = Gate.run(opts, deadline())
     assert repo |> run_reader(tmp) |> String.ends_with?("old\n\n")
     File.write!(Path.join(repo, "lib/data.txt"), "fresh resource content\n")
     assert repo |> run_reader(tmp) |> String.ends_with?("fresh resource content\n\n")
+  end
+
+  test "source failures recorded at approval are excused in both gates, while new ones fail", %{
+    tmp_dir: tmp
+  } do
+    repo = fixture(tmp)
+    File.write!(Path.join(repo, "lib/data.txt"), "old\n")
+    File.write!(Path.join(repo, "lib/reader.ex"), reader(false))
+    opts = options(repo, tmp)
+    run_dir = Path.join(tmp, "final")
+    assert {:ok, base} = Checks.run_all(repo, opts.project, run_dir, %{}, Git.env())
+    baseline = CheckBaseline.from_assessments(base.checks)
+    opts = %{opts | check_baseline: baseline}
+    final_options = %{check_baseline: baseline}
+
+    assert {:ok, gate} = Gate.run(opts, deadline())
+    assert gate.status == :pass
+    assert Enum.join(gate.warnings) =~ "Base-red warning"
+
+    assert {:ok, final} =
+             Checks.run_all(repo, opts.project, run_dir, %{}, Git.env(), final_options)
+
+    assert final.status == :pass
+    assert Enum.join(final.warnings) =~ "Base-red warning"
+    File.write!(Path.join(repo, "lib/another.ex"), reader(false))
+    assert {:ok, gate} = Gate.run(opts, deadline())
+    assert gate.status == :fail
+
+    assert {:ok, final} =
+             Checks.run_all(repo, opts.project, run_dir, %{}, Git.env(), final_options)
+
+    assert {:fail, ["source_checks"]} = final.status
   end
 
   test "three repeated public map contracts are advice in both gates without optional tools", %{

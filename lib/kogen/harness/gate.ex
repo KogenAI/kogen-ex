@@ -24,7 +24,11 @@ defmodule Kogen.Harness.Gate do
       checks = checks ++ quality_commands(opts, deadline)
       commands = Enum.reject(fixes ++ checks, & &1.base_red?)
       status = if Feedback.overall_exit_level(commands) == 0, do: :pass, else: :fail
-      failures = if status == :pass, do: [], else: [Feedback.render_model_feedback(commands)]
+
+      failures =
+        if status == :pass,
+          do: [],
+          else: [Feedback.render_model_feedback(commands, opts.changed_ranges)]
 
       warnings =
         Enum.flat_map(fixes ++ checks, &CheckBaseline.warning/1) ++
@@ -44,13 +48,14 @@ defmodule Kogen.Harness.Gate do
   end
 
   defp quality_commands(opts, deadline) do
-    Kogen.Quality.commands(
-      Kogen.Quality.Request.new(opts.workdir, opts.run_dir, opts.env, %{
-        base: opts.base,
-        sandbox: opts.sandbox,
-        deadline: deadline
-      })
-    )
+    opts.workdir
+    |> Kogen.Quality.Request.new(opts.run_dir, opts.env, %{
+      base: opts.base,
+      sandbox: opts.sandbox,
+      deadline: deadline
+    })
+    |> Kogen.Quality.commands()
+    |> Enum.map(&CheckBaseline.annotate(&1, opts.check_baseline))
   end
 
   defp before_gate(nil), do: :ok

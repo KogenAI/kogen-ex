@@ -106,7 +106,11 @@ defmodule Kogen.Feedback do
   end
 
   @spec render_model_feedback([map()]) :: String.t()
-  def render_model_feedback(results), do: Renderer.model(results)
+  def render_model_feedback(results), do: render_model_feedback(results, nil)
+
+  @spec render_model_feedback([map()], function() | nil) :: String.t()
+  def render_model_feedback(results, changed_ranges),
+    do: results |> Renderer.model() |> Renderer.with_changes(changed_ranges)
 
   @spec render_environment_detail([map()]) :: String.t()
   def render_environment_detail(results), do: Renderer.environment(results)

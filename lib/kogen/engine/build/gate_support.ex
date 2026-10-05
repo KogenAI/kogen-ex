@@ -46,6 +46,9 @@ defmodule Kogen.Engine.Build.GateSupport do
     |> Map.put(:base, session.base_sha)
     |> Map.put(:base_test, base_test)
     |> Map.put(:changed_paths, changed_paths)
+    |> Map.put(:changed_ranges, fn ->
+      Workspace.changed_line_ranges(session.workdir, session.base_sha, session.git_env)
+    end)
     |> Map.put(:flake_excused_test_ids, previously_excused)
   end
 
@@ -265,32 +268,7 @@ defmodule Kogen.Engine.Build.GateSupport do
 
   def record_gate_flakes(_session, _gate), do: {:ok, []}
 
-  def gate_failure(%HarnessResult{outcome: :done}), do: {nil, nil}
-
-  def gate_failure(%HarnessResult{outcome: :gate_environment, gate: gate}) do
-    detail = gate_detail(gate, "The done gate could not complete its checks.")
-    {%Failure{class: :environment, reason: :check_unavailable, detail: detail}, detail}
-  end
-
-  def gate_failure(%HarnessResult{outcome: reason}) when reason in [:turn_cap, :wall_cap] do
-    detail =
-      case reason do
-        :turn_cap -> "Developer exhausted its turn cap."
-        :wall_cap -> "Developer exhausted its wall-clock cap."
-      end
-
-    {%Failure{class: :candidate, reason: reason, detail: detail}, detail}
-  end
-
-  def gate_failure(%HarnessResult{outcome: :gate_red, gate: gate}) do
-    detail = gate_detail(gate, "Harness done gate failed.")
-    {%Failure{class: :candidate, reason: :done_gate_red, detail: detail}, detail}
-  end
-
-  defp gate_detail(%{failures: failures}, fallback) when is_list(failures),
-    do: if(failures == [], do: fallback, else: Enum.join(failures, "\n"))
-
-  defp gate_detail(_gate, fallback), do: fallback
+  defdelegate gate_failure(result), to: Failure, as: :from_developer
 
   defp default_harness_options(session, guard) do
     context = Map.get(session.request.recipe.roles, :context)

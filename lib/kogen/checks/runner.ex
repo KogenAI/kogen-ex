@@ -55,10 +55,20 @@ defmodule Kogen.Checks.Runner do
            }}
           | {:error, Failure.t()}
   def run_all(workdir, %Project{} = project, run_dir, env, git_env, options) do
+    options = options(options)
+
     workdir
-    |> run_all_with_project(project, run_dir, env, git_env, options(options))
+    |> run_all_with_project(project, run_dir, env, git_env, options)
     |> Kogen.Quality.augment(workdir, run_dir, Map.merge(env, git_env), options)
+    |> final_feedback(options.changed_ranges)
   end
+
+  defp final_feedback({:ok, %{status: {:fail, _}} = result}, changed_ranges) do
+    checks = Enum.reject(result.checks, & &1.base_red?)
+    {:ok, %{result | feedback: Feedback.render_model_feedback(checks, changed_ranges)}}
+  end
+
+  defp final_feedback(result, _changed_ranges), do: result
 
   defp run_all_with_project(workdir, %Project{} = project, run_dir, env, git_env, options) do
     with :ok <- prepare_logs(run_dir),
@@ -79,7 +89,7 @@ defmodule Kogen.Checks.Runner do
         before_tree,
         workdir,
         git_env,
-        options.check_baseline
+        options
       )
     else
       {:error, %Failure{} = failure} -> {:error, failure}
@@ -87,16 +97,15 @@ defmodule Kogen.Checks.Runner do
     end
   end
 
-  defp finish_run(results, before_tree, workdir, git_env, baseline) do
+  defp finish_run(results, before_tree, workdir, git_env, options) do
     with {:ok, _after_tree} <- Workspace.tree_hash(workdir, git_env),
          {:ok, receipts, failures, feedbacks} <- results do
-      checks = Enum.map(feedbacks, &CheckBaseline.annotate(&1, baseline))
+      checks = Enum.map(feedbacks, &CheckBaseline.annotate(&1, options.check_baseline))
       base_red = Enum.filter(checks, & &1.base_red?)
-      active_checks = Enum.reject(checks, & &1.base_red?)
       failures = Enum.reject(failures, &base_red_name?(base_red, &1))
       receipts = Enum.reject(receipts, &base_red_name?(base_red, &1.check))
       status = if failures == [], do: :pass, else: {:fail, failures}
-      feedback = if failures == [], do: "", else: Feedback.render_model_feedback(active_checks)
+
       exit_levels = Enum.map(checks, &{&1.name, &1.exit_level})
       warnings = Enum.flat_map(checks, &CheckBaseline.warning/1)
 
@@ -105,7 +114,7 @@ defmodule Kogen.Checks.Runner do
          tree: before_tree,
          receipts: receipts,
          status: status,
-         feedback: feedback,
+         feedback: "",
          exit_levels: exit_levels,
          checks: checks,
          warnings: warnings
@@ -116,12 +125,17 @@ defmodule Kogen.Checks.Runner do
   defp base_red_name?(checks, name), do: Enum.any?(checks, &(&1.name == name))
 
   defp options(%Sandbox{} = sandbox),
-    do: %{sandbox: sandbox, check_baseline: [], baseline_run?: false}
+    do: %{sandbox: sandbox, check_baseline: [], baseline_run?: false, changed_ranges: nil}
 
-  defp options(nil), do: %{sandbox: nil, check_baseline: [], baseline_run?: false}
+  defp options(nil),
+    do: %{sandbox: nil, check_baseline: [], baseline_run?: false, changed_ranges: nil}
 
   defp options(options) when is_map(options),
-    do: Map.merge(%{sandbox: nil, check_baseline: [], baseline_run?: false}, options)
+    do:
+      Map.merge(
+        %{sandbox: nil, check_baseline: [], baseline_run?: false, changed_ranges: nil},
+        options
+      )
 
   defp run_specs(specs, %RunState{} = initial) do
     case Enum.reduce_while(specs, {:ok, initial}, &reduce_spec/2) do

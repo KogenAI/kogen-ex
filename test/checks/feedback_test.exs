@@ -363,7 +363,8 @@ defmodule Kogen.Checks.FeedbackTest do
         {before + String.length(old_feedback), compact_chars + String.length(compact)}
       end)
 
-    assert compact_chars < before * 0.25
+    # Assertion source and values now stay in each finding, within its own size budget.
+    assert compact_chars < before * 0.35
   end
 
   defp analyze(name, argv, status, file) do

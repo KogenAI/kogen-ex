@@ -31,6 +31,21 @@ defmodule Kogen.Feedback.Renderer do
     end
   end
 
+  def with_changes("", _changed_ranges), do: ""
+  def with_changes(feedback, nil), do: feedback
+
+  def with_changes(feedback, changed_ranges) when is_function(changed_ranges, 0) do
+    case changed_ranges.() do
+      {:ok, [_ | _] = ranges} ->
+        feedback <>
+          "\nCandidate changes relative to Build base:\n" <>
+          Enum.join(Enum.take(ranges, 30), "\n")
+
+      _other ->
+        feedback
+    end
+  end
+
   def environment(results) do
     unavailable = Enum.filter(results, &(&1.exit_level == 3))
 
