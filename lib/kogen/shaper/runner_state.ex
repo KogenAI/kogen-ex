@@ -11,6 +11,7 @@ defmodule Kogen.Shaper.Runner.State do
     failure_text: nil,
     turn_offset: 0,
     repairs: 0,
+    style_repairs: 0,
     calls: []
   ]
 
@@ -23,6 +24,7 @@ defmodule Kogen.Shaper.Runner.State do
           failure_text: String.t() | nil,
           turn_offset: non_neg_integer(),
           repairs: non_neg_integer(),
+          style_repairs: non_neg_integer(),
           calls: [Kogen.Harness.ShapeCall.t()]
         }
 end

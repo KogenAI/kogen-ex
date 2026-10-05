@@ -142,13 +142,55 @@ defmodule Kogen.Shaper.RepairReliabilityTest do
     end
   end
 
+  test "style advice stops after two repairs and saves warnings without spending structural passes",
+       %{tmp_dir: tmp_dir} do
+    project = seed_project!(Path.join(tmp_dir, "project"))
+    notes = "Approach: Change Tiny.value/0 to return :new and preserve its public function path."
+
+    advisory =
+      notes |> change_intent() |> String.replace("keeps returning :old", "should return :new")
+
+    write =
+      ScriptedProvider.write_many(:shape, [
+        {intent_path(), advisory},
+        {acceptance_path(), String.replace(acceptance_test(), ":old", ":new")}
+      ])
+
+    structural = ScriptedProvider.write(:shape, intent_path(), change_intent(nil))
+    {:ok, server} = ScriptedProvider.start_link([write, write, structural, structural, write])
+    config = %Config{server: server}
+
+    try do
+      assert {:ok, result} = Shaper.shape(request(project, tmp_dir, config))
+      assert result.rounds == 5
+      requests = ScriptedProvider.requests(config)
+      assert length(requests) == 5
+      assert Enum.map_join(Enum.at(requests, 1).input, &inspect/1) =~ "Style advice:"
+      assert Enum.map_join(Enum.at(requests, 2).input, &inspect/1) =~ "lint_hedge"
+
+      warning_file =
+        Path.join([project, ".kogen", "intents", "shape-loop", "shape-warnings.json"])
+
+      saved = warning_file |> File.read!() |> :json.decode()
+
+      assert Enum.any?(
+               saved["warnings"],
+               &(&1["code"] == "lint_hedge" and &1["item_ids"] == ["A1"])
+             )
+
+      assert File.read!(result.intent_path) =~ "should return :new"
+    after
+      GenServer.stop(server, :normal)
+    end
+  end
+
   test "repair exhaustion reports the actual failure and pass counts", %{tmp_dir: tmp_dir} do
     project = seed_project!(Path.join(tmp_dir, "project"))
 
     invalid =
       intent(
-        "usually keeps",
-        "Approach: Keep Tiny.value/0 unchanged and preserve its public result by avoiding unrelated changes."
+        "keeps",
+        "A1 verifies the existing Tiny.value/0 result."
       )
 
     repeated =
@@ -157,7 +199,7 @@ defmodule Kogen.Shaper.RepairReliabilityTest do
         {acceptance_path(), acceptance_test()}
       ])
 
-    {:ok, server} = ScriptedProvider.start_link(List.duplicate(repeated, 5))
+    {:ok, server} = ScriptedProvider.start_link(List.duplicate(repeated, 3))
     config = %Config{server: server}
 
     try do
@@ -169,11 +211,11 @@ defmodule Kogen.Shaper.RepairReliabilityTest do
               }} = Shaper.shape(request(project, tmp_dir, config))
 
       assert detail =~ "Shaper repair limit reached for intent_lint_failed"
-      assert detail =~ "4 repair round(s), 5 attempt(s), and 5 model call(s)"
+      assert detail =~ "2 repair round(s), 3 attempt(s), and 3 model call(s)"
       assert detail =~ "candidate/intent_lint_failed"
 
       assert File.read!(Path.join([tmp_dir, "shape-run", "logs", "shaper.log"])) =~
-               "repairs=4/4 attempts=5 calls=5"
+               "repairs=2/2 attempts=3 calls=3"
     after
       GenServer.stop(server, :normal)
     end

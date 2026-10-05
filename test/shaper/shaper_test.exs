@@ -93,13 +93,8 @@ defmodule Kogen.Shaper.Tests do
                ".kogen/acceptance/shape-loop_test.exs"
 
       assert Enum.map_join(Enum.at(requests, 2).input, &inspect/1) =~ "intent_lint_failed"
-      assert Enum.map_join(Enum.at(requests, 2).input, &inspect/1) =~ "contains a hedge"
       repair = Enum.map_join(Enum.at(requests, 2).input, &inspect/1)
-      assert repair =~ "Acceptance item A1 text:"
-      assert repair =~ "Tiny.value/0 usually keeps returning :old on the unchanged checkout."
-
-      assert repair =~
-               "Rule: Acceptance items must state a definite, observable result without hedge words."
+      refute repair =~ "contains a hedge"
 
       assert repair =~ "Notes text:"
       assert repair =~ "A1 verifies Tiny.value/0 returns :old."

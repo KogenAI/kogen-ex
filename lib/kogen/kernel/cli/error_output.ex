@@ -130,8 +130,10 @@ defmodule Kogen.Kernel.CLI.ErrorOutput do
 
   def format(reason), do: {70, "controller/#{inspect(reason)}\n"}
 
-  defp issue_line(%{rule: rule, message: message, line: line}),
+  defp issue_line(%{rule: rule, message: message, line: line}) when is_integer(line),
     do: "  #{rule} at line #{line}: #{message}\n"
+
+  defp issue_line(%{rule: rule, message: message}), do: "  #{rule}: #{message}\n"
 
   defp issue_line(%{line: line, message: message}), do: "  line #{line}: #{message}\n"
   defp issue_line(issue), do: "  #{inspect(issue)}\n"

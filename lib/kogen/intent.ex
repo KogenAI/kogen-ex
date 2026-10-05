@@ -3,6 +3,7 @@ defmodule Kogen.Intent do
   use Boundary, deps: [Kogen.Contracts], exports: []
 
   alias Kogen.Contracts.Intent
+  alias Kogen.Intent.Advisory
   alias Kogen.Intent.Parser
 
   @type parse_error :: %{line: pos_integer(), message: String.t()}
@@ -16,6 +17,17 @@ defmodule Kogen.Intent do
 
   @spec lint(Intent.t()) :: [issue()]
   def lint(%Intent{} = intent), do: Kogen.Intent.Lint.lint(intent)
+
+  @spec structural_issues(Intent.t()) :: [issue()]
+  def structural_issues(intent), do: Enum.reject(lint(intent), &Advisory.style?/1)
+
+  @spec style_warnings(Intent.t()) :: [Kogen.Contracts.ShapeWarning.t()]
+  def style_warnings(intent) do
+    intent
+    |> lint()
+    |> Enum.filter(&Advisory.style?/1)
+    |> Enum.map(&Advisory.warning/1)
+  end
 
   @spec hash(binary()) :: String.t()
   def hash(binary) when is_binary(binary) do

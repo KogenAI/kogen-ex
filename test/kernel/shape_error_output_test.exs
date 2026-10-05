@@ -32,4 +32,16 @@ defmodule Kogen.Kernel.ShapeErrorOutputTest do
   test "other shaping failures keep their usual output" do
     assert ErrorOutput.format_shape(:intent_not_found) == ErrorOutput.format(:intent_not_found)
   end
+
+  test "lint errors print a line only when one is known" do
+    issues = [
+      %{rule: :missing_verify, line: nil, message: "Add Verify."},
+      %{rule: :invalid_verify, line: 12, message: "Unknown Verify."}
+    ]
+
+    assert {1, text} = ErrorOutput.format({:lint, issues})
+    assert text =~ "  missing_verify: Add Verify.\n"
+    assert text =~ "  invalid_verify at line 12: Unknown Verify.\n"
+    refute text =~ "at line :"
+  end
 end

@@ -59,7 +59,11 @@ defmodule Kogen.Kernel.Approval do
          project_root: request.project_root,
          origin: request.origin,
          git_env: git_env,
-         warnings: warnings
+         warnings:
+           Enum.uniq_by(
+             warnings ++ Intent.style_warnings(intent),
+             &{&1.code, &1.item_ids, &1.message}
+           )
        }}
     end
   end
@@ -112,7 +116,7 @@ defmodule Kogen.Kernel.Approval do
   def warnings_text(warnings, check_baseline \\ []) do
     lines =
       Enum.map_join(warnings, "", fn warning ->
-        items = Enum.join(warning.item_ids, ", ")
+        items = if warning.item_ids == [], do: "-", else: Enum.join(warning.item_ids, ", ")
         "  - #{warning.code}: #{items} — #{warning.message}\n"
       end)
 
@@ -138,7 +142,7 @@ defmodule Kogen.Kernel.Approval do
   end
 
   defp clean_intent(%IntentData{} = intent) do
-    case Intent.lint(intent) do
+    case Intent.structural_issues(intent) do
       [] -> :ok
       issues -> {:error, {:lint, issues}}
     end

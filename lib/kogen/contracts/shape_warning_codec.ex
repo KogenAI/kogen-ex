@@ -52,12 +52,13 @@ defmodule Kogen.Contracts.ShapeWarningCodec do
     end
   end
 
-  defp decode_warning(
-         %{"code" => "shape_reclassified", "item_ids" => ids, "message" => message} = row
-       )
-       when map_size(row) == 3 and is_list(ids) and ids != [] and is_binary(message) do
-    if Enum.all?(ids, &valid_item_id?/1) and String.trim(message) != "" do
-      {:ok, %ShapeWarning{code: :shape_reclassified, item_ids: ids, message: message}}
+  defp decode_warning(%{"code" => code, "item_ids" => ids, "message" => message} = row)
+       when map_size(row) == 3 and is_list(ids) and is_binary(message) do
+    known = Enum.find(ShapeWarning.codes(), &(Atom.to_string(&1) == code))
+
+    if (known && (known != :shape_reclassified or ids != [])) and
+         Enum.all?(ids, &valid_item_id?/1) and String.trim(message) != "" do
+      {:ok, %ShapeWarning{code: known, item_ids: ids, message: message}}
     else
       :error
     end

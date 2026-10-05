@@ -3,7 +3,7 @@
 This file is the contract between domains. Change it only through the integrator. Types refer to `Kogen.Contracts.*` structs unless stated. Paths are absolute strings. Only `Kogen.Kernel` reads HOME, env or cwd; everyone else receives explicit values.
 
 ## Dependency graph (Boundary, acyclic)
-`contracts` ← every domain. `workspace` → proc. `provider` → proc. `state` → workspace. `checks` → proc, workspace, project. `harness` → proc, provider, project. `build` is pure (contracts, plus resilience's error classes). `shaper` → checks, harness, intent, proc, project, resilience. `engine` → build, intent, proc, project, provider, workspace, state, checks, harness. `runner` → build, checks, engine, harness, state. `queue` → proc, state, workspace. `kernel` → proc, project, intent, provider, engine, runner, workspace, state, checks, harness, resilience, shaper, queue, cli. `cli` is pure (no deps).
+`contracts` ← every domain. `workspace` → proc. `provider` → proc. `state` → workspace. `feedback` → contracts. `quality` → proc, workspace. `checks` → feedback, quality, proc, workspace, project. `harness` → quality, checks, proc, provider, project. `build` is pure (contracts, plus resilience's error classes). `shaper` → checks, harness, intent, proc, project, resilience. `engine` → build, intent, proc, project, provider, workspace, state, checks, harness. `runner` → build, checks, engine, harness, state. `queue` → proc, state, workspace. `kernel` → proc, project, intent, provider, engine, runner, workspace, state, checks, harness, resilience, shaper, queue, cli. `cli` is pure (no deps).
 
 ## Kogen.Proc
 - `run([String.t()], opts) :: {:ok, ProcResult.t()} | {:error, :enoent | term()}`
@@ -43,7 +43,7 @@ This file is the contract between domains. Change it only through the integrator
 ## Kogen.Intent / Kogen.Project
 - `Kogen.Intent.parse(path) :: {:ok, Intent.t()} | {:error, [%{line: pos_integer(), message: String.t()}]}`
 - `Kogen.Intent.parse_binary(binary, path) :: same`
-- `Kogen.Intent.lint(Intent.t()) :: [%{rule: atom(), message: String.t(), line: pos_integer() | nil}]`
+- `Kogen.Intent.lint(Intent.t()) :: [%{rule: atom(), message: String.t(), line: pos_integer() | nil}]`. `structural_issues/1` returns blocking findings; `style_warnings/1` returns advisory `lint_<rule>` warnings.
 - `Kogen.Intent.hash(binary) :: String.t()` (sha256 hex)
 - `Kogen.Project.load(checkout_root) :: {:ok, Project.t()} | {:error, [%{line, message}]}`, reading `.kogen/project.yaml`
 - Project settings may include `base: <branch>` and `build: {recipe, roles, wall_minutes, edge_tests, model_fallback}`. An explicit project Build recipe overrides the matching machine setting; `~/.kogen/config.yaml` supplies the recipe when the project omits one, and `ladder` is used when both omit it. `wall_minutes` (a positive integer, project over machine) sets a ladder's whole-Build wall budget, default 60. The account is a machine choice (`kogen provider use`), never committed; a legacy `account: <label>` still loads for one CLI generation and warns. Build roles (`builder`, `planner`, `reviewer`, `context`, `auditor`, `shaper`) accept `model` and `effort`; project values override matching values from `~/.kogen/config.yaml`.
@@ -84,7 +84,7 @@ This file is the contract between domains. Change it only through the integrator
   - `changed?` optional controller callback; Engine supplies it using Workspace's sanitized Candidate tree scan, so Harness never runs Git against the Candidate directly.
 
 ## Kogen.Shaper
-- `shape(%Kogen.Shaper.Request{}) :: {:ok, %Kogen.Shaper.Result{}} | {:error, term()}`; the controller runs the Harness shaper, lints the generated Intent, runs the project's `acceptance_checks`, and applies red-on-base validation. A `test keep` item that fails on the base is reclassified as `test` and recorded as an approval warning. Candidate validation failures return to the same model conversation for at most four repair rounds, subject to the unchanged turn limit; there is no default shaping wall timeout.
+- `shape(%Kogen.Shaper.Request{}) :: {:ok, %Kogen.Shaper.Result{}} | {:error, term()}`; the controller runs the Harness shaper, lints the generated Intent, runs the project's `acceptance_checks`, and applies red-on-base validation. A `test keep` item that fails on the base is reclassified as `test` and recorded as an approval warning. Structural validation gets three passes. Style findings get at most two extra repairs in the same conversation, then become `lint_<rule>` warnings in `shape-warnings.json`, subject to the unchanged turn limit; there is no default shaping wall timeout.
 - Each `%Kogen.Harness.ShapeCall{}` records the shape model, effort, per-call token counts, and wall time. The transcript is stored outside the project checkout.
 
 ## Kogen.Checks
@@ -195,7 +195,7 @@ kogen help [<command> [<subcommand>]]
 
 ### Shaping an Intent from a task statement
 
-Run `kogen intent shape <slug> <file> --project <checkout>` to create `.kogen/intents/<slug>/intent.md` and `.kogen/acceptance/<slug>_test.exs`. Pass `-` as the file to read the request from stdin. The command blocks until shaping and validation finish, with a 60-turn limit and no wall timeout; it never approves the Intent. When shaping ends on a provider error after its retries, it exits 4 and says that no Intent was written. Its model and effort come from `build.roles.shaper`, falling back to `build.roles.builder`; `--json` emits per-call usage for automation.
+Run `kogen intent shape <slug> <file> --project <checkout>` to create `.kogen/intents/<slug>/intent.md` and `.kogen/acceptance/<slug>_test.exs`. Pass `-` as the file to read the request from stdin. The command blocks until shaping and validation finish, with a 60-turn limit and no wall timeout; it never approves the Intent. Structural validation gets three passes. Style advice gets at most two additional repairs in the same conversation, within the same turn and wall limits; whatever remains is saved in `shape-warnings.json`. Approval displays these as card warnings and still exits 5 for review. When shaping ends on a provider error after its retries, it exits 4 and says that no Intent was written. Its model and effort come from `build.roles.shaper`, falling back to `build.roles.builder`; `--json` emits per-call usage for automation.
 
 ### Writing an acceptance test for a Build-engine Intent
 

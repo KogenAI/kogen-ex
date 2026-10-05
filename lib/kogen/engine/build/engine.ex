@@ -102,7 +102,7 @@ defmodule Kogen.Engine.Build.Engine do
 
     with {:ok, intent} <- Intent.parse_binary(approval.intent_bytes, path),
          true <- intent.slug == approval.slug,
-         [] <- Intent.lint(intent) do
+         [] <- Intent.structural_issues(intent) do
       {:ok, intent, approval.intent_bytes}
     else
       false -> {:error, :approved_intent_slug_mismatch}

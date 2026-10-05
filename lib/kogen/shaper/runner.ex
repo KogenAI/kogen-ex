@@ -1,15 +1,17 @@
 defmodule Kogen.Shaper.Runner do
   @moduledoc false
 
+  import Kogen.Shaper.Progress, only: [progress: 3, limit_failure: 4]
+
   alias Kogen.Checks.ShapeFormatRequest
   alias Kogen.Checks.ShapeValidation
   alias Kogen.Contracts.Failure
   alias Kogen.Contracts.Project
-  alias Kogen.Contracts.Redact
   alias Kogen.Contracts.ShapeWarning
   alias Kogen.Harness
   alias Kogen.Harness.Opts
   alias Kogen.Harness.ShapePass
+  alias Kogen.Intent
   alias Kogen.Proc
   alias Kogen.Project, as: ProjectDomain
   alias Kogen.Shaper.Request
@@ -19,7 +21,7 @@ defmodule Kogen.Shaper.Runner do
   alias Kogen.Shaper.ShapeWarnings
   alias Kogen.Shaper.Validation
 
-  @max_repairs 4
+  @max_repairs 2
 
   @spec run(Request.t()) :: {:ok, Result.t()} | {:error, term()}
   def run(%Request{} = request) do
@@ -35,7 +37,7 @@ defmodule Kogen.Shaper.Runner do
 
   defp attempt(%State{} = state) do
     request = state.request
-    attempt_number = state.repairs + 1
+    attempt_number = state.repairs + state.style_repairs + 1
     remaining_turns = request.limits.max_turns - state.turn_offset
     remaining_ms = remaining_ms(state.deadline)
 
@@ -106,7 +108,7 @@ defmodule Kogen.Shaper.Runner do
 
     case validation do
       {:ok, warnings} ->
-        validation_succeeded(state, attempt_number, warnings)
+        finish_or_polish(state, pass, attempt_number, warnings)
 
       {:error, %Failure{class: :candidate} = failure} when state.repairs < @max_repairs ->
         progress(
@@ -139,6 +141,25 @@ defmodule Kogen.Shaper.Runner do
     end
   end
 
+  defp finish_or_polish(state, pass, attempt_number, warnings) do
+    style = Enum.filter(warnings, &String.starts_with?(Atom.to_string(&1.code), "lint_"))
+
+    if style != [] and state.style_repairs < 2 do
+      progress(state.request, attempt_number, "style_advisory; repair_scheduled")
+      detail = Enum.map_join(style, "\n", &"#{&1.code}: #{&1.message}")
+
+      attempt(%{
+        state
+        | history: pass.items,
+          failure_text: "Style advice:\n" <> detail,
+          turn_offset: state.turn_offset + pass.turns,
+          style_repairs: state.style_repairs + 1
+      })
+    else
+      validation_succeeded(state, attempt_number, warnings)
+    end
+  end
+
   defp validation_succeeded(state, attempt_number, warnings) do
     case ShapeWarnings.write(state.request.workdir, state.request.slug, warnings) do
       :ok ->
@@ -149,7 +170,7 @@ defmodule Kogen.Shaper.Runner do
          result(
            state.request,
            state.calls,
-           state.repairs + 1,
+           attempt_number,
            state.opts,
            warnings
          )}
@@ -212,16 +233,22 @@ defmodule Kogen.Shaper.Runner do
   end
 
   defp resolve_generated_files({{:ok, intent}, {:ok, test_bytes}}, request, project, opts) do
-    Kogen.Checks.validate_shape(%ShapeValidation{
-      workdir: request.workdir,
-      project: project,
-      intent: intent,
-      acceptance_bytes: test_bytes,
-      run_dir: opts.run_dir,
-      env: opts.env,
-      git_env: request.git_env,
-      sandbox: request.sandbox
-    })
+    result =
+      Kogen.Checks.validate_shape(%ShapeValidation{
+        workdir: request.workdir,
+        project: project,
+        intent: intent,
+        acceptance_bytes: test_bytes,
+        run_dir: opts.run_dir,
+        env: opts.env,
+        git_env: request.git_env,
+        sandbox: request.sandbox
+      })
+
+    case result do
+      {:ok, warnings} -> {:ok, warnings ++ Intent.style_warnings(intent)}
+      error -> error
+    end
   end
 
   defp resolve_generated_files(
@@ -365,16 +392,4 @@ defmodule Kogen.Shaper.Runner do
   defp intent_path(slug), do: ".kogen/intents/#{slug}/intent.md"
   defp acceptance_path(slug), do: ".kogen/acceptance/#{slug}_test.exs"
   defp failure(class, reason, detail), do: %Failure{class: class, reason: reason, detail: detail}
-
-  defp limit_failure(request, attempt_number, reason, detail) do
-    progress(request, attempt_number, "stopped reason=#{reason}")
-    {:error, failure(:candidate, reason, detail)}
-  end
-
-  defp progress(request, attempt_number, message) do
-    line = Redact.text("attempt=#{attempt_number} #{message}")
-    log_path = Path.join([request.run_dir, "logs", "shaper.log"])
-    _ = File.write(log_path, line <> "\n", [:append])
-    IO.puts(:stderr, "shaper #{line}")
-  end
 end

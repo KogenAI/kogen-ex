@@ -39,7 +39,8 @@ defmodule Kogen.Shaper.Validation do
 
   defp lint(%Intent{} = intent, source, project) do
     issues =
-      IntentDomain.lint(intent) ++ approach_issues(intent) ++ gate_path_issues(intent, project)
+      IntentDomain.structural_issues(intent) ++
+        approach_issues(intent) ++ gate_path_issues(intent, project)
 
     case issues do
       [] ->

@@ -175,15 +175,15 @@ defmodule Kogen.Shaper.ShapingReliabilityTests do
     end
   end
 
-  test "uses up to four repair rounds within the existing turn and wall limits", %{
+  test "uses three structural validation passes within the existing turn and wall limits", %{
     tmp_dir: tmp_dir
   } do
     project = seed_project!(Path.join(tmp_dir, "project"))
 
     invalid_intent =
       intent(
-        "usually keeps",
-        "Approach: Keep Tiny.value/0 unchanged and preserve its public result by avoiding unrelated changes."
+        "keeps",
+        "A1 verifies the existing Tiny.value/0 result."
       )
 
     valid_intent =
@@ -197,7 +197,7 @@ defmodule Kogen.Shaper.ShapingReliabilityTests do
           {intent_path(), invalid_intent},
           {acceptance_path(), acceptance_test()}
         ]),
-        4
+        2
       ) ++
         [
           ScriptedProvider.write_many(:shape, [
@@ -213,13 +213,13 @@ defmodule Kogen.Shaper.ShapingReliabilityTests do
       shape_request = request(project, tmp_dir, config)
       assert shape_request.limits == %{max_turns: 60, wall_ms: :infinity}
       assert {:ok, result} = Shaper.shape(shape_request)
-      assert result.rounds == 5
-      assert length(result.calls) == 5
-      assert length(ScriptedProvider.requests(config)) == 5
+      assert result.rounds == 3
+      assert length(result.calls) == 3
+      assert length(ScriptedProvider.requests(config)) == 3
 
       run_log = File.read!(Path.join([tmp_dir, "shape-run", "logs", "shaper.log"]))
-      assert run_log =~ "attempt=5 started turns_used=4/60"
-      assert run_log =~ "attempt=5 validation_passed"
+      assert run_log =~ "attempt=3 started turns_used=2/60"
+      assert run_log =~ "attempt=3 validation_passed"
     after
       GenServer.stop(server, :normal)
     end
