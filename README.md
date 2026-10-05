@@ -47,6 +47,8 @@ build:
 
 The `ladder` recipe plans once, then builds on fresh Candidates rung by rung (configured builder, Sol medium, Sol high, then a raw-request attempt) until one is green, repairing while failures fall. A hard plan runs the first two rungs in parallel. A test auditor can demote an acceptance test that is over-strict or contradicts the Request. When no rung is green, the best Candidate is pushed to `kogen/<slug>` and status shows `needs attention: kogen/<slug>`.
 
+Intent shaping defaults to **gpt-6.1-sol at high effort**, independently of the builder model. An explicit `build.roles.shaper` in `.kogen/project.yaml` or `~/.kogen/config.yaml` overrides this default; project fields take precedence over machine settings.
+
 When `base` is omitted, Kogen uses the origin HEAD branch recorded locally, then the checkout's current branch. Optional machine defaults live in `~/.kogen/config.yaml`; project settings override them.
 
 ## Repository map

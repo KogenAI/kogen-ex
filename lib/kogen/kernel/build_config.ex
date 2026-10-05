@@ -23,7 +23,7 @@ defmodule Kogen.Kernel.BuildConfig do
 
     case Map.get(roles, :shaper) do
       nil ->
-        builder
+        {"gpt-6.1-sol", "high"}
 
       settings ->
         {Map.get(settings, :model, elem(builder, 0)),

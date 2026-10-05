@@ -1,7 +1,7 @@
 defmodule Kogen.Cli.Help do
   @moduledoc """
-  Static help text. The top level lists commands only; each command lists its own
-  subcommands and options.
+  Static help text. The top level lists commands and the shaping default; each
+  command lists its own subcommands and options.
   """
 
   @top_level """
@@ -12,6 +12,9 @@ defmodule Kogen.Cli.Help do
     provider   Manage Kogen's provider logins
     version    Show the Kogen version
     help       Show help for a command
+
+  Intent shaping defaults to gpt-6.1-sol at high effort; an explicit build.roles.shaper
+  in project or machine config overrides this default.
 
   Run kogen <command> to see its subcommands and options.
   """
@@ -61,7 +64,8 @@ defmodule Kogen.Cli.Help do
 
     Shapes .kogen/intents/<slug>/intent.md and its acceptance test from the request in <file>
     (- reads stdin). Waits until the shaper finishes, with no time limit. Never approves.
-    Model and effort come from build.roles.shaper in .kogen/project.yaml.
+    Shaping defaults to gpt-6.1-sol at high effort. An explicit build.roles.shaper in
+    project or machine config overrides this default.
 
     Options:
       --json                Print the shape result and model usage as JSON
