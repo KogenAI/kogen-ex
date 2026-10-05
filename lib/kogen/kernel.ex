@@ -174,11 +174,15 @@ defmodule Kogen.Kernel do
   defdelegate reconcile(run_id, project_root, origin, base), to: Queueing
 
   @spec queue_start(Path.t(), Path.t() | nil, String.t() | nil, (String.t() -> :ok)) ::
-          {:ok, map()} | {:running, pos_integer()} | {:error, term()}
+          {:ok, map()}
+          | {:running, %{pid: pos_integer(), started_at: String.t() | nil}}
+          | {:error, term()}
   defdelegate queue_start(project_root, origin, base, say), to: Queueing, as: :start
 
   @spec queue_detach(Path.t(), Path.t() | nil, String.t() | nil) ::
-          {:ok, pos_integer(), Path.t()} | {:running, pos_integer()} | {:error, term()}
+          {:ok, pos_integer(), Path.t()}
+          | {:running, %{pid: pos_integer(), started_at: String.t() | nil}}
+          | {:error, term()}
   defdelegate queue_detach(project_root, origin, base), to: Queueing, as: :detach
 
   @spec queue_stop(Path.t(), Path.t() | nil, String.t() | nil) ::

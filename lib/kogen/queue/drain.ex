@@ -29,7 +29,19 @@ defmodule Kogen.Queue.Drain do
 
   @spec run(Path.t(), hooks()) :: {:ok, summary()} | {:running, pos_integer()} | {:error, term()}
   def run(state_root, hooks) do
-    case Lock.acquire(state_root) do
+    case run_with_owner(state_root, hooks) do
+      {:running, %{pid: pid}} -> {:running, pid}
+      result -> result
+    end
+  end
+
+  @doc "Runs the drain, returning the live owner's persisted metadata when already running."
+  @spec run_with_owner(Path.t(), hooks()) ::
+          {:ok, summary()}
+          | {:running, %{pid: pos_integer(), started_at: String.t() | nil}}
+          | {:error, term()}
+  def run_with_owner(state_root, hooks) do
+    case Lock.acquire_with_owner(state_root) do
       :ok ->
         try do
           loop(state_root, hooks, [], %{})

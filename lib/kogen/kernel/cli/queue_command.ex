@@ -10,7 +10,7 @@ defmodule Kogen.Kernel.CLI.QueueCommand do
     with :ok <- project_directory(args) do
       case Kogen.Kernel.queue_detach(args.project, args.origin, args.base) do
         {:ok, pid, log} -> {0, "queue: started in the background (pid #{pid})\nlog: #{log}\n"}
-        {:running, pid} -> {0, "queue: already running (pid #{pid})\n"}
+        {:running, owner} -> {0, already_running(owner)}
         {:error, reason} -> ErrorOutput.format(reason)
       end
     end
@@ -22,7 +22,7 @@ defmodule Kogen.Kernel.CLI.QueueCommand do
 
       case Kogen.Kernel.queue_start(args.project, args.origin, args.base, say) do
         {:ok, summary} -> {exit_code(summary), summary_line(summary)}
-        {:running, pid} -> {0, "queue: already running (pid #{pid})\n"}
+        {:running, owner} -> {0, already_running(owner)}
         {:error, reason} -> ErrorOutput.format(reason)
       end
     end
@@ -38,6 +38,9 @@ defmodule Kogen.Kernel.CLI.QueueCommand do
       end
     end
   end
+
+  defp already_running(%{pid: pid, started_at: started_at}),
+    do: "queue: already running (pid #{pid}, started at #{started_at})\n"
 
   defp exit_code(%{stop: {:failed, outcome}}), do: class_code(outcome.class)
 

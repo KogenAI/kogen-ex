@@ -103,10 +103,12 @@ defmodule Kogen.Kernel.Queueing do
   end
 
   @spec start(Path.t(), Path.t() | nil, String.t() | nil, (String.t() -> :ok)) ::
-          {:ok, Drain.summary()} | {:running, pos_integer()} | {:error, term()}
+          {:ok, Drain.summary()}
+          | {:running, %{pid: pos_integer(), started_at: String.t() | nil}}
+          | {:error, term()}
   def start(project_root, origin, base, say) do
     with {:ok, target} <- resolve(project_root, origin, base) do
-      Drain.run(target.state_root, %{
+      Drain.run_with_owner(target.state_root, %{
         recover: fn -> recover(target) end,
         statuses: fn -> statuses(target) end,
         build: &build(&1, target),
@@ -116,11 +118,26 @@ defmodule Kogen.Kernel.Queueing do
   end
 
   @spec detach(Path.t(), Path.t() | nil, String.t() | nil) ::
-          {:ok, pos_integer(), Path.t()} | {:running, pos_integer()} | {:error, term()}
+          {:ok, pos_integer(), Path.t()}
+          | {:running, %{pid: pos_integer(), started_at: String.t() | nil}}
+          | {:error, term()}
   def detach(project_root, origin, base) do
-    with {:ok, target} <- resolve(project_root, origin, base),
-         :stopped <- Lock.state(target.state_root),
-         {:ok, argv} <- relaunch_argv(target),
+    with {:ok, target} <- resolve(project_root, origin, base) do
+      case Lock.owner_state(target.state_root) do
+        {:running, owner} ->
+          {:running, owner}
+
+        :stopped ->
+          start_detached(project_root, target)
+
+        {:error, reason} ->
+          {:error, reason}
+      end
+    end
+  end
+
+  defp start_detached(project_root, target) do
+    with {:ok, argv} <- relaunch_argv(target),
          :ok <- File.mkdir_p(target.state_root),
          log = Lock.log_path(target.state_root),
          {:ok, result} <-
