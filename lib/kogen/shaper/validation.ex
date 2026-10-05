@@ -4,6 +4,7 @@ defmodule Kogen.Shaper.Validation do
   alias Kogen.Contracts.Failure
   alias Kogen.Contracts.Intent
   alias Kogen.Intent, as: IntentDomain
+  alias Kogen.Project.GatePaths
 
   @approach_action ~r/\b(?:add|advance|calculate|change|compare|compute|count|derive|extend|filter|handle|implement|keep|limit|map|move|normalize|parse|preserve|record|replace|return|route|run|schedule|shift|skip|store|update|use|validate|wrap)\b/i
   @approach_action_at_start ~r/\A(?:add|advance|calculate|change|compare|compute|count|derive|extend|filter|handle|implement|keep|limit|map|move|normalize|parse|preserve|record|replace|return|route|run|schedule|shift|skip|store|update|use|validate|wrap)\b/i
@@ -22,18 +23,23 @@ defmodule Kogen.Shaper.Validation do
   end
 
   @spec intent(binary(), Path.t()) :: {:ok, Intent.t()} | {:error, Failure.t()}
-  def intent(bytes, path) do
+  def intent(bytes, path), do: intent(bytes, path, nil)
+
+  @spec intent(binary(), Path.t(), Kogen.Contracts.Project.t() | nil) ::
+          {:ok, Intent.t()} | {:error, Failure.t()}
+  def intent(bytes, path, project) do
     case IntentDomain.parse_binary(bytes, path) do
       {:ok, %Intent{} = intent} ->
-        lint(intent, bytes)
+        lint(intent, bytes, project)
 
       {:error, issues} ->
         {:error, failure(:intent_parse_failed, render_parse_issues(issues, bytes))}
     end
   end
 
-  defp lint(%Intent{} = intent, source) do
-    issues = IntentDomain.lint(intent) ++ approach_issues(intent)
+  defp lint(%Intent{} = intent, source, project) do
+    issues =
+      IntentDomain.lint(intent) ++ approach_issues(intent) ++ gate_path_issues(intent, project)
 
     case issues do
       [] ->
@@ -41,6 +47,25 @@ defmodule Kogen.Shaper.Validation do
 
       issues ->
         {:error, failure(:intent_lint_failed, render_lint_issues(issues, intent, source))}
+    end
+  end
+
+  defp gate_path_issues(%Intent{changes_gate: true}, _project), do: []
+  defp gate_path_issues(_intent, nil), do: []
+
+  defp gate_path_issues(%Intent{notes: notes}, project) do
+    case GatePaths.referenced_path(GatePaths.effective(project), notes || "") do
+      nil ->
+        []
+
+      path ->
+        [
+          %{
+            rule: :undeclared_gate_path,
+            message: "Gate-path edit requires `changes_gate: true`; matched path #{path}.",
+            line: nil
+          }
+        ]
     end
   end
 
@@ -135,7 +160,13 @@ defmodule Kogen.Shaper.Validation do
       ] ->
         {"Brief", intent.brief}
 
-      issue.rule in [:notes_too_long, :malformed_ref, :long_code_block, :missing_approach] ->
+      issue.rule in [
+        :notes_too_long,
+        :malformed_ref,
+        :long_code_block,
+        :missing_approach,
+        :undeclared_gate_path
+      ] ->
         {"Notes", intent.notes || ""}
 
       issue.rule in [:missing_title, :title_too_long] ->

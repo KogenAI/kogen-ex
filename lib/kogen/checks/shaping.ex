@@ -23,18 +23,33 @@ defmodule Kogen.Checks.Shaping do
   alias Kogen.Contracts.MiseEnvironment
   alias Kogen.Contracts.ProcResult
   alias Kogen.Proc
+  alias Kogen.Project.GatePaths
   alias Kogen.Workspace
 
   @spec validate(ShapeValidation.t()) ::
           {:ok, [Kogen.Contracts.ShapeWarning.t()]} | {:error, Failure.t()}
   def validate(%ShapeValidation{} = request) do
-    case stage_test(request.workdir, request.intent.slug, request.acceptance_bytes) do
-      {:ok, %StageFile{} = staged} ->
-        result = verify(request)
-        cleanup_result(result, cleanup(staged))
+    with :ok <- declared_gate_changes(request),
+         {:ok, %StageFile{} = staged} <-
+           stage_test(request.workdir, request.intent.slug, request.acceptance_bytes) do
+      result = verify(request)
+      cleanup_result(result, cleanup(staged))
+    end
+  end
 
-      {:error, %Failure{} = failure} ->
-        {:error, failure}
+  defp declared_gate_changes(%ShapeValidation{intent: %{changes_gate: true}}), do: :ok
+
+  defp declared_gate_changes(%ShapeValidation{} = request) do
+    paths = GatePaths.effective(request.project)
+    text = Enum.join([request.intent.notes || "", request.acceptance_bytes], "\n")
+
+    case GatePaths.referenced_path(paths, text) do
+      nil ->
+        :ok
+
+      path ->
+        {:error,
+         failure(:candidate, :undeclared_gate_path, "changes_gate: true required for #{path}.")}
     end
   end
 

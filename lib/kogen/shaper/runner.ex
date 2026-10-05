@@ -202,7 +202,7 @@ defmodule Kogen.Shaper.Runner do
       with {:ok, intent_bytes} <- read_generated(request.workdir, intent_path),
            {:ok, normalized_bytes} <-
              normalize_generated_intent(request, intent_path, intent_bytes, attempt_number) do
-        Validation.intent(normalized_bytes, intent_path)
+        Validation.intent(normalized_bytes, intent_path, project)
       end
 
     acceptance_result = read_generated(request.workdir, acceptance_path)

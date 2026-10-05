@@ -31,6 +31,7 @@ defmodule Kogen.Harness.Shaping do
   alias Kogen.Harness.ShaperTools
   alias Kogen.Harness.Shaping.State
   alias Kogen.Harness.Usage
+  alias Kogen.Project.GatePaths
   alias Kogen.Tooling.Error
   alias Kogen.Tooling.ToolResult
 
@@ -72,6 +73,7 @@ defmodule Kogen.Harness.Shaping do
   - State a definite observable result and avoid hedges. Give every item exactly one Verify line in this form: `- A1: test domain=<configured-domain>` or `- A1: test keep domain=<configured-domain>`. Do not change the order of the words or omit `domain=`.
   - Trim surrounding whitespace from headings, item lines, frontmatter values, and line endings. Do not indent section headings, Acceptance entries, or Verify entries.
   - An Intent must include a concrete implementation approach in Notes: say which code path to change and how, plus the behavior to preserve. Acceptance criteria alone are not a plan. Keep this concise.
+  - Set `changes_gate: true` in frontmatter only when the task or planned changes require modifying an effective gate path listed in the task context. Otherwise omit it; merely running or inspecting checks is not a gate-path change.
   - Write a complete test module to the exact acceptance path. Use `async: true`, test through public functions, and add one `@tag intent: "<slug>/A<n>"` for every Acceptance item. Use `test` for behavior the task adds or changes and `test keep` only for existing behavior that passes on the unchanged checkout. At least one item must use `test`. If a `test keep` item is red on the base, Kogen will reclassify it as `test` and show an approval warning.
   - Do not write to other paths. Do not finish by only describing the files: use the write tool for both. If validation asks for repair, preserve valid content, repair the named rule or missing file, and do not finish until both exact files have been written.
 
@@ -136,7 +138,7 @@ defmodule Kogen.Harness.Shaping do
              Map.keys(opts.project.domains),
              history,
              failure_text,
-             opts.workdir
+             opts
            ) do
       deadline = wall_deadline(opts.limits.wall_ms)
 
@@ -265,17 +267,20 @@ defmodule Kogen.Harness.Shaping do
 
   defp continue_loop({:error, reason}, _response), do: {:error, reason}
 
-  defp input_items(slug, task, domains, [], nil, _workdir) do
+  defp input_items(slug, task, domains, [], nil, opts) do
     configured_domains = domains |> Enum.sort() |> Enum.join(", ")
+    gate_paths = opts.project |> GatePaths.effective() |> Enum.map_join(", ", &"`#{&1}`")
 
     text =
-      "Slug: #{slug}\n\nConfigured project domains: #{configured_domains}. Use only these names in the Intent and Verify lines.\n\nTask statement:\n#{task}\n\nWrite the Intent to `.kogen/intents/#{slug}/intent.md` and its acceptance test to `.kogen/acceptance/#{slug}_test.exs`."
+      "Slug: #{slug}\n\nConfigured project domains: #{configured_domains}. Use only these names in the Intent and Verify lines.\n\nEffective gate paths: #{gate_paths}. Set `changes_gate: true` only when the task or planned changes require modifying one of these paths. Omit it for unrelated changes; running or inspecting checks alone does not count.\n\nTask statement:\n#{task}\n\nWrite the Intent to `.kogen/intents/#{slug}/intent.md` and its acceptance test to `.kogen/acceptance/#{slug}_test.exs`."
 
     {:ok, [Codec.user_item(text)]}
   end
 
-  defp input_items(slug, _task, _domains, history, failure_text, workdir)
+  defp input_items(slug, _task, _domains, history, failure_text, opts)
        when is_list(history) and is_binary(failure_text) do
+    workdir = opts.workdir
+
     paths =
       slug
       |> output_paths()
@@ -300,7 +305,7 @@ defmodule Kogen.Harness.Shaping do
     {:ok, history ++ [Codec.user_item(repair)]}
   end
 
-  defp input_items(_slug, _task, _domains, _history, _failure_text, _workdir),
+  defp input_items(_slug, _task, _domains, _history, _failure_text, _opts),
     do: error(:invalid_shape_history, "Shaper repair history is invalid.")
 
   defp valid_request(slug, task, history, failure_text, turn_offset, opts) do

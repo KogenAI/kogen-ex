@@ -1,6 +1,6 @@
 defmodule Kogen.Project do
   @moduledoc "Loads and validates `.kogen/project.yaml` for an explicit checkout root."
-  use Boundary, deps: [Kogen.Contracts, Kogen.Workspace], exports: []
+  use Boundary, deps: [Kogen.Contracts, Kogen.Workspace], exports: [GatePaths]
 
   alias Kogen.Contracts.Project
   alias Kogen.Project.BuildSettings
