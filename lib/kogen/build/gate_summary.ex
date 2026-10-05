@@ -1,5 +1,5 @@
-defmodule Kogen.Engine.Build.GateSummary do
-  @moduledoc false
+defmodule Kogen.Build.GateSummary do
+  @moduledoc "Compact, JSON-ready summaries of one done-gate result."
 
   @max_findings 20
   @message_limit 240

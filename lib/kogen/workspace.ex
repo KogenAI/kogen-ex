@@ -12,6 +12,7 @@ defmodule Kogen.Workspace do
   alias Kogen.Workspace.Index
   alias Kogen.Workspace.IntentFiles
   alias Kogen.Workspace.Landing
+  alias Kogen.Workspace.ProtectedRestore
   alias Kogen.Workspace.Rebase
   alias Kogen.Workspace.Refs
   alias Kogen.Workspace.StatusRefs
@@ -116,6 +117,10 @@ defmodule Kogen.Workspace do
   def protected_violations(workdir, base_sha, manifest, git_env),
     do: Guard.protected_violations(workdir, base_sha, manifest, git_env)
 
+  @doc "Restores protected Candidate paths to their approved bytes; returns the restored paths."
+  @spec restore_protected(ProtectedRestore.approved()) :: {:ok, [String.t()]} | {:error, term()}
+  def restore_protected(approved), do: ProtectedRestore.restore(approved)
+
   @spec scope_violations(
           Path.t(),
           String.t(),
@@ -159,6 +164,19 @@ defmodule Kogen.Workspace do
           :ok | {:error, :stale | term()}
   def ref_update(repo, ref, new_sha, old_sha, git_env),
     do: Refs.ref_update(repo, ref, new_sha, old_sha, git_env)
+
+  @doc "Points `refs/heads/<branch>` at `sha`, creating the branch or moving it there."
+  @spec publish_branch(Path.t(), String.t(), String.t(), git_env()) :: :ok | {:error, term()}
+  def publish_branch(repo, branch, sha, git_env) do
+    ref = "refs/heads/" <> branch
+
+    case Refs.ref_read(repo, ref, git_env) do
+      {:error, :missing} -> Refs.ref_create(repo, ref, sha, git_env)
+      {:ok, ^sha} -> :ok
+      {:ok, previous} -> Refs.ref_update(repo, ref, sha, previous, git_env)
+      {:error, reason} -> {:error, reason}
+    end
+  end
 
   @spec ref_delete(Path.t(), String.t(), String.t(), git_env()) :: :ok | {:error, :stale | term()}
   def ref_delete(repo, ref, expected_sha, git_env),

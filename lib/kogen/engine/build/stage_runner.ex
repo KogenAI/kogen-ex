@@ -1,11 +1,11 @@
 defmodule Kogen.Engine.Build.StageRunner do
   @moduledoc false
 
+  alias Kogen.Build.GateSummary
   alias Kogen.Build.Recipe
   alias Kogen.Contracts.Failure
   alias Kogen.Contracts.ProviderError
   alias Kogen.Engine.Build.Commit
-  alias Kogen.Engine.Build.GateSummary
   alias Kogen.Engine.Build.GateSupport
   alias Kogen.Engine.Build.Guard
   alias Kogen.Engine.Build.PhaseTiming, as: Timing

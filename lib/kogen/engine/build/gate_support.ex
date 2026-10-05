@@ -6,7 +6,6 @@ defmodule Kogen.Engine.Build.GateSupport do
   alias Kogen.Contracts.ProcResult
   alias Kogen.Engine.Build.Guard
   alias Kogen.Engine.Build.PhaseTiming
-  alias Kogen.Engine.Build.ProtectedPaths
   alias Kogen.Engine.Build.Session
   alias Kogen.Harness.Opts
   alias Kogen.Harness.Result, as: HarnessResult
@@ -89,7 +88,21 @@ defmodule Kogen.Engine.Build.GateSupport do
     fn event -> State.record(session.run, Map.put(event, :attempt, session.attempt)) end
   end
 
-  defp protected_restorer(session), do: fn -> ProtectedPaths.restore(session) end
+  defp protected_restorer(session), do: fn -> restore_protected(session) end
+
+  @spec restore_protected(Session.t()) :: {:ok, [String.t()]} | {:error, term()}
+  def restore_protected(%Session{approval: approval} = session) do
+    Workspace.restore_protected(%{
+      workdir: session.workdir,
+      origin: session.request.origin,
+      base_sha: session.base_sha,
+      slug: approval.slug,
+      intent_bytes: approval.intent_bytes,
+      acceptance_files: approval.acceptance_files,
+      manifest: approval.protected_manifest,
+      git_env: session.git_env
+    })
+  end
 
   @spec base_test(Session.t(), [String.t()], pos_integer()) ::
           {:ok, ProcResult.t()} | {:error, term()}

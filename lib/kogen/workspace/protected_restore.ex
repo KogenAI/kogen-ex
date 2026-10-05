@@ -1,21 +1,31 @@
-defmodule Kogen.Engine.Build.ProtectedPaths do
+defmodule Kogen.Workspace.ProtectedRestore do
   @moduledoc false
 
-  alias Kogen.Engine.Build.Session
-  alias Kogen.State.Approval
   alias Kogen.Workspace
 
-  @spec restore(Session.t()) :: {:ok, [String.t()]} | {:error, term()}
-  def restore(%Session{} = session) do
-    session.approval.protected_manifest
+  @typedoc "A Candidate checkout plus the approved bytes its protected paths must keep."
+  @type approved :: %{
+          workdir: Path.t(),
+          origin: Path.t(),
+          base_sha: String.t(),
+          slug: String.t(),
+          intent_bytes: binary(),
+          acceptance_files: %{String.t() => binary()},
+          manifest: %{String.t() => String.t()},
+          git_env: %{String.t() => String.t()}
+        }
+
+  @spec restore(approved()) :: {:ok, [String.t()]} | {:error, term()}
+  def restore(%{workdir: _workdir, manifest: manifest} = checkout) do
+    manifest
     |> Enum.sort_by(&elem(&1, 0))
     |> Enum.reduce_while({:ok, []}, fn {path, approved_sha}, {:ok, changed} ->
-      case changed?(session.workdir, path, approved_sha) do
+      case changed?(checkout.workdir, path, approved_sha) do
         {:ok, false} ->
           {:cont, {:ok, changed}}
 
         {:ok, true} ->
-          case restore_path(session, path, approved_sha) do
+          case restore_path(checkout, path, approved_sha) do
             :ok -> {:cont, {:ok, [path | changed]}}
             {:error, reason} -> {:halt, {:error, {path, reason}}}
           end
@@ -25,27 +35,27 @@ defmodule Kogen.Engine.Build.ProtectedPaths do
       end
     end)
     |> case do
-      {:ok, paths} -> clean_acceptance_source(session, paths)
+      {:ok, paths} -> clean_acceptance_source(checkout, paths)
       error -> error
     end
   end
 
-  defp restore_path(session, path, approved_sha) do
+  defp restore_path(checkout, path, approved_sha) do
     if approved_sha == Workspace.absent_digest() do
       with :ok <- validate_path(path),
-           {:ok, _removed} <- File.rm_rf(Path.join(session.workdir, path)) do
+           {:ok, _removed} <- File.rm_rf(Path.join(checkout.workdir, path)) do
         :ok
       end
     else
-      with {:ok, bytes} <- approved_bytes(session, path),
-           :ok <- ensure_consistent(session, path, bytes, approved_sha) do
-        Workspace.write_file(session.workdir, path, bytes)
+      with {:ok, bytes} <- approved_bytes(checkout, path),
+           :ok <- ensure_consistent(checkout, path, bytes, approved_sha) do
+        Workspace.write_file(checkout.workdir, path, bytes)
       end
     end
   end
 
-  defp clean_acceptance_source(session, paths) do
-    case Workspace.remove_acceptance_source(session.workdir, session.approval.slug) do
+  defp clean_acceptance_source(checkout, paths) do
+    case Workspace.remove_acceptance_source(checkout.workdir, checkout.slug) do
       {:ok, nil} ->
         {:ok, Enum.reverse(paths)}
 
@@ -86,35 +96,35 @@ defmodule Kogen.Engine.Build.ProtectedPaths do
     end
   end
 
-  defp approved_bytes(%Session{approval: %Approval{} = approval} = session, path) do
-    intent_path = ".kogen/intents/#{approval.slug}/intent.md"
-    acceptance_path = ".kogen/acceptance/#{approval.slug}_test.exs"
-    candidate_path = "test/acceptance/#{approval.slug}_test.exs"
+  defp approved_bytes(checkout, path) do
+    intent_path = ".kogen/intents/#{checkout.slug}/intent.md"
+    acceptance_path = ".kogen/acceptance/#{checkout.slug}_test.exs"
+    candidate_path = "test/acceptance/#{checkout.slug}_test.exs"
 
     case path do
       ^intent_path ->
-        {:ok, approval.intent_bytes}
+        {:ok, checkout.intent_bytes}
 
       ^acceptance_path ->
-        acceptance_bytes(approval, acceptance_path)
+        acceptance_bytes(checkout, acceptance_path)
 
       ^candidate_path ->
-        acceptance_bytes(approval, acceptance_path)
+        acceptance_bytes(checkout, acceptance_path)
 
       other ->
-        Workspace.read_file_at(session.request.origin, session.base_sha, other, session.git_env)
+        Workspace.read_file_at(checkout.origin, checkout.base_sha, other, checkout.git_env)
     end
   end
 
   # Non-Intent protected paths are approved from the base tree, so restoring bytes that hash
   # differently would corrupt the Candidate; report a controller bug instead of writing them.
-  defp ensure_consistent(%Session{approval: approval} = session, path, bytes, approved_sha) do
-    if intent_path?(approval.slug, path) or sha256(bytes) == approved_sha do
+  defp ensure_consistent(checkout, path, bytes, approved_sha) do
+    if intent_path?(checkout.slug, path) or sha256(bytes) == approved_sha do
       :ok
     else
       {:error,
        {:controller_bug,
-        "approved bytes of #{path} differ from the base tree at #{session.base_sha}; " <>
+        "approved bytes of #{path} differ from the base tree at #{checkout.base_sha}; " <>
           "the approval manifest is inconsistent with its base"}}
     end
   end
@@ -122,7 +132,7 @@ defmodule Kogen.Engine.Build.ProtectedPaths do
   defp intent_path?(slug, path),
     do: path in [".kogen/intents/#{slug}/intent.md", "test/acceptance/#{slug}_test.exs"]
 
-  defp acceptance_bytes(%Approval{acceptance_files: files}, path) do
+  defp acceptance_bytes(%{acceptance_files: files}, path) do
     case Map.fetch(files, path) do
       {:ok, bytes} -> {:ok, bytes}
       :error -> {:error, :approved_acceptance_bytes_missing}

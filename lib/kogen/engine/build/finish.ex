@@ -1,9 +1,9 @@
 defmodule Kogen.Engine.Build.Finish do
   @moduledoc false
 
+  alias Kogen.Build.GateSummary
   alias Kogen.Contracts.Failure
   alias Kogen.Engine.Build.CandidateSnapshot
-  alias Kogen.Engine.Build.GateSummary
   alias Kogen.Engine.Build.Guard
   alias Kogen.Engine.Build.Request
   alias Kogen.Engine.Build.Result

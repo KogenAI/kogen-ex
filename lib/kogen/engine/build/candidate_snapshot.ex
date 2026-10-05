@@ -1,7 +1,7 @@
 defmodule Kogen.Engine.Build.CandidateSnapshot do
   @moduledoc false
 
-  alias Kogen.Engine.Build.GateSummary
+  alias Kogen.Build.GateSummary
   alias Kogen.Engine.Build.Session
   alias Kogen.Harness.Result, as: HarnessResult
   alias Kogen.State
