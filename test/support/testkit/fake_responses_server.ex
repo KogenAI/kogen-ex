@@ -4,13 +4,23 @@ defmodule Kogen.Testkit.FakeResponsesServer do
   (the last one repeats) and the owner receives `{:fake_request, index, request_body, monotonic_ms}` with the decoded JSON body.
 
   Behaviours: `{:ok, text}`, `{:status, code, body}`, `:hang` (no reply), `:close` (drop the
-  connection), `:trickle` (a 200 stream that emits a byte every 50 ms and never completes).
+  connection), `:trickle` (a 200 stream that emits a keepalive comment every 50 ms and never
+  completes), `:stall` (a 200 stream that sends one event and then nothing), `:keepalive_stall`
+  (one event, then only keepalive comments every 50 ms) and `{:steady, text, events, ms}`
+  (`events` progress events `ms` apart, then the completed response).
   """
 
   @read_ms 20_000
 
   @type behaviour ::
-          {:ok, String.t()} | {:status, pos_integer(), binary()} | :hang | :close | :trickle
+          {:ok, String.t()}
+          | {:status, pos_integer(), binary()}
+          | :hang
+          | :close
+          | :trickle
+          | :stall
+          | :keepalive_stall
+          | {:steady, String.t(), pos_integer(), pos_integer()}
 
   @spec start([behaviour()]) :: {String.t(), pid()}
   def start([_first | _rest] = script) do
@@ -49,6 +59,27 @@ defmodule Kogen.Testkit.FakeResponsesServer do
   end
 
   defp respond(socket, {:ok, text}), do: send_stream(socket, text)
+
+  defp respond(socket, :stall) do
+    started_stream(socket)
+    respond(socket, :hang)
+  end
+
+  defp respond(socket, :keepalive_stall) do
+    started_stream(socket)
+    trickle(socket, 0)
+  end
+
+  defp respond(socket, {:steady, text, events, interval_ms}) do
+    :ok = :gen_tcp.send(socket, stream_header())
+
+    for _event <- 1..events do
+      :ok = :gen_tcp.send(socket, chunk(progress_event()))
+      pause(interval_ms)
+    end
+
+    send_completed(socket, text)
+  end
 
   defp respond(socket, {:status, code, body}) do
     :gen_tcp.send(
@@ -91,6 +122,11 @@ defmodule Kogen.Testkit.FakeResponsesServer do
   defp trickle(socket, _count), do: :gen_tcp.close(socket)
 
   defp send_stream(socket, text) do
+    :ok = :gen_tcp.send(socket, stream_header())
+    send_completed(socket, text)
+  end
+
+  defp send_completed(socket, text) do
     item = %{
       "id" => "msg_fake",
       "type" => "message",
@@ -112,17 +148,31 @@ defmodule Kogen.Testkit.FakeResponsesServer do
         ) <>
         "\r\n\r\n"
 
-    :ok = :gen_tcp.send(socket, stream_header())
-
-    :ok =
-      :gen_tcp.send(socket, [
-        Integer.to_string(byte_size(event), 16),
-        "\r\n",
-        event,
-        "\r\n0\r\n\r\n"
-      ])
-
+    :ok = :gen_tcp.send(socket, [chunk(event), "0\r\n\r\n"])
     :gen_tcp.close(socket)
+  end
+
+  # httpc holds body bytes that arrive in the header's packet until more data comes, so the
+  # first event goes out on its own.
+  defp started_stream(socket) do
+    :ok = :gen_tcp.send(socket, stream_header())
+    pause(20)
+    :ok = :gen_tcp.send(socket, chunk(progress_event()))
+  end
+
+  defp pause(ms) do
+    receive do
+    after
+      ms -> :ok
+    end
+  end
+
+  defp chunk(data), do: [Integer.to_string(byte_size(data), 16), "\r\n", data, "\r\n"]
+
+  defp progress_event do
+    "event: response.output_item.done\r\ndata: " <>
+      ~s({"type":"response.output_item.done","item":{"type":"reasoning","summary":[]}}) <>
+      "\r\n\r\n"
   end
 
   defp stream_header do

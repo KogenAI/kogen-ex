@@ -18,6 +18,8 @@ end
 defmodule Kogen.Engine.Build.Request do
   @moduledoc false
 
+  alias Kogen.Resilience.Policy
+
   @enforce_keys [
     :slug,
     :home,
@@ -34,7 +36,7 @@ defmodule Kogen.Engine.Build.Request do
     :credential_source,
     :credential_label
   ]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [resilience: %Policy{}]
 
   @type t :: %__MODULE__{
           slug: String.t(),
@@ -50,7 +52,8 @@ defmodule Kogen.Engine.Build.Request do
           provider_mod: module(),
           provider_config: term(),
           credential_source: :kogen_owned | :custom,
-          credential_label: String.t()
+          credential_label: String.t(),
+          resilience: Policy.t()
         }
 end
 

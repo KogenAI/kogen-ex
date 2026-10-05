@@ -11,7 +11,8 @@ defmodule Kogen.Engine do
       Kogen.Workspace,
       Kogen.State,
       Kogen.Checks,
-      Kogen.Harness
+      Kogen.Harness,
+      Kogen.Resilience
     ],
     exports: [
       Build.CandidateSnapshot,

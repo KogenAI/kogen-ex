@@ -194,7 +194,8 @@
                  Kogen.Workspace,
                  Kogen.State,
                  Kogen.Checks,
-                 Kogen.Harness
+                 Kogen.Harness,
+                 Kogen.Resilience
                ],
                Kogen.Kernel => [
                  Kogen.Proc,
@@ -217,6 +218,7 @@
                  Kogen.Proc,
                  Kogen.Project,
                  Kogen.Queue,
+                 Kogen.Resilience,
                  Kogen.Shaper,
                  Kogen.State,
                  Kogen.Testkit,

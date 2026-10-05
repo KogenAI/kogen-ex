@@ -3,9 +3,11 @@ defmodule Kogen.Resilience.RequestLog do
   One run-journal record per model request, written whatever its outcome.
 
   A request is one provider call: a retried request leaves one record per attempt, and
-  `retries` counts the attempts before it. Times are epoch milliseconds; `first_byte_at` is
-  null when the provider never answered (or cannot tell). Token counts are null unless the
-  response reported them. The journal file is `requests.jsonl` in the run directory.
+  `retries` counts the attempts before it. Times are epoch milliseconds; `first_byte_at` and
+  `last_byte_at` bound the response's progress and are null when the provider never answered
+  (or cannot tell). A `stall` record's `idle_ms` is the silence that ended it. Token counts are
+  null unless the response reported them. The journal file is `requests.jsonl` in the run
+  directory.
   """
 
   alias Kogen.Contracts.ModelResponse
@@ -15,10 +17,10 @@ defmodule Kogen.Resilience.RequestLog do
   @file_name "requests.jsonl"
   @token_names [:input, :cached_input, :output, :reasoning, :cache_write]
 
-  @enforce_keys [:started_at, :first_byte]
+  @enforce_keys [:started_at, :progress]
   defstruct @enforce_keys
 
-  @type t :: %__MODULE__{started_at: integer(), first_byte: :atomics.atomics_ref()}
+  @type t :: %__MODULE__{started_at: integer(), progress: :atomics.atomics_ref()}
   @type meta :: %{
           stage: atom(),
           turn: non_neg_integer(),
@@ -35,14 +37,15 @@ defmodule Kogen.Resilience.RequestLog do
 
   @doc "Starts timing one request."
   @spec start() :: t()
-  def start, do: %__MODULE__{started_at: now(), first_byte: :atomics.new(1, signed: false)}
+  def start, do: %__MODULE__{started_at: now(), progress: :atomics.new(2, signed: false)}
 
-  @doc "A function the transport calls when the first response byte arrives; only the first call counts."
-  @spec first_byte_marker(t()) :: (-> :ok)
-  def first_byte_marker(%__MODULE__{first_byte: ref}) do
+  @doc "The request's `on_progress`: the first call marks the first byte, every call the last."
+  @spec progress_marker(t()) :: (-> :ok)
+  def progress_marker(%__MODULE__{progress: ref}) do
     fn ->
-      _previous = :atomics.compare_exchange(ref, 1, 0, now())
-      :ok
+      at = now()
+      _previous = :atomics.compare_exchange(ref, 1, 0, at)
+      :atomics.put(ref, 2, at)
     end
   end
 
@@ -50,6 +53,8 @@ defmodule Kogen.Resilience.RequestLog do
   @spec record(t(), meta(), {:ok, ModelResponse.t()} | {:error, ProviderError.t()}) :: map()
   def record(%__MODULE__{} = probe, meta, result) do
     {outcome, tokens} = outcome(result)
+    ended_at = now()
+    last_byte_at = progress(probe, 2)
 
     %{
       stage: meta.stage,
@@ -59,9 +64,11 @@ defmodule Kogen.Resilience.RequestLog do
       model: meta.model,
       effort: meta.effort,
       started_at: probe.started_at,
-      first_byte_at: first_byte(probe),
-      ended_at: now(),
+      first_byte_at: progress(probe, 1),
+      last_byte_at: last_byte_at,
+      ended_at: ended_at,
       outcome: outcome,
+      idle_ms: idle_ms(outcome, last_byte_at, ended_at),
       retries: meta.retries,
       tokens: tokens,
       history_items: meta.history.items,
@@ -95,12 +102,17 @@ defmodule Kogen.Resilience.RequestLog do
   defp count(value) when is_integer(value) and value >= 0, do: value
   defp count(_value), do: 0
 
-  defp first_byte(%__MODULE__{first_byte: ref}) do
-    case :atomics.get(ref, 1) do
+  defp progress(%__MODULE__{progress: ref}, index) do
+    case :atomics.get(ref, index) do
       0 -> :null
       at -> at
     end
   end
+
+  defp idle_ms(:stall, last_byte_at, ended_at) when is_integer(last_byte_at),
+    do: ended_at - last_byte_at
+
+  defp idle_ms(_outcome, _last_byte_at, _ended_at), do: :null
 
   defp nullable(nil), do: :null
   defp nullable(value) when is_binary(value) or is_atom(value), do: to_string(value)

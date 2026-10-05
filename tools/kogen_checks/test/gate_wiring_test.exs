@@ -65,7 +65,8 @@ defmodule KogenChecks.GateWiringTest do
           Kogen.Workspace,
           Kogen.State,
           Kogen.Checks,
-          Kogen.Harness
+          Kogen.Harness,
+          Kogen.Resilience
         ],
         Kogen.Kernel => [
           Kogen.Proc,
@@ -88,6 +89,7 @@ defmodule KogenChecks.GateWiringTest do
           Kogen.Proc,
           Kogen.Project,
           Kogen.Queue,
+          Kogen.Resilience,
           Kogen.Shaper,
           Kogen.State,
           Kogen.Testkit,

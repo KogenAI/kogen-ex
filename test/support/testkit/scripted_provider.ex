@@ -11,7 +11,7 @@ defmodule Kogen.E2e.ScriptedProvider.Step do
   @moduledoc false
 
   @enforce_keys [:stage, :text, :calls]
-  defstruct @enforce_keys ++ [model: nil, effort: nil, error: nil, usage: nil]
+  defstruct @enforce_keys ++ [model: nil, effort: nil, error: nil, usage: nil, stall?: false]
 
   @type stage :: :context | :plan | :develop | :review | :audit | :shape | :edge
   @type t :: %__MODULE__{
@@ -21,7 +21,8 @@ defmodule Kogen.E2e.ScriptedProvider.Step do
           model: String.t() | nil,
           effort: String.t() | nil,
           error: Kogen.Contracts.ProviderError.class() | nil,
-          usage: map() | nil
+          usage: map() | nil,
+          stall?: boolean()
         }
 end
 
@@ -68,6 +69,11 @@ defmodule Kogen.E2e.ScriptedProvider do
   @spec fail(Step.stage(), ProviderError.class()) :: Step.t()
   def fail(stage, class) when stage in @known_stages and is_atom(class),
     do: %Step{stage: stage, text: "", calls: [], error: class}
+
+  @doc "Starts the stage's response stream (one progress signal), then sends nothing more."
+  @spec stall(Step.stage()) :: Step.t()
+  def stall(stage) when stage in @known_stages,
+    do: %Step{stage: stage, text: "", calls: [], stall?: true}
 
   @spec write(Step.stage(), Path.t(), String.t()) :: Step.t()
   def write(stage, path, contents) when stage in @known_stages do
@@ -130,7 +136,10 @@ defmodule Kogen.E2e.ScriptedProvider do
   @spec respond(Config.t(), ModelRequest.t()) ::
           {:ok, ModelResponse.t()} | {:error, ProviderError.t()}
   def respond(%Config{server: server}, %ModelRequest{} = request) do
-    GenServer.call(server, {:respond, request}, @call_timeout_ms)
+    case GenServer.call(server, {:respond, request}, @call_timeout_ms) do
+      :stall -> stall_stream(request)
+      reply -> reply
+    end
   end
 
   def respond(_config, _request),
@@ -244,6 +253,16 @@ defmodule Kogen.E2e.ScriptedProvider do
     end
   end
 
+  # The caller's idle timeout ends the silent stream by stopping this process.
+  defp stall_stream(%ModelRequest{on_progress: on_progress}) do
+    if is_function(on_progress, 0), do: on_progress.()
+
+    receive do
+      :never -> provider_error(:transport, "Scripted stall ended.")
+    end
+  end
+
+  defp reply(%Step{stall?: true}, _sequence), do: :stall
   defp reply(%Step{error: nil} = step, sequence), do: {:ok, response(step, sequence)}
 
   defp reply(%Step{error: class}, _sequence),

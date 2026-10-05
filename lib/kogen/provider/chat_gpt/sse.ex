@@ -38,6 +38,14 @@ defmodule Kogen.Provider.ChatGPT.SSE do
     read_frame(frame, %{stream | buffer: ""}, decode_event)
   end
 
+  @doc "True when every line of `chunk` is a comment, a blank, or part of a keepalive event."
+  def keepalive?(chunk) do
+    chunk
+    |> normalize_newlines()
+    |> :binary.split("\n", [:global])
+    |> Enum.all?(&keepalive_line?/1)
+  end
+
   def data(frame) do
     frame
     |> :binary.split("\n", [:global])
@@ -55,6 +63,15 @@ defmodule Kogen.Provider.ChatGPT.SSE do
       do: stream,
       else: decode_event.(event, %{stream | event_lines: [event | stream.event_lines]})
   end
+
+  defp keepalive_line?(""), do: true
+  defp keepalive_line?(<<":", _comment::binary>>), do: true
+  defp keepalive_line?("event: keepalive"), do: true
+
+  defp keepalive_line?(<<"data:", value::binary>>),
+    do: String.contains?(value, ~s("type":"keepalive"))
+
+  defp keepalive_line?(_line), do: false
 
   defp trim_one_space(<<32, rest::binary>>), do: rest
   defp trim_one_space(value), do: value

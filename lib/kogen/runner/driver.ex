@@ -61,7 +61,11 @@ defmodule Kogen.Runner.Driver do
         run_events_with_tail(updated, events, rest, mode)
 
       {:error, updated, failure} ->
-        updated = add_stage_line(updated, stage, [{:stage_failed, stage, failure}])
+        updated =
+          updated
+          |> wall_spent(session, failure)
+          |> add_stage_line(stage, [{:stage_failed, stage, failure}])
+
         apply_effect_event(updated, {:stage_failed, stage, failure}, rest, mode)
 
       {:base_moved, updated} ->
@@ -137,6 +141,14 @@ defmodule Kogen.Runner.Driver do
     end
   end
 
+  # The exchange retries timeouts, stalls and transport failures until the stage's wall runs
+  # out; the cycle ends such an attempt like a wall cap, so it is not the Build's failure.
+  defp wall_spent(updated, before, %Failure{class: :provider, reason: reason})
+       when reason in [:timeout, :stall, :transport],
+       do: %{updated | failure: before.failure, failure_text: before.failure_text}
+
+  defp wall_spent(updated, _before, _failure), do: updated
+
   defp failed(%Failure{} = failure), do: {:stage_failed, :develop, failure}
 
   defp finish_if_terminal(session, mode) do
@@ -165,6 +177,10 @@ defmodule Kogen.Runner.Driver do
 
     # A provider failure is retried or paused, so it must not replace the repair feedback.
     case events do
+      [{:stage_failed, _stage, %Failure{class: :provider, reason: reason}}]
+      when reason in [:timeout, :stall, :transport] ->
+        session
+
       [{:stage_failed, _stage, %Failure{class: :provider} = failure}] ->
         %{session | failure: failure}
 

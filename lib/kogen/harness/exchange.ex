@@ -237,8 +237,9 @@ defmodule Kogen.Harness.Exchange do
   end
 
   defp provider_call(opts, %ModelRequest{} = request, remaining_ms, probe) do
-    request = %{request | on_first_byte: RequestLog.first_byte_marker(probe)}
-    ProviderCall.run(opts.provider_mod, opts.provider_config, request, remaining_ms)
+    request = %{request | on_progress: RequestLog.progress_marker(probe)}
+    idle_ms = opts.resilience.stream_idle_ms
+    ProviderCall.run(opts.provider_mod, opts.provider_config, request, remaining_ms, idle_ms)
   end
 
   defp record_response(opts, request, {:ok, %ModelResponse{} = response}) do

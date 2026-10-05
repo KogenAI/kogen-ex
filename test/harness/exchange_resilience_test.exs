@@ -55,6 +55,64 @@ defmodule Kogen.Harness.ExchangeResilienceTest do
     end
   end
 
+  describe "stream idle timeout" do
+    test "a stream that goes silent after its first byte is aborted at the idle timeout and retried",
+         %{tmp_dir: tmp_dir} do
+      {url, server} = FakeResponsesServer.start([:stall, {:ok, "recovered"}])
+      opts = opts(tmp_dir, url, %{timeout_ms: 30_000}, %{@fast | stream_idle_ms: 300})
+
+      assert {:ok, %{text: "recovered"}} = Exchange.respond(opts, request())
+      assert_receive {:fake_request, 1, _body, first_at}
+      assert_receive {:fake_request, 2, _body, second_at}
+      assert second_at - first_at >= 300 and second_at - first_at < 5_000
+      assert_receive {:recorded, %{event: :provider_retry, reason: :stall, attempt: 1}}
+      FakeResponsesServer.stop(server)
+    end
+
+    test "keepalive comments do not keep a silent stream alive", %{tmp_dir: tmp_dir} do
+      {url, server} = FakeResponsesServer.start([:keepalive_stall, {:ok, "recovered"}])
+      opts = opts(tmp_dir, url, %{timeout_ms: 30_000}, %{@fast | stream_idle_ms: 300})
+
+      assert {:ok, %{text: "recovered"}} = Exchange.respond(opts, request())
+      assert_receive {:recorded, %{event: :provider_retry, reason: :stall}}
+      FakeResponsesServer.stop(server)
+    end
+
+    test "a slow but steadily streaming response is not cut", %{tmp_dir: tmp_dir} do
+      {url, server} = FakeResponsesServer.start([{:steady, "slow", 8, 100}, {:ok, "retried"}])
+      opts = opts(tmp_dir, url, %{timeout_ms: 30_000}, %{@fast | stream_idle_ms: 300})
+      started = System.monotonic_time(:millisecond)
+
+      assert {:ok, %{text: "slow"}} = Exchange.respond(opts, request())
+      assert System.monotonic_time(:millisecond) - started >= 800
+      refute_received {:fake_request, 2, _body, _at}
+      refute_received {:recorded, %{event: :provider_retry}}
+      FakeResponsesServer.stop(server)
+    end
+
+    test "stalls are retried past max_attempts while the wall budget lasts", %{tmp_dir: tmp_dir} do
+      script = List.duplicate(:stall, 5) ++ [{:ok, "persisted"}]
+      {url, server} = FakeResponsesServer.start(script)
+      opts = opts(tmp_dir, url, %{timeout_ms: 30_000}, %{@fast | stream_idle_ms: 100})
+
+      assert {:ok, %{text: "persisted"}} = Exchange.respond(opts, request())
+      assert_receive {:fake_request, 6, _body, _at}
+      FakeResponsesServer.stop(server)
+    end
+
+    test "without a wall budget stalls stop at max_attempts", %{tmp_dir: tmp_dir} do
+      {url, server} = FakeResponsesServer.start([:stall, :stall, {:ok, "too late"}])
+      policy = %{@fast | stream_idle_ms: 100, max_attempts: 2}
+      opts = opts(tmp_dir, url, %{timeout_ms: 30_000}, policy)
+
+      assert {:error, %ProviderError{class: :stall}} =
+               Exchange.respond(opts, %{request() | remaining_ms: :infinity})
+
+      refute_receive {:fake_request, 3, _body, _at}, 200
+      FakeResponsesServer.stop(server)
+    end
+  end
+
   describe "retried classes" do
     for {name, behaviour, reason} <- [
           {"timeout", :hang, :timeout},

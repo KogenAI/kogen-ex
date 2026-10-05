@@ -47,6 +47,62 @@ defmodule Kogen.Queue.DrainTest do
              Drain.run(tmp_dir, hooks(states, outcomes, lines))
   end
 
+  test "a provider failure is recorded and the next Intent still builds", %{tmp_dir: tmp_dir} do
+    {:ok, states} = Agent.start_link(fn -> %{"a" => {:approved, 1}, "b" => {:approved, 2}} end)
+    failed = %{outcome("a", :failed, :provider) | reason: "timeout"}
+    outcomes = %{"a" => failed, "b" => outcome("b", :landed, nil)}
+    {:ok, lines} = Agent.start_link(fn -> [] end)
+
+    assert {:ok, %{builds: [^failed, %{slug: "b", status: :landed}], stop: :empty}} =
+             Drain.run(tmp_dir, hooks(states, outcomes, lines))
+
+    assert "failed a: provider/timeout (Build run-a)\n" in Agent.get(lines, & &1)
+  end
+
+  test "an unavailable provider pauses the drain and builds the same Intent again", %{
+    tmp_dir: tmp_dir
+  } do
+    {:ok, states} = Agent.start_link(fn -> %{"a" => {:approved, 1}, "b" => {:approved, 2}} end)
+    limited = %{outcome("a", :failed, :provider) | reason: "usage_limit"}
+    {:ok, script} = Agent.start_link(fn -> [limited, outcome("a", :landed, nil)] end)
+    {:ok, lines} = Agent.start_link(fn -> [] end)
+    test_process = self()
+
+    hooks = %{
+      hooks(states, %{"b" => outcome("b", :landed, nil)}, lines)
+      | build: fn
+          "a" ->
+            result = Agent.get_and_update(script, fn [next | rest] -> {next, rest} end)
+            Agent.update(states, &Map.put(&1, "a", {result.status, nil}))
+            {:ok, result}
+
+          "b" ->
+            {:ok, outcome("b", :landed, nil)}
+        end
+    }
+
+    hooks =
+      Map.put(hooks, :pause, fn wait_ms ->
+        send(test_process, {:paused, wait_ms})
+        :ok
+      end)
+
+    assert {:ok, %{builds: builds, stop: :empty}} = Drain.run(tmp_dir, hooks)
+
+    assert Enum.map(builds, &{&1.slug, &1.status}) == [
+             {"a", :failed},
+             {"a", :landed},
+             {"b", :landed}
+           ]
+
+    assert_received {:paused, 300_000}
+
+    assert "queue: the provider is unavailable (usage_limit); building a again in 5 min\n" in Agent.get(
+             lines,
+             & &1
+           )
+  end
+
   test "builds an approval at most once per drain even if it stays queued", %{tmp_dir: tmp_dir} do
     {:ok, states} = Agent.start_link(fn -> %{"stuck" => {:approved, 1}} end)
     {:ok, lines} = Agent.start_link(fn -> [] end)

@@ -1,9 +1,13 @@
 defmodule Kogen.Queue.Drain do
   @moduledoc """
   The serial drain behind `kogen queue start`: build the oldest approved Intent, repeat until
-  none is left or a stop was requested. A Build that fails on its candidate doesn't stop the
-  drain; an environment, provider or Kogen failure does, because the next Build would hit it
-  too. Each step first recovers crashed Builds. Kernel supplies the effects as hooks.
+  none is left or a stop was requested. A Build that fails on its candidate or on a provider
+  error doesn't stop the drain: its failure is recorded and the next Intent builds. When the
+  provider cannot serve anyone (a usage limit or a lost login), the drain waits `pause_ms`
+  and builds the same Intent again, for at most `pause_cap_ms` of waiting in all, as a ladder
+  Build does. An environment or Kogen failure stops the drain, because the next Build would
+  hit it too. Each step first recovers crashed Builds. Kernel supplies the effects as hooks;
+  the optional `pause` hook waits (tests replace it).
   """
 
   alias Kogen.Queue.Lock
@@ -19,11 +23,16 @@ defmodule Kogen.Queue.Drain do
         }
 
   @type hooks :: %{
-          recover: (-> {:ok, list()} | {:error, term()}),
-          statuses: (-> {:ok, [Kogen.Queue.IntentStatus.t()]} | {:error, term()}),
-          build: (String.t() -> {:ok, outcome()} | {:error, term()}),
-          say: (String.t() -> :ok)
+          required(:recover) => (-> {:ok, list()} | {:error, term()}),
+          required(:statuses) => (-> {:ok, [Kogen.Queue.IntentStatus.t()]} | {:error, term()}),
+          required(:build) => (String.t() -> {:ok, outcome()} | {:error, term()}),
+          required(:say) => (String.t() -> :ok),
+          optional(:pause) => (pos_integer() -> :ok)
         }
+
+  @pause_ms 300_000
+  @pause_cap_ms 86_400_000
+  @unavailable [{:provider, "usage_limit"}, {:provider, "login"}, {:environment, "login"}]
 
   @type summary :: %{builds: [outcome()], stop: :empty | :requested | {:failed, outcome()}}
 
@@ -44,7 +53,7 @@ defmodule Kogen.Queue.Drain do
     case Lock.acquire_with_owner(state_root) do
       :ok ->
         try do
-          loop(state_root, hooks, [], %{})
+          loop(state_root, hooks, [], %{paused_ms: 0})
         after
           Lock.release(state_root)
         end
@@ -58,7 +67,9 @@ defmodule Kogen.Queue.Drain do
     with {:ok, _closed} <- hooks.recover.(),
          {:ok, statuses} <- hooks.statuses.() do
       next =
-        statuses |> Status.queued() |> Enum.find(&(not Map.has_key?(attempted, attempt_key(&1))))
+        statuses
+        |> Status.queued()
+        |> Enum.find(&(not Map.has_key?(attempted, attempt_key(&1))))
 
       cond do
         Lock.stop_requested?(state_root) -> {:ok, summary(built, :requested)}
@@ -74,13 +85,50 @@ defmodule Kogen.Queue.Drain do
     case hooks.build.(next.slug) do
       {:ok, outcome} ->
         hooks.say.(outcome_line(outcome))
+        built = [outcome | built]
 
-        if outcome.status == :landed or outcome.class == :candidate,
-          do: loop(state_root, hooks, [outcome | built], attempted),
-          else: {:ok, summary([outcome | built], {:failed, outcome})}
+        cond do
+          {outcome.class, outcome.reason} in @unavailable ->
+            wait_for_provider(state_root, hooks, {next, outcome}, built, attempted)
+
+          outcome.status != :landed and outcome.class in [:environment, :controller] ->
+            {:ok, summary(built, {:failed, outcome})}
+
+          true ->
+            loop(state_root, hooks, built, attempted)
+        end
 
       {:error, reason} ->
         {:error, reason}
+    end
+  end
+
+  # Nothing can build while the account is out, so after the wait the same Intent builds
+  # again (its failed Build no longer leaves it queued).
+  defp wait_for_provider(state_root, hooks, {next, outcome}, built, attempted) do
+    if attempted.paused_ms + @pause_ms > @pause_cap_ms do
+      {:ok, summary(built, {:failed, outcome})}
+    else
+      hooks.say.(
+        "queue: the provider is unavailable (#{outcome.reason}); " <>
+          "building #{next.slug} again in #{div(@pause_ms, 60_000)} min\n"
+      )
+
+      :ok = Map.get(hooks, :pause, &pause/1).(@pause_ms)
+      attempted = %{attempted | paused_ms: attempted.paused_ms + @pause_ms}
+
+      with {:ok, _closed} <- hooks.recover.() do
+        if Lock.stop_requested?(state_root),
+          do: {:ok, summary(built, :requested)},
+          else: step(state_root, hooks, next, built, attempted)
+      end
+    end
+  end
+
+  defp pause(wait_ms) do
+    receive do
+    after
+      wait_ms -> :ok
     end
   end
 

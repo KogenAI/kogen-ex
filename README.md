@@ -77,7 +77,7 @@ When `base` is omitted, Kogen uses the origin HEAD branch recorded locally, then
 | Checks | Deterministic verification and check results | Contracts, Proc, Workspace, Project |
 | Tooling | Builder tool schemas, confined file access, edits, search, writes, and shell commands | Contracts, Proc |
 | Harness | Provider-backed Developer orchestration and stage coordination | Checks, Contracts, Proc, Provider, Project, Tooling |
-| Engine | Single-Candidate Build stages, checks, commit, landing and cleanup | Build, Checks, Contracts, Harness, Intent, Proc, Project, Provider, State, Workspace |
+| Engine | Single-Candidate Build stages, checks, commit, landing and cleanup | Build, Checks, Contracts, Harness, Intent, Proc, Project, Provider, Resilience, State, Workspace |
 | Runner | Drives the Build Cycle across Candidates: ladder rungs, parallel members, test auditor | Build, Checks, Contracts, Engine, Harness, State |
 | Queue | Intent states, the serial drain and its lock, automatic crash recovery, Build reports | Proc, State, Workspace |
 | CLI | Command parsing and static help (pure) | — |

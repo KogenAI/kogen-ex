@@ -301,6 +301,7 @@ defmodule Kogen.Engine.Build.GateSupport do
       sandbox: session.sandbox,
       provider_mod: session.request.provider_mod,
       provider_config: session.request.provider_config,
+      resilience: session.request.resilience,
       proc_mod: Kogen.Proc,
       env: session.process_env,
       before_gate: guard,

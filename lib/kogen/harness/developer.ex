@@ -2,6 +2,7 @@ defmodule Kogen.Harness.Developer do
   @moduledoc false
 
   alias Kogen.Contracts.ModelResponse
+  alias Kogen.Contracts.ProviderError
   alias Kogen.Contracts.ToolCall
   alias Kogen.Harness.Codec
   alias Kogen.Harness.Developer.Budget
@@ -16,6 +17,7 @@ defmodule Kogen.Harness.Developer do
   alias Kogen.Harness.Result
   alias Kogen.Harness.Tools
   alias Kogen.Harness.Usage
+  alias Kogen.Resilience.Policy
   alias Kogen.Tooling.Error
   alias Kogen.Tooling.ToolResult
 
@@ -91,6 +93,13 @@ defmodule Kogen.Harness.Developer do
         if deadline_passed?(state),
           do: {:ok, result(:wall_cap, nil, state)},
           else: handle_response(opts, prompt, state, response)
+
+      # The exchange retries timeouts and stalls until the wall budget cannot cover another
+      # attempt, so one reaching here means the wall ran out, not that the provider failed.
+      {:error, %ProviderError{class: class} = error} ->
+        if Policy.budget_bound?(class),
+          do: {:ok, result(:wall_cap, nil, state)},
+          else: {:error, error}
 
       {:error, reason} ->
         {:error, reason}

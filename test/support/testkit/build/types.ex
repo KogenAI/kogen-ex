@@ -7,6 +7,7 @@ defmodule Kogen.E2e do
       Kogen.Kernel,
       Kogen.Proc,
       Kogen.Project,
+      Kogen.Resilience,
       Kogen.Shaper,
       Kogen.State,
       Kogen.Testkit,
@@ -28,6 +29,8 @@ end
 defmodule Kogen.E2e.Build.Options do
   @moduledoc false
 
+  alias Kogen.Resilience.Policy
+
   @enforce_keys [:seed_project]
   defstruct [
     :seed_project,
@@ -36,7 +39,8 @@ defmodule Kogen.E2e.Build.Options do
     recipe: "staged",
     builder_model: "scripted-model",
     builder_effort: "medium",
-    ladder: %{}
+    ladder: %{},
+    resilience: %Policy{}
   ]
 
   @type t :: %__MODULE__{
@@ -46,7 +50,8 @@ defmodule Kogen.E2e.Build.Options do
           recipe: String.t(),
           builder_model: String.t(),
           builder_effort: String.t(),
-          ladder: map()
+          ladder: map(),
+          resilience: Policy.t()
         }
 end
 

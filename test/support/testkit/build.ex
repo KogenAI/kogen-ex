@@ -78,7 +78,11 @@ defmodule Kogen.E2e.Build do
         options.builder_effort
       )
 
-    request = %{request | recipe: ladder_overrides(request.recipe, options.ladder)}
+    request = %{
+      request
+      | recipe: ladder_overrides(request.recipe, options.ladder),
+        resilience: options.resilience
+    }
 
     case Kogen.Kernel.build(request) do
       {:ok, build} -> started_result(fixture, build)

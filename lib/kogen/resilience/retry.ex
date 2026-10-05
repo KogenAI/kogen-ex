@@ -22,17 +22,23 @@ defmodule Kogen.Resilience.Retry do
 
   @doc """
   Decides what follows a failed attempt. Stops for non-retryable classes, when attempts are
-  spent, or when the remaining wall budget cannot cover the backoff. After the configured
+  spent, or when the remaining wall budget cannot cover the backoff. Timeouts, stalls and
+  transport failures spend no attempts while a wall budget bounds them. After the configured
   overload streak the next configured model is used, without waiting.
   """
   @spec next(Policy.t(), t(), atom(), non_neg_integer() | :infinity) :: decision()
   def next(%Policy{} = policy, %__MODULE__{} = retry, class, remaining_ms) do
-    if Policy.retryable?(class) and retry.attempt < policy.max_attempts do
+    if Policy.retryable?(class) and attempts_left?(policy, retry, class, remaining_ms) do
       overloads = if class == :overload, do: retry.overloads + 1, else: 0
       switch(policy, retry, overloads, remaining_ms)
     else
       :stop
     end
+  end
+
+  defp attempts_left?(policy, retry, class, remaining_ms) do
+    (is_integer(remaining_ms) and Policy.budget_bound?(class)) or
+      retry.attempt < policy.max_attempts
   end
 
   defp switch(policy, retry, overloads, remaining_ms) do

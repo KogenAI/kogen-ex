@@ -196,7 +196,7 @@ defmodule Kogen.Build.LadderCycleTest do
     assert state.attempt == "sol-medium"
   end
 
-  test "an unchanged repair or provider stop moves to the next rung" do
+  test "an unchanged repair or a wall spent on provider timeouts moves to the next rung" do
     state = developing(new())
     {state, _effects} = red_gate(state, 2, ["red"])
     {state, effects} = Cycle.step(state, {:stage_ok, :develop, %{tree: "tree-0"}})
@@ -210,7 +210,7 @@ defmodule Kogen.Build.LadderCycleTest do
       )
 
     assert state.attempt == "sol-high"
-    assert [_record, {:escalate, %{trigger: :provider_failed}}, _run] = effects
+    assert [_record, {:escalate, %{trigger: :wall_cap}}, _run] = effects
   end
 
   test "a hard plan runs the first two rungs in parallel and commits a green winner" do

@@ -4,17 +4,26 @@ defmodule Kogen.Resilience.Policy do
 
   `fallbacks` lists, per role, the models to move to (in order) after the current model
   reports `overload_fallback_after` consecutive overloads.
+
+  A request whose stream started but then sends nothing for `stream_idle_ms` is a stall: it is
+  aborted and retried. Live Responses streams send a reasoning item every 9–20 s while the
+  model thinks, so 90 s of silence is far beyond a legitimate pause. Hard turns reason for over
+  10 minutes, so `request_cap_ms` (20 minutes) is only a last-resort cap on one attempt.
+  Timeouts, stalls and transport failures are retried for as long as the wall budget lasts;
+  `max_attempts` bounds the other retried classes, and every class when there is no budget.
   """
 
   alias Kogen.Contracts.ProviderError
 
-  @retryable [:timeout, :transport, :overload, :malformed]
+  @retryable [:timeout, :stall, :transport, :overload, :malformed]
+  @budget_bound [:timeout, :stall, :transport]
   @sol_medium {"gpt-6.1-sol", "medium"}
 
   defstruct max_attempts: 4,
             backoff_base_ms: 2_000,
             backoff_max_ms: 60_000,
-            request_cap_ms: 600_000,
+            request_cap_ms: 1_200_000,
+            stream_idle_ms: 90_000,
             overload_fallback_after: 2,
             fallbacks: %{
               builder: [@sol_medium],
@@ -30,6 +39,7 @@ defmodule Kogen.Resilience.Policy do
           backoff_base_ms: non_neg_integer(),
           backoff_max_ms: non_neg_integer(),
           request_cap_ms: pos_integer(),
+          stream_idle_ms: pos_integer(),
           overload_fallback_after: pos_integer(),
           fallbacks: %{optional(role()) => [model()]}
         }
@@ -37,6 +47,10 @@ defmodule Kogen.Resilience.Policy do
   @doc "Login and usage-limit errors can never succeed on retry, so only these classes are retried."
   @spec retryable?(ProviderError.class()) :: boolean()
   def retryable?(class), do: class in @retryable
+
+  @doc "Classes retried for as long as the wall budget lasts, whatever `max_attempts` says."
+  @spec budget_bound?(ProviderError.class()) :: boolean()
+  def budget_bound?(class), do: class in @budget_bound
 
   @doc """
   Errors that no retry can fix but that clear by themselves or when the user signs in again:

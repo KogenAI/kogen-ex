@@ -330,6 +330,7 @@ defmodule Kogen.Build.Cycle do
   defp provider_retry(state, stage, reason) do
     case ProviderFailure.retry(state, stage, reason) do
       {:retry, next, effects} -> {next, effects}
+      {:stop, :wall_cap} -> fail_candidate(state, :wall_cap, :wall_cap)
       {:stop, result} -> fail_candidate(state, result, :provider_failed)
     end
   end

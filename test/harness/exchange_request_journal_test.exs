@@ -49,7 +49,8 @@ defmodule Kogen.Harness.ExchangeRequestJournalTest do
     policy = %{@fast | max_attempts: 1}
     opts = opts(tmp_dir, url, %{first_byte_timeout_ms: 150, timeout_ms: 30_000}, policy)
 
-    assert {:error, %ProviderError{class: :timeout}} = Exchange.respond(opts, request())
+    assert {:error, %ProviderError{class: :timeout}} =
+             Exchange.respond(opts, %{request() | remaining_ms: :infinity})
 
     assert [record] = records(tmp_dir)
 
@@ -72,6 +73,23 @@ defmodule Kogen.Harness.ExchangeRequestJournalTest do
     assert {first["outcome"], first["retries"], first["tokens"]} == {"overload", 0, :null}
     assert {second["outcome"], second["retries"]} == {"ok", 1}
     assert second["started_at"] >= first["ended_at"]
+    FakeResponsesServer.stop(server)
+  end
+
+  test "a stalled stream is recorded as a stall with its last byte and idle gap", %{
+    tmp_dir: tmp_dir
+  } do
+    {url, server} = FakeResponsesServer.start([:stall, {:ok, "recovered"}])
+    opts = opts(tmp_dir, url, %{timeout_ms: 30_000}, %{@fast | stream_idle_ms: 300})
+
+    assert {:ok, %{text: "recovered"}} = Exchange.respond(opts, request())
+
+    assert [stalled, recovered] = records(tmp_dir)
+    assert %{"outcome" => "stall", "retries" => 0, "tokens" => :null} = stalled
+    assert stalled["first_byte_at"] == stalled["last_byte_at"]
+    assert stalled["idle_ms"] == stalled["ended_at"] - stalled["last_byte_at"]
+    assert stalled["idle_ms"] >= 300 and stalled["idle_ms"] < 5_000
+    assert %{"outcome" => "ok", "retries" => 1, "idle_ms" => :null} = recovered
     FakeResponsesServer.stop(server)
   end
 

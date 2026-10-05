@@ -10,6 +10,7 @@ defmodule Kogen.Provider.ChatGPT do
   alias Kogen.Provider.ChatGPT.Codec
   alias Kogen.Provider.ChatGPT.CredentialStore
   alias Kogen.Provider.ChatGPT.Refresh
+  alias Kogen.Provider.ChatGPT.SSE
 
   @responses_endpoint "https://api.openai.com/v1/responses"
   @benchmark_endpoint "https://chatgpt.com/backend-api/codex/responses"
@@ -25,7 +26,7 @@ defmodule Kogen.Provider.ChatGPT do
               endpoint: nil,
               timeout_ms: nil,
               first_byte_timeout_ms: 120_000,
-              total_timeout_ms: 600_000,
+              total_timeout_ms: 1_200_000,
               credential_path: nil,
               credential_root: nil,
               backend: nil,
@@ -193,7 +194,7 @@ defmodule Kogen.Provider.ChatGPT do
              proxy_env: config.proxy_env,
              first_byte_ms: config.first_byte_timeout_ms,
              total_ms: config.total_timeout_ms,
-             on_first_byte: request.on_first_byte
+             on_chunk: progress(request.on_progress)
            ) do
       handle_response(response)
     else
@@ -207,6 +208,14 @@ defmodule Kogen.Provider.ChatGPT do
         {:error, error}
     end
   end
+
+  # Keepalive comments prove the connection, not the response: only other chunks count as
+  # progress, so a stream that sends nothing else still reads as silent.
+  defp progress(callback) when is_function(callback, 0) do
+    fn chunk -> if SSE.keepalive?(chunk), do: :ok, else: callback.() end
+  end
+
+  defp progress(_callback), do: nil
 
   defp handle_response(%Transport.Response{status: status, body: body, chunks: chunks})
        when status in 200..299 do
