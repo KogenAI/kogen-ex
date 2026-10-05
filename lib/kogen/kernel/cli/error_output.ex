@@ -71,6 +71,12 @@ defmodule Kogen.Kernel.CLI.ErrorOutput do
   def format({:acceptance_check_failed, name, _}),
     do: {1, "check/acceptance_check_failed: acceptance check #{name} failed\n"}
 
+  def format({:checkout_behind_base, base, paths}) do
+    {3,
+     "environment/checkout_behind_base: checkout is behind #{base}: #{Enum.join(paths, ", ")} " <>
+       "differ; update your checkout first\n"}
+  end
+
   def format({:base_moved, expected, current}),
     do: {3, "environment/base_moved: expected #{expected}, found #{inspect(current)}\n"}
 

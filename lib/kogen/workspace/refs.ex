@@ -110,6 +110,20 @@ defmodule Kogen.Workspace.Refs do
     end
   end
 
+  @spec tree_paths(Path.t(), String.t(), %{String.t() => String.t()}) ::
+          {:ok, [String.t()]} | {:error, term()}
+  def tree_paths(repo, rev, git_env) do
+    if valid_revision?(rev) do
+      case Git.run(repo, ["ls-tree", "-r", "-z", "--name-only", rev], git_env) do
+        {:ok, 0, output} -> {:ok, Git.nul_lines(output)}
+        {:ok, status, output} -> {:error, {:ls_tree_failed, status, output}}
+        {:error, reason} -> {:error, reason}
+      end
+    else
+      {:error, :invalid_revision}
+    end
+  end
+
   @spec commit_message(Path.t(), String.t(), %{String.t() => String.t()}) ::
           {:ok, binary()} | {:error, term()}
   def commit_message(repo, rev, git_env) do

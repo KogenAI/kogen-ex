@@ -21,13 +21,13 @@ defmodule Kogen.Kernel.Approval do
 
   alias Kogen.Contracts.CheckBaseline
   alias Kogen.Contracts.Intent, as: IntentData
-  alias Kogen.Contracts.Project, as: ProjectData
   alias Kogen.Contracts.ShapeWarning
   alias Kogen.Contracts.ShapeWarningCodec
   alias Kogen.Engine.Runtime
   alias Kogen.Intent
   alias Kogen.Kernel.Approval.Request
   alias Kogen.Kernel.ApprovalChecks
+  alias Kogen.Kernel.ApprovalManifest
   alias Kogen.Kernel.Types.ApprovalPreview
   alias Kogen.Project
   alias Kogen.State
@@ -77,13 +77,7 @@ defmodule Kogen.Kernel.Approval do
          {:ok, check_baseline} <-
            ApprovalChecks.run(request, project, base_sha, acceptance_files),
          {:ok, protected_manifest} <-
-           protected_manifest(
-             request.project_root,
-             project,
-             request.slug,
-             bytes,
-             acceptance_files
-           ) do
+           ApprovalManifest.build(request, base_sha, git_env, project, bytes, acceptance_files) do
       approval = %ApprovalRecord{
         slug: request.slug,
         intent_bytes: bytes,
@@ -177,50 +171,6 @@ defmodule Kogen.Kernel.Approval do
     end
   end
 
-  defp protected_manifest(project_root, %ProjectData{} = project, slug, intent_bytes, files) do
-    source_path = acceptance_source_path(slug)
-
-    protected_paths =
-      project.protected_paths
-      |> Enum.flat_map(&expand_glob(project_root, &1))
-      |> Enum.reject(&(&1 == source_path))
-
-    approved_files = [
-      {intent_path(slug), intent_bytes},
-      {candidate_acceptance_path(slug), Map.fetch!(files, acceptance_source_path(slug))}
-    ]
-
-    with {:ok, manifest} <- hash_paths(project_root, protected_paths) do
-      add_approved_files(manifest, approved_files)
-    end
-  end
-
-  defp expand_glob(root, pattern) do
-    root
-    |> Path.join(pattern)
-    |> Path.wildcard(match_dot: true)
-    |> Enum.filter(&File.regular?/1)
-    |> Enum.map(&Path.relative_to(&1, root))
-  end
-
-  defp hash_paths(root, paths) do
-    paths
-    |> Enum.uniq()
-    |> Enum.reduce_while({:ok, %{}}, fn path, {:ok, manifest} ->
-      case File.read(Path.join(root, path)) do
-        {:ok, bytes} -> {:cont, {:ok, Map.put(manifest, path, sha256(bytes))}}
-        {:error, reason} -> {:halt, {:error, {:protected_file_unavailable, path, reason}}}
-      end
-    end)
-  end
-
-  defp add_approved_files(manifest, files) do
-    {:ok,
-     Enum.reduce(files, manifest, fn {path, bytes}, current ->
-       Map.put(current, path, sha256(bytes))
-     end)}
-  end
-
   defp valid_slug?(slug),
     do: is_binary(slug) and Regex.match?(~r/\A[a-z0-9]+(?:-[a-z0-9]+)*\z/, slug)
 
@@ -237,6 +187,4 @@ defmodule Kogen.Kernel.Approval do
 
   defp intent_path(slug), do: ".kogen/intents/#{slug}/intent.md"
   defp acceptance_source_path(slug), do: ".kogen/acceptance/#{slug}_test.exs"
-  defp candidate_acceptance_path(slug), do: "test/acceptance/#{slug}_test.exs"
-  defp sha256(bytes), do: :sha256 |> :crypto.hash(bytes) |> Base.encode16(case: :lower)
 end

@@ -3,6 +3,7 @@ defmodule Kogen.Workspace do
   use Boundary, deps: [Kogen.Contracts, Kogen.Proc], exports: []
 
   alias Kogen.Workspace.ApprovalManifest
+  alias Kogen.Workspace.ApprovedFile
   alias Kogen.Workspace.Checkout
   alias Kogen.Workspace.Diff
   alias Kogen.Workspace.Guard
@@ -167,6 +168,12 @@ defmodule Kogen.Workspace do
   @spec read_file_at(Path.t(), String.t(), String.t(), git_env()) ::
           {:ok, binary()} | {:error, :missing | term()}
   def read_file_at(repo, rev, path, git_env), do: Refs.read_file_at(repo, rev, path, git_env)
+
+  @spec write_file(Path.t(), String.t(), binary()) :: :ok | {:error, term()}
+  def write_file(root, path, bytes), do: ApprovedFile.write(root, path, bytes)
+
+  @spec tree_paths(Path.t(), String.t(), git_env()) :: {:ok, [String.t()]} | {:error, term()}
+  def tree_paths(repo, rev, git_env), do: Refs.tree_paths(repo, rev, git_env)
 
   @spec commit_message(Path.t(), String.t(), git_env()) :: {:ok, binary()} | {:error, term()}
   def commit_message(repo, rev, git_env), do: Refs.commit_message(repo, rev, git_env)
