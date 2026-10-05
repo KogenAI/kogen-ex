@@ -1,4 +1,5 @@
 name: kogen
+account: kogen
 checks:
   - name: full
     argv: [make, check-full]

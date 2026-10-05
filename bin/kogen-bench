@@ -301,6 +301,11 @@ if env:
     lines.append("env:")
     lines.extend("  " + key + ": " + quote(value) for key, value in sorted(env.items()))
 
+bench_account = os.environ.get("KOGEN_BENCH_ACCOUNT", "").strip()
+if bench_account:
+    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", bench_account):
+        raise SystemExit("KOGEN_BENCH_ACCOUNT must be a Kogen account label")
+    lines.append("account: " + bench_account)
 lines += ["domains:", "  app: [lib, test]"]
 with open(target_path, "w", encoding="utf-8") as target:
     target.write("\n".join(lines) + "\n")
