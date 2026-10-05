@@ -16,10 +16,10 @@ defmodule Kogen.Kernel.CLI.Runner do
   def run(%Args{command: :version} = args), do: version(args)
   def run(%Args{command: :intent_check} = args), do: intent_check(args)
   def run(%Args{command: :intent_shape} = args), do: intent_shape(args)
-  def run(%Args{command: :approve} = args), do: approve(args)
+  def run(%Args{command: :intent_approve} = args), do: approve(args)
   def run(%Args{command: :build} = args), do: build(args)
+  def run(%Args{command: :build_show} = args), do: build_show(args)
   def run(%Args{command: :status} = args), do: status(args)
-  def run(%Args{command: :report} = args), do: report(args)
   def run(%Args{command: :reconcile} = args), do: reconcile(args)
   def run(%Args{command: :provider_list}), do: provider_list()
   def run(%Args{command: :provider_login} = args), do: provider_login(args)
@@ -36,7 +36,7 @@ defmodule Kogen.Kernel.CLI.Runner do
 
   defp intent_check(args) do
     with :ok <- project_directory(args),
-         path = Path.expand(hd(args.positionals), args.project),
+         path = intent_path(hd(args.positionals), args.project),
          {:ok, intent} <- Kogen.Kernel.intent_check(path) do
       {0, "intent #{intent.slug}: valid (sha256 #{intent.sha256})\n"}
     else
@@ -53,9 +53,7 @@ defmodule Kogen.Kernel.CLI.Runner do
            Kogen.Kernel.shape(
              hd(args.positionals),
              args.project,
-             task,
-             args.model,
-             args.effort
+             task
            ) do
       render_shape(result, args.json)
     else
@@ -153,12 +151,7 @@ defmodule Kogen.Kernel.CLI.Runner do
              slug: hd(args.positionals),
              project_root: args.project,
              origin: args.origin,
-             base: args.base,
-             model: args.model,
-             effort: args.effort,
-             recipe: args.recipe,
-             borrow: if(args.borrow == "codex", do: :codex),
-             label: args.account_label || "default"
+             base: args.base
            }) do
       render_build(result)
     else
@@ -191,7 +184,7 @@ defmodule Kogen.Kernel.CLI.Runner do
     end
   end
 
-  defp report(args) do
+  defp build_show(args) do
     with :ok <- project_directory(args),
          {:ok, json} <-
            Kogen.Kernel.report(
@@ -309,6 +302,14 @@ defmodule Kogen.Kernel.CLI.Runner do
 
   defp project_directory(%Args{project: project}) do
     if File.dir?(project), do: :ok, else: {:error, {:project_unavailable, project}}
+  end
+
+  defp intent_path(value, project) do
+    path = Path.expand(value, project)
+
+    if File.regular?(path),
+      do: path,
+      else: Path.join([project, ".kogen", "intents", value, "intent.md"])
   end
 
   defp command_error(%Failure{} = failure) do

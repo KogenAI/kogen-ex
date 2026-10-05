@@ -47,33 +47,38 @@ defmodule Kogen.Kernel.RuntimeDiscovery do
   end
 
   @spec provider_config(keyword()) ::
-          {:ok, ChatGPT.Config.t(), :kogen_owned | :codex_borrowed | :custom, String.t()}
+          {:ok, ChatGPT.Config.t(), :kogen_owned | :custom, String.t()}
           | {
               :error,
               ProviderError.t()
             }
   def provider_config(opts \\ []) do
     with {:ok, home} <- home() do
-      borrow = Keyword.get(opts, :borrow)
       label = Keyword.get(opts, :label, "default")
+      # Benchmark and CI runners may inject a temporary credential file. CLI users select
+      # Kogen-owned logins with the project account setting instead.
       explicit = System.get_env("KOGEN_AUTH_PATH")
 
-      cond do
-        borrow == :codex ->
-          [home, ".codex", "auth.json"]
-          |> Path.join()
-          |> ChatGPT.borrowed_codex_config()
-          |> with_source(:codex_borrowed, "codex")
-
-        is_binary(explicit) and explicit != "" ->
-          explicit |> Path.expand() |> ChatGPT.config() |> with_source(:custom, "custom")
-
-        true ->
-          home
-          |> Path.join(".kogen")
-          |> ChatGPT.owned_config(credential_backend(), label)
-          |> with_source(:kogen_owned, label)
+      if is_binary(explicit) and explicit != "" do
+        explicit |> Path.expand() |> ChatGPT.config() |> with_source(:custom, "custom")
+      else
+        home
+        |> Path.join(".kogen")
+        |> ChatGPT.owned_config(credential_backend(), label)
+        |> with_source(:kogen_owned, label)
       end
+    end
+  end
+
+  @spec benchmark_provider_config() ::
+          {:ok, ChatGPT.Config.t()} | {:error, ProviderError.t() | :benchmark_auth_unavailable}
+  def benchmark_provider_config do
+    case System.get_env("KOGEN_AUTH_PATH") do
+      path when is_binary(path) and path != "" ->
+        path |> Path.expand() |> ChatGPT.config() |> benchmark_config_with_proxy()
+
+      _missing ->
+        {:error, :benchmark_auth_unavailable}
     end
   end
 
@@ -132,6 +137,11 @@ defmodule Kogen.Kernel.RuntimeDiscovery do
   end
 
   defp with_source({:error, %ProviderError{}} = error, _source, _label), do: error
+
+  defp benchmark_config_with_proxy({:ok, config}),
+    do: {:ok, %{config | proxy_env: proxy_environment()}}
+
+  defp benchmark_config_with_proxy({:error, %ProviderError{}} = error), do: error
 
   defp browser_environment do
     Map.take(System.get_env(), [

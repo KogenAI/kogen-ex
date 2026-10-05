@@ -42,7 +42,8 @@ defmodule Kogen.Kernel.InstallLocalTest do
       end
 
     assert status == 0, "installed launcher failed:\n#{output}"
-    assert output =~ "Usage: kogen"
+    assert output =~ "Commands:"
+    assert output =~ "  status      "
   end
 
   defp installed_alternate_erlang(env) do

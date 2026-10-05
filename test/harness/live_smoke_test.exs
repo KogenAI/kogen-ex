@@ -7,8 +7,7 @@ defmodule Kogen.Harness.LiveSmokeTest do
   alias Kogen.Harness
   alias Kogen.Harness.Opts
   alias Kogen.Provider.ChatGPT
-
-  @auth_path "/Users/almirsarajcic/.codex/auth.json"
+  alias Kogen.Testkit.BenchmarkAuth
 
   @tag :live
   test "gpt-6-luna low adds a function to a temporary mini repo", %{tmp_dir: tmp_dir} do
@@ -29,12 +28,16 @@ defmodule Kogen.Harness.LiveSmokeTest do
     source_path = Path.join(workdir, "lib/mini.ex")
     File.write!(source_path, "defmodule Mini do\nend\n")
 
-    case ChatGPT.config(@auth_path) do
+    case BenchmarkAuth.config() do
       {:ok, provider_config} ->
         live_develop(tmp_dir, workdir, source_path, provider_config)
 
+      {:error, :benchmark_auth_unavailable} ->
+        IO.puts("Live Harness smoke skipped: set KOGEN_AUTH_PATH in the benchmark/CI job.")
+        assert true
+
       {:error, %ProviderError{class: :login}} ->
-        IO.puts("Live Harness smoke skipped: Codex credentials are unavailable or expired.")
+        IO.puts("Live Harness smoke skipped: benchmark credentials are unavailable or expired.")
         assert true
     end
   end

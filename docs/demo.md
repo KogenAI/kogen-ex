@@ -1,5 +1,7 @@
 # Kogen end-to-end demo
 
+Archived 2026-10-03 transcript using the pre-settled CLI. It records historical behavior; use the current commands in [README](../README.md).
+
 Recorded 2026-10-03. Live provider credential source: `codex_borrowed` (the existing Codex auth file; no credential copied into the project). Both approvals used the supplied provenance:
 
 ```text

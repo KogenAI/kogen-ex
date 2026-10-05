@@ -70,6 +70,7 @@ defmodule Kogen.Shaper.ShapingReliabilityTests do
         capture_io(fn ->
           result =
             CLI.execute([
+              "intent",
               "approve",
               "shape-loop",
               "--project",

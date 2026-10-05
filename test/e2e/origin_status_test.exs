@@ -97,7 +97,8 @@ defmodule Kogen.E2e.OriginStatusTest do
 
       {0, report_json} =
         CLI.execute([
-          "report",
+          "build",
+          "show",
           @slug,
           "--json",
           "--project",

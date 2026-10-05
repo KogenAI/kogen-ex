@@ -3,54 +3,45 @@ defmodule Kogen.Kernel.CLITest do
 
   alias Kogen.Kernel.CLI
   alias Kogen.Kernel.CLI.Arguments
+  alias Kogen.Testkit.Git
 
   @fixture Path.expand("../../fixtures/hello_app", __DIR__)
 
-  test "version works with or without a project path" do
+  test "version works without a project path" do
     assert {0, "kogen 0.0.0\n"} = CLI.execute(["version"])
-    assert {0, "kogen 0.0.0\n"} = CLI.execute(["version", "--project", @fixture])
   end
 
-  test "project commands default to the current directory" do
+  test "top-level help is the compact golden command list" do
+    assert CLI.execute([]) == {0, top_level_help()}
+    assert CLI.execute(["help"]) == {0, top_level_help()}
+    assert CLI.execute(["--help"]) == {0, top_level_help()}
+  end
+
+  test "command help is a golden subcommand and option list" do
+    assert CLI.execute(["intent", "--help"]) == {0, intent_help()}
+    assert CLI.execute(["help", "intent"]) == {0, intent_help()}
+    assert ["build", "--help"] |> CLI.execute() |> elem(1) =~ "build show <slug>"
+  end
+
+  test "project commands default to cwd and defer base selection" do
     assert {:ok, args} = Arguments.parse(["status"])
     assert Path.type(args.project) == :absolute
     assert args.origin == nil
+    assert args.base == nil
 
     assert {:ok, explicit} = Arguments.parse(["status", "--origin", "/tmp/kogen-origin"])
     assert explicit.origin == "/tmp/kogen-origin"
   end
 
-  test "build accepts only the built-in recipes and defaults to staged" do
-    assert {:ok, default} = Arguments.parse(["build", "greet"])
-    assert default.recipe == "staged"
+  test "build settings are no longer command flags" do
+    assert {:ok, build} = Arguments.parse(["build", "greet"])
+    assert build.command == :build
 
-    assert {:ok, direct} = Arguments.parse(["build", "greet", "--recipe", "direct"])
-    assert direct.recipe == "direct"
-
-    assert {:ok, direct_shell} =
-             Arguments.parse(["build", "greet", "--recipe", "direct-shell"])
-
-    assert direct_shell.recipe == "direct-shell"
-
-    assert {:ok, direct_escalate} =
-             Arguments.parse(["build", "greet", "--recipe", "direct-escalate"])
-
-    assert direct_escalate.recipe == "direct-escalate"
-
-    assert {:ok, plan_shell} = Arguments.parse(["build", "greet", "--recipe", "plan-shell"])
-    assert plan_shell.recipe == "plan-shell"
-
-    assert {:ok, escalate_shell} =
-             Arguments.parse(["build", "greet", "--recipe", "escalate-shell"])
-
-    assert escalate_shell.recipe == "escalate-shell"
-
-    assert {:error,
-            "--recipe must be staged, plan-shell, direct, direct-shell, direct-escalate, or escalate-shell"} =
-             Arguments.parse(["build", "greet", "--recipe", "unknown"])
+    assert {:ok, show} = Arguments.parse(["build", "show", "greet"])
+    assert show.command == :build_show
   end
 
-  test "provider commands parse account labels without requiring a project" do
+  test "provider commands keep account labels on login and logout" do
     assert {:ok, login} = Arguments.parse(["provider", "login", "chatgpt", "--as", "personal"])
     assert login.command == :provider_login
     assert login.account_label == "personal"
@@ -64,11 +55,27 @@ defmodule Kogen.Kernel.CLITest do
     assert {:ok, list} = Arguments.parse(["provider", "list"])
     assert list.command == :provider_list
     assert list.project == nil
-    assert list.origin == nil
   end
 
-  test "intent check parses and lints from the named project root" do
-    assert {0, output} =
+  test "old command and flag forms return moved errors" do
+    cases = [
+      {["approve", "greet"], "moved: use kogen intent approve <slug>"},
+      {["report", "greet"], "moved: use kogen build show <slug>"},
+      {["build", "greet", "--model", "m"], "moved: set build.roles.builder.model"},
+      {["build", "greet", "--effort", "high"], "moved: set build.roles.builder.effort"},
+      {["build", "greet", "--recipe", "direct"], "moved: set build.recipe"},
+      {["build", "greet", "--borrow", "codex"], "moved: use kogen provider login chatgpt"},
+      {["build", "greet", "--as", "personal"], "moved: set account"}
+    ]
+
+    for {argv, message} <- cases do
+      assert {2, output} = CLI.execute(argv)
+      assert output =~ message
+    end
+  end
+
+  test "intent check resolves a project-relative path or slug" do
+    assert {0, path_output} =
              CLI.execute([
                "intent",
                "check",
@@ -77,25 +84,27 @@ defmodule Kogen.Kernel.CLITest do
                @fixture
              ])
 
-    assert output =~ "intent greet: valid"
-    assert output =~ "sha256"
+    assert path_output =~ "intent greet: valid"
+    assert path_output =~ "sha256"
+
+    assert {0, slug_output} =
+             CLI.execute(["intent", "check", "greet", "--project", @fixture])
+
+    assert slug_output =~ "intent greet: valid"
   end
 
   test "intent check prints parse issues and uses exit code 2", %{tmp_dir: tmp_dir} do
     File.write!(Path.join(tmp_dir, "broken.md"), "not an Intent\n")
 
-    assert {2, output} =
-             CLI.execute(["intent", "check", "broken.md", "--project", tmp_dir])
-
+    assert {2, output} = CLI.execute(["intent", "check", "broken.md", "--project", tmp_dir])
     assert output =~ "parse failed"
     assert output =~ "frontmatter must start"
   end
 
-  test "status emits text and derives draft from the selected project branch", %{
-    tmp_dir: tmp_dir
-  } do
-    project = Kogen.Testkit.Git.create!(tmp_dir)
-    Kogen.Testkit.Proc.cmd!("git", ["-C", project, "branch", "-M", "main"], env: git_env())
+  test "status emits text and JSON for the selected project branch", %{tmp_dir: tmp_dir} do
+    project = Git.create!(tmp_dir)
+    write_project_config(project)
+    Git.git!(project, ["branch", "-M", "main"])
     intent_path = Path.join([project, ".kogen", "intents", "greet", "intent.md"])
     File.mkdir_p!(Path.dirname(intent_path))
     File.write!(intent_path, "draft Intent\n")
@@ -103,8 +112,7 @@ defmodule Kogen.Kernel.CLITest do
     assert {0, "greet draft run=- landed=-\n"} =
              CLI.execute(["status", "--project", project, "--base", "main"])
 
-    assert {0, output} =
-             CLI.execute(["status", "--project", project, "--base", "main", "--json"])
+    assert {0, output} = CLI.execute(["status", "--project", project, "--base", "main", "--json"])
 
     assert :json.decode(output) == [
              %{
@@ -116,19 +124,41 @@ defmodule Kogen.Kernel.CLITest do
            ]
   end
 
-  test "report requires JSON output" do
-    assert {2, output} = CLI.execute(["report", "greet", "--project", @fixture])
-    assert output =~ "report requires --json"
+  defp write_project_config(project) do
+    File.mkdir_p!(Path.join(project, ".kogen"))
+
+    File.cp!(
+      Path.join(@fixture, ".kogen/project.yaml"),
+      Path.join(project, ".kogen/project.yaml")
+    )
   end
 
-  defp git_env do
-    [
-      {"GIT_CONFIG_GLOBAL", "/dev/null"},
-      {"GIT_CONFIG_NOSYSTEM", "1"},
-      {"GIT_AUTHOR_NAME", "Kogen Test"},
-      {"GIT_AUTHOR_EMAIL", "test@kogen.invalid"},
-      {"GIT_COMMITTER_NAME", "Kogen Test"},
-      {"GIT_COMMITTER_EMAIL", "test@kogen.invalid"}
-    ]
+  defp top_level_help do
+    """
+    Commands:
+      status      Show project and Intent state
+      intent      Check, shape, or approve an Intent
+      build       Build an Intent or show a Build report
+      reconcile   Reconcile a Build after a crash
+      provider    Manage Kogen ChatGPT logins
+      version     Show the Kogen version
+      help        Show help for a command
+    """
+  end
+
+  defp intent_help do
+    """
+    Usage: kogen intent <command> [arguments] [options]
+
+    Commands:
+      check <slug|path>     Parse and lint an Intent
+      shape <slug>          Create an Intent from --task-file
+      approve <slug>        Review and record an Intent approval
+
+    Options:
+      --project <checkout>  Project checkout (default: current directory)
+      --origin <repo>       Local Git repository used for state and landing
+      --base <branch>       Target branch (project setting, origin HEAD, then current branch)
+    """
   end
 end

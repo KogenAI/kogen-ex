@@ -49,7 +49,7 @@ defmodule Kogen.Engine.Build.Request do
           runtime: Kogen.Engine.Runtime.t(),
           provider_mod: module(),
           provider_config: term(),
-          credential_source: :kogen_owned | :codex_borrowed | :custom,
+          credential_source: :kogen_owned | :custom,
           credential_label: String.t()
         }
 end

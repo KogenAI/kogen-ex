@@ -5,7 +5,16 @@ defmodule Kogen.Contracts.Project do
 
   @enforce_keys [:root, :name, :checks, :setup, :fix, :diagnose, :protected_paths, :domains]
   defstruct @enforce_keys ++
-              [format: nil, acceptance_checks: [], setup_outputs: [], env: %{}, sandbox: true]
+              [
+                format: nil,
+                acceptance_checks: [],
+                setup_outputs: [],
+                env: %{},
+                sandbox: true,
+                base: nil,
+                account: "default",
+                build: nil
+              ]
 
   @type diagnostic :: %{required(:glob) => String.t(), required(:argv) => [String.t()]}
   @type t :: %__MODULE__{
@@ -21,6 +30,9 @@ defmodule Kogen.Contracts.Project do
           protected_paths: [String.t()],
           domains: %{optional(String.t()) => [String.t()]},
           env: %{optional(String.t()) => String.t()},
-          sandbox: boolean()
+          sandbox: boolean(),
+          base: String.t() | nil,
+          account: String.t(),
+          build: %{optional(:recipe) => String.t(), optional(:roles) => map()} | nil
         }
 end

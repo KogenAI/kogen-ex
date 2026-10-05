@@ -84,11 +84,11 @@ defmodule Kogen.Harness.Shaping do
   domains: [project, contracts, kernel]
   size: small
   ---
-  Three self-builds failed late because an approved acceptance test broke a static rule (a forbidden domain reference) that only the done gate checked. The Developer may not edit the test, so each Build was lost. Let a project declare `acceptance_checks:` that `kogen approve` runs on the acceptance test before it records an approval.
+  Three self-builds failed late because an approved acceptance test broke a static rule (a forbidden domain reference) that only the done gate checked. The Developer may not edit the test, so each Build was lost. Let a project declare `acceptance_checks:` that `kogen intent approve` runs on the acceptance test before it records an approval.
 
   ## Acceptance
-  - A1: `kogen approve` exits non-zero, names the failing check, and records no approval when an acceptance check fails.
-  - A2: When every acceptance check passes, `kogen approve` records the approval and leaves no check files in the checkout.
+  - A1: `kogen intent approve` exits non-zero, names the failing check, and records no approval when an acceptance check fails.
+  - A2: When every acceptance check passes, `kogen intent approve` records the approval and leaves no check files in the checkout.
   - A3: An `{path}` argv element is replaced by `test/acceptance/<slug>_test.exs`, which holds the acceptance test while checks run.
 
   ## Verify

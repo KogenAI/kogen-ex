@@ -31,29 +31,19 @@ end
 defmodule Kogen.Kernel.Types.BuildOptions do
   @moduledoc false
 
-  @enforce_keys [:slug, :project_root, :origin, :base, :model, :effort]
+  @enforce_keys [:slug, :project_root]
   defstruct [
     :slug,
     :project_root,
     :origin,
-    :base,
-    :model,
-    :effort,
-    borrow: nil,
-    label: "default",
-    recipe: "staged"
+    :base
   ]
 
   @type t :: %__MODULE__{
           slug: String.t(),
           project_root: Path.t(),
           origin: Path.t() | nil,
-          base: String.t(),
-          model: String.t(),
-          effort: String.t(),
-          recipe: String.t(),
-          borrow: :codex | nil,
-          label: String.t()
+          base: String.t() | nil
         }
 end
 
@@ -98,13 +88,9 @@ defmodule Kogen.Kernel.CLI.Args do
     :project,
     :origin,
     :base,
-    :model,
-    :effort,
     :by,
     :task_file,
     :account_label,
-    :borrow,
-    :recipe,
     positionals: [],
     yes: false,
     json: false
@@ -115,13 +101,9 @@ defmodule Kogen.Kernel.CLI.Args do
           project: Path.t() | nil,
           origin: Path.t() | nil,
           base: String.t() | nil,
-          model: String.t() | nil,
-          effort: String.t() | nil,
           by: String.t() | nil,
           task_file: Path.t() | nil,
           account_label: String.t() | nil,
-          borrow: String.t() | nil,
-          recipe: String.t() | nil,
           positionals: [String.t()],
           yes: boolean(),
           json: boolean()

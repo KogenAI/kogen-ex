@@ -3,6 +3,7 @@ defmodule Kogen.Project.ProjectTest do
 
   alias Kogen.Contracts.CheckSpec
   alias Kogen.Contracts.Project
+  alias Kogen.Project, as: ProjectLoader
 
   test "loads all declared project data and converts timeout strings", %{tmp_dir: root} do
     write_config(root, """
@@ -34,7 +35,7 @@ defmodule Kogen.Project.ProjectTest do
     sandbox: false
     """)
 
-    assert {:ok, %Project{} = project} = Kogen.Project.load(root)
+    assert {:ok, %Project{} = project} = ProjectLoader.load(root)
     assert project.root == root
     assert project.name == "tiny-app"
     assert project.checks == [%CheckSpec{name: "test", argv: ["mix", "test"], timeout_ms: 60_000}]
@@ -66,7 +67,7 @@ defmodule Kogen.Project.ProjectTest do
 
   test "omitted optional collections are empty and checks is required", %{tmp_dir: root} do
     write_config(root, "name: tiny-app\nchecks: []\n")
-    assert {:ok, project} = Kogen.Project.load(root)
+    assert {:ok, project} = ProjectLoader.load(root)
     assert project.acceptance_checks == []
     assert project.format == nil
     assert project.fix == []
@@ -78,31 +79,85 @@ defmodule Kogen.Project.ProjectTest do
     assert project.sandbox
 
     write_config(root, "name: tiny-app\n")
-    assert {:error, [%{message: message}]} = Kogen.Project.load(root)
+    assert {:error, [%{message: message}]} = ProjectLoader.load(root)
     assert message =~ "missing required key `checks`"
   end
 
   test "reports a missing project file", %{tmp_dir: root} do
-    assert {:error, [%{message: message}]} = Kogen.Project.load(root)
+    assert {:error, [%{message: message}]} = ProjectLoader.load(root)
     assert message =~ ".kogen/project.yaml"
+  end
+
+  test "project config selects account, base, recipe, and role models", %{tmp_dir: root} do
+    write_config(root, """
+    name: tiny-app
+    checks: []
+    base: careful-rebuild
+    account: personal
+    build:
+      recipe: direct
+      roles:
+        builder:
+          model: project-model
+        shaper:
+          model: shape-model
+          effort: low
+    """)
+
+    home = Path.join(root, "machine-home")
+    machine_config = Path.join([home, ".kogen", "config.yaml"])
+    File.mkdir_p!(Path.dirname(machine_config))
+
+    File.write!(machine_config, """
+    build:
+      recipe: plan-shell
+      roles:
+        builder:
+          model: machine-model
+          effort: medium
+        planner:
+          model: machine-planner
+          effort: high
+    """)
+
+    assert {:ok, project} = ProjectLoader.load(root)
+    assert project.base == "careful-rebuild"
+    assert project.account == "personal"
+    assert {:ok, machine} = ProjectLoader.load_machine_build_settings(home)
+
+    effective = ProjectLoader.effective_build_settings(machine, project.build)
+    assert effective.recipe == "direct"
+    assert effective.roles.builder == %{model: "project-model", effort: "medium"}
+    assert effective.roles.planner == %{model: "machine-planner", effort: "high"}
+    assert effective.roles.shaper == %{model: "shape-model", effort: "low"}
+
+    assert effective.recipe == "direct"
+    assert effective.roles.builder == %{model: "project-model", effort: "medium"}
+    assert effective.roles.planner == %{model: "machine-planner", effort: "high"}
+  end
+
+  test "account defaults to the Kogen default label", %{tmp_dir: root} do
+    write_config(root, "name: tiny-app\nchecks: []\n")
+    assert {:ok, project} = ProjectLoader.load(root)
+    assert project.account == "default"
   end
 
   test "sandbox accepts only a boolean project setting", %{tmp_dir: root} do
     write_config(root, "name: tiny-app\nchecks: []\nsandbox: maybe\n")
 
-    assert {:error, [%{message: message}]} = Kogen.Project.load(root)
+    assert {:error, [%{message: message}]} = ProjectLoader.load(root)
     assert message == "`sandbox` must be a boolean"
   end
 
   test "format must be a non-empty argv list", %{tmp_dir: root} do
     write_config(root, "name: tiny-app\nchecks: []\nformat: []\n")
 
-    assert {:error, [%{message: message}]} = Kogen.Project.load(root)
+    assert {:error, [%{message: message}]} = ProjectLoader.load(root)
     assert message == "project.format must not be empty"
 
     write_config(root, "name: tiny-app\nchecks: []\nformat: mix format\n")
 
-    assert {:error, [%{message: message}]} = Kogen.Project.load(root)
+    assert {:error, [%{message: message}]} = ProjectLoader.load(root)
     assert message == "`format` must be a list of strings"
   end
 
@@ -117,7 +172,7 @@ defmodule Kogen.Project.ProjectTest do
     extra: value
     """)
 
-    assert {:error, errors} = Kogen.Project.load(root)
+    assert {:error, errors} = ProjectLoader.load(root)
     messages = Enum.map(errors, & &1.message)
     assert Enum.any?(messages, &String.contains?(&1, "project has unknown key \"extra\""))
     assert Enum.any?(messages, &String.contains?(&1, "checks[1] has unknown key \"shell\""))
@@ -134,7 +189,7 @@ defmodule Kogen.Project.ProjectTest do
         tier: safe
     """)
 
-    assert {:error, [%{message: message}]} = Kogen.Project.load(root)
+    assert {:error, [%{message: message}]} = ProjectLoader.load(root)
     assert message =~ "fix[1] has unknown key \"tier\""
 
     write_config(root, """
@@ -145,7 +200,7 @@ defmodule Kogen.Project.ProjectTest do
         argv: [mix, format]
     """)
 
-    assert {:error, errors} = Kogen.Project.load(root)
+    assert {:error, errors} = ProjectLoader.load(root)
     assert Enum.any?(errors, &(&1.message =~ "fix[1] is missing required key `timeout_ms`"))
   end
 
@@ -160,7 +215,7 @@ defmodule Kogen.Project.ProjectTest do
         shell: true
     """)
 
-    assert {:error, [%{message: message}]} = Kogen.Project.load(root)
+    assert {:error, [%{message: message}]} = ProjectLoader.load(root)
     assert message =~ "setup[1] has unknown key \"shell\""
 
     write_config(root, """
@@ -172,19 +227,19 @@ defmodule Kogen.Project.ProjectTest do
         timeout_ms: 1000
     """)
 
-    assert {:error, [%{message: message}]} = Kogen.Project.load(root)
+    assert {:error, [%{message: message}]} = ProjectLoader.load(root)
     assert message =~ "setup[1].argv must not be empty"
   end
 
   test "setup outputs must be safe, distinct, non-overlapping relative paths", %{tmp_dir: root} do
     write_config(root, "name: tiny-app\nchecks: []\nsetup_outputs: [../outside]\n")
 
-    assert {:error, [%{message: message}]} = Kogen.Project.load(root)
+    assert {:error, [%{message: message}]} = ProjectLoader.load(root)
     assert message =~ "unsafe path"
 
     write_config(root, "name: tiny-app\nchecks: []\nsetup_outputs: [deps, deps/cache]\n")
 
-    assert {:error, [%{message: message}]} = Kogen.Project.load(root)
+    assert {:error, [%{message: message}]} = ProjectLoader.load(root)
     assert message =~ "paths overlap"
   end
 
@@ -202,7 +257,7 @@ defmodule Kogen.Project.ProjectTest do
     domains: intent
     """)
 
-    assert {:error, errors} = Kogen.Project.load(root)
+    assert {:error, errors} = ProjectLoader.load(root)
     messages = Enum.map(errors, & &1.message)
     assert Enum.any?(messages, &String.contains?(&1, "checks[1].argv must not be empty"))
     assert Enum.any?(messages, &String.contains?(&1, "timeout_ms must be a positive integer"))
@@ -222,11 +277,11 @@ defmodule Kogen.Project.ProjectTest do
 
   test "rejects non-map project roots and non-list checks", %{tmp_dir: root} do
     write_config(root, "[one, two]\n")
-    assert {:error, [%{message: message}]} = Kogen.Project.load(root)
+    assert {:error, [%{message: message}]} = ProjectLoader.load(root)
     assert message =~ "document root"
 
     write_config(root, "name: tiny-app\nchecks: test\n")
-    assert {:error, [%{message: message}]} = Kogen.Project.load(root)
+    assert {:error, [%{message: message}]} = ProjectLoader.load(root)
     assert message =~ "`checks` must be a list"
   end
 

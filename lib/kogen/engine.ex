@@ -25,6 +25,23 @@ defmodule Kogen.Engine do
   @spec build_recipe(String.t(), String.t(), String.t()) :: Recipe.t()
   def build_recipe(name, model, effort), do: Recipe.for_build(name, model, effort)
 
+  @spec build_recipe(String.t(), String.t(), String.t(), map()) :: Recipe.t()
+  def build_recipe(name, model, effort, role_settings) when is_map(role_settings) do
+    recipe = Recipe.for_build(name, model, effort)
+
+    roles =
+      Enum.reduce(role_settings, recipe.roles, fn {role, settings}, acc ->
+        {default_model, default_effort} = Map.get(acc, role, {model, effort})
+
+        Map.put(acc, role, {
+          Map.get(settings, :model, default_model),
+          Map.get(settings, :effort, default_effort)
+        })
+      end)
+
+    %{recipe | roles: roles}
+  end
+
   @spec run(Request.t()) :: {:ok, Result.t()} | {:error, term()}
   def run(%Request{} = request), do: Kogen.Engine.Build.Engine.run(request)
 

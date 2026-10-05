@@ -104,19 +104,20 @@ defmodule Kogen.Kernel.Status do
   @spec list(Path.t(), Path.t(), Path.t(), String.t(), map()) ::
           {:ok, [IntentStatus.t()]} | {:error, term()}
   def list(project_root, state_root, origin, base, git_env) do
-    project_root
-    |> intent_paths()
-    |> Enum.reduce_while({:ok, []}, fn path, {:ok, statuses} ->
-      slug = path |> Path.dirname() |> Path.basename()
+    slugs = intent_paths(project_root)
+    legacy_root = Path.join(project_root, ".kogen")
 
-      case intent_status(project_root, origin, state_root, slug, base, git_env) do
-        {:ok, status} -> {:cont, {:ok, [status | statuses]}}
-        {:error, reason} -> {:halt, {:error, reason}}
-      end
-    end)
-    |> case do
-      {:ok, statuses} -> {:ok, Enum.reverse(statuses)}
-      error -> error
+    with {:ok, current_runs} <- State.list(state_root),
+         {:ok, legacy_runs} <- legacy_runs(state_root, legacy_root),
+         {:ok, snapshot} <-
+           Workspace.status_snapshot(
+             origin,
+             base,
+             git_env,
+             Enum.any?(current_runs ++ legacy_runs, &(&1.status == :running))
+           ) do
+      run_rows = latest_runs(slugs, current_runs, legacy_runs)
+      render_statuses(slugs, run_rows, snapshot)
     end
   rescue
     ArgumentError -> {:error, :status_unavailable}
@@ -126,38 +127,76 @@ defmodule Kogen.Kernel.Status do
     [project_root, ".kogen", "intents", "*", "intent.md"]
     |> Path.join()
     |> Path.wildcard()
-    |> Enum.filter(&valid_slug?(Path.basename(Path.dirname(&1))))
+    |> Enum.map(&Path.basename(Path.dirname(&1)))
+    |> Enum.filter(&valid_slug?/1)
     |> Enum.sort()
   end
 
-  defp intent_status(project_root, origin, state_root, slug, base, git_env) do
-    legacy_root = Path.join(project_root, ".kogen")
+  defp legacy_runs(state_root, legacy_root) when state_root == legacy_root, do: {:ok, []}
+  defp legacy_runs(_state_root, legacy_root), do: State.list(legacy_root)
 
-    with {:ok, selected_root} <- StateView.preferred_root(state_root, legacy_root, slug) do
-      load_intent_status(origin, selected_root, slug, base, git_env)
+  defp latest_runs(slugs, current_runs, legacy_runs) do
+    current = Enum.group_by(current_runs, & &1.slug)
+    legacy = Enum.group_by(legacy_runs, & &1.slug)
+
+    Enum.reduce_while(slugs, {:ok, %{}}, fn slug, {:ok, statuses} ->
+      selected_runs = Map.get(current, slug, [])
+      selected_runs = if selected_runs == [], do: Map.get(legacy, slug, []), else: selected_runs
+
+      case StateView.latest(selected_runs) do
+        {:ok, latest} -> {:cont, {:ok, Map.put(statuses, slug, latest)}}
+        {:error, reason} -> {:halt, {:error, reason}}
+      end
+    end)
+  end
+
+  defp render_statuses(slugs, {:ok, latest_runs}, snapshot) do
+    statuses =
+      Enum.map(slugs, fn slug ->
+        latest = Map.get(latest_runs, slug)
+        approval = Map.get(snapshot.approvals, slug)
+        landed_sha = Map.get(snapshot.landed, slug)
+
+        %IntentStatus{
+          slug: slug,
+          status: lifecycle_status(slug, approval, landed_sha, latest, snapshot.claim_run_id),
+          run_id: if(match?(%Run{}, latest), do: latest.id),
+          landed_sha: landed_sha
+        }
+      end)
+
+    {:ok, statuses}
+  end
+
+  defp render_statuses(_slugs, error, _snapshot), do: error
+
+  defp lifecycle_status(_slug, _approval, landed_sha, _latest, _claim_run_id)
+       when is_binary(landed_sha), do: :landed
+
+  defp lifecycle_status(slug, approval, nil, latest, claim_run_id) do
+    cond do
+      claimed_run?(slug, latest, claim_run_id) -> :building
+      terminal_for_approval?(latest, approval, :parked) -> :parked
+      terminal_for_approval?(latest, approval, :failed) -> :failed
+      is_binary(approval) -> :approved
+      true -> :draft
     end
   end
 
-  defp load_intent_status(origin, state_root, slug, base, git_env) do
-    status = State.status(origin, state_root, slug, base, git_env)
+  defp claimed_run?(_slug, %Run{id: claim_run_id}, claim_run_id) when is_binary(claim_run_id),
+    do: true
 
-    with {:ok, runs} <- StateView.runs(state_root, slug),
-         {:ok, latest} <- StateView.latest(runs),
-         {:ok, landed_sha} <- landed_sha(status, origin, base, slug, runs, git_env) do
-      {:ok,
-       %IntentStatus{
-         slug: slug,
-         status: status,
-         run_id: if(match?(%Run{}, latest), do: latest.id),
-         landed_sha: landed_sha
-       }}
-    end
-  end
+  defp claimed_run?(_slug, _latest, _claim_run_id), do: false
 
-  defp landed_sha(:landed, origin, base, slug, _runs, git_env),
-    do: Workspace.intent_commit(origin, base, slug, git_env)
+  defp terminal_for_approval?(
+         %Run{approval_commit: run_approval, status: run_status},
+         approval,
+         status
+       )
+       when is_binary(approval) and run_approval == approval and run_status == status and
+              status in [:failed, :parked], do: true
 
-  defp landed_sha(_status, _origin, _base, _slug, _runs, _git_env), do: {:ok, nil}
+  defp terminal_for_approval?(_latest, _approval, _status), do: false
 
   defp valid_slug?(slug), do: Regex.match?(~r/\A[a-z0-9]+(?:-[a-z0-9]+)*\z/, slug)
 end

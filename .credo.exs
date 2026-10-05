@@ -112,6 +112,7 @@
                Kogen.Contracts.ShapeWarningCodec,
                Kogen.Proc.Request,
                Kogen.Project.Loader,
+               Kogen.Project.BuildSettings,
                Kogen.Workspace.Git,
                Kogen.Contracts.MiseEnvironment,
                Kogen.Engine.Runtime,
@@ -186,7 +187,8 @@
                  Kogen.Workspace,
                  Kogen.State,
                  Kogen.Checks,
-                 Kogen.Harness
+                 Kogen.Harness,
+                 Kogen.Shaper
                ],
                Kogen.E2e => [
                  Kogen.Engine,

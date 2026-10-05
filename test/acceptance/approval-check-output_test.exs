@@ -104,6 +104,7 @@ defmodule Kogen.Acceptance.ApprovalCheckOutputTest do
     branch = repo |> git(["rev-parse", "--abbrev-ref", "HEAD"]) |> String.trim()
 
     args = [
+      "intent",
       "approve",
       "probe",
       "--project",

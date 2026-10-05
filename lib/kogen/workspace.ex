@@ -7,6 +7,7 @@ defmodule Kogen.Workspace do
   alias Kogen.Workspace.Landing
   alias Kogen.Workspace.Rebase
   alias Kogen.Workspace.Refs
+  alias Kogen.Workspace.StatusRefs
 
   @type git_env :: %{String.t() => String.t()}
 
@@ -64,6 +65,25 @@ defmodule Kogen.Workspace do
 
   @spec remote_url(Path.t(), String.t(), git_env()) :: {:ok, String.t()} | {:error, term()}
   def remote_url(repo, remote, git_env), do: Refs.remote_url(repo, remote, git_env)
+
+  @spec head_branch(Path.t(), git_env()) :: {:ok, String.t()} | {:error, term()}
+  def head_branch(repo, git_env), do: StatusRefs.head_branch(repo, git_env)
+
+  @spec remote_head_branch(Path.t(), String.t()) :: {:ok, String.t()} | {:error, term()}
+  def remote_head_branch(repo, remote), do: StatusRefs.remote_head_branch(repo, remote)
+
+  @doc false
+  @spec status_snapshot(Path.t(), String.t(), git_env()) ::
+          {:ok, %{approvals: map(), landed: map(), claim_run_id: String.t() | nil}}
+          | {:error, term()}
+  def status_snapshot(repo, branch, git_env), do: StatusRefs.snapshot(repo, branch, git_env, true)
+
+  @doc false
+  @spec status_snapshot(Path.t(), String.t(), git_env(), boolean()) ::
+          {:ok, %{approvals: map(), landed: map(), claim_run_id: String.t() | nil}}
+          | {:error, term()}
+  def status_snapshot(repo, branch, git_env, include_claim?),
+    do: StatusRefs.snapshot(repo, branch, git_env, include_claim?)
 
   @spec ref_read(Path.t(), String.t(), git_env()) ::
           {:ok, String.t()} | {:error, :missing | term()}

@@ -4,39 +4,8 @@ defmodule Kogen.Kernel.CLI do
 
   alias Kogen.Kernel.CLI.Args
   alias Kogen.Kernel.CLI.Arguments
+  alias Kogen.Kernel.CLI.Help
   alias Kogen.Kernel.CLI.Runner
-
-  @usage """
-  Usage: kogen <command> [arguments] [options]
-
-  Commands:
-    intent check <path>   Parse and lint an Intent
-    intent shape <slug>   Create and validate an Intent (--task-file)
-    approve <slug>        Review and record an Intent approval (--by, --yes)
-    build <slug>          Build and land an approved Intent (--recipe, --model, --effort)
-    provider list         List saved ChatGPT accounts
-    provider login chatgpt [--as <label>]
-                          Sign in using "Continue with ChatGPT"
-    provider logout chatgpt [--as <label>]
-                          Sign out of a saved ChatGPT account
-    status                Show Intent state (--json for JSON)
-    report <slug>         Show the latest run report (--json)
-    reconcile <run-id>    Reconcile a run after a crash
-    version               Show the Kogen version
-
-  Common options:
-    --project <checkout>  Project checkout (default: current directory)
-    --origin <repo>       Git repository used for approval and landing
-    --base <branch>       Target branch (default: main)
-  Intent shaping options:
-    --task-file <path>    Task statement text file
-    --model <name>        Builder model (default: gpt-6-luna)
-    --effort <level>      Builder effort (default: max)
-    --recipe <name>       Build recipe (default: staged)
-    --json                Emit shaping result and call usage as JSON
-    --as <label>          ChatGPT account label (default: default)
-    --borrow codex        Explicitly use the read-only Codex login for this Build
-  """
 
   @spec main([String.t()]) :: no_return()
   def main(argv) do
@@ -64,10 +33,10 @@ defmodule Kogen.Kernel.CLI do
   def execute(argv) do
     case Arguments.parse(argv) do
       {:ok, %Args{command: command} = args} -> dispatch(command, args)
-      {:error, reason} -> {2, "kogen: #{reason}\n\n#{@usage}"}
+      {:error, reason} -> {2, "kogen: #{reason}\n\n" <> elem(Help.render([]), 1)}
     end
   end
 
-  defp dispatch(:help, _args), do: {0, @usage}
+  defp dispatch(:help, args), do: Help.render(args.positionals)
   defp dispatch(_command, %Args{} = args), do: Runner.run(args)
 end

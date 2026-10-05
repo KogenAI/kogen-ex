@@ -3,12 +3,19 @@ defmodule Kogen.Project do
   use Boundary, deps: [Kogen.Contracts, Kogen.Workspace], exports: []
 
   alias Kogen.Contracts.Project
+  alias Kogen.Project.BuildSettings
   alias Kogen.Project.SetupReuse
 
   @type load_error :: %{line: pos_integer() | nil, message: String.t()}
 
   @spec load(Path.t()) :: {:ok, Project.t()} | {:error, [load_error()]}
   def load(checkout_root), do: Kogen.Project.Loader.load(checkout_root)
+
+  @spec load_machine_build_settings(Path.t()) :: {:ok, map() | nil} | {:error, [load_error()]}
+  def load_machine_build_settings(home), do: BuildSettings.load_machine(home)
+
+  @spec effective_build_settings(map() | nil, map() | nil) :: %{recipe: String.t(), roles: map()}
+  def effective_build_settings(machine, project), do: BuildSettings.effective(machine, project)
 
   @spec run_setup(
           Project.t(),

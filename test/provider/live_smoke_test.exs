@@ -4,8 +4,7 @@ defmodule Kogen.Provider.ChatGPT.LiveSmokeTest do
   alias Kogen.Contracts.ModelRequest
   alias Kogen.Contracts.ProviderError
   alias Kogen.Provider.ChatGPT
-
-  @auth_path "/Users/almirsarajcic/.codex/auth.json"
+  alias Kogen.Testkit.BenchmarkAuth
 
   @tag :live
   test "gpt-6-luna and gpt-6.1-sol answer tiny live requests" do
@@ -18,15 +17,19 @@ defmodule Kogen.Provider.ChatGPT.LiveSmokeTest do
   end
 
   defp run_smoke do
-    case ChatGPT.config(@auth_path) do
+    case BenchmarkAuth.config() do
       {:ok, config} ->
         Enum.each(["gpt-6-luna", "gpt-6.1-sol"], fn model ->
           assert {:ok, response} = ChatGPT.respond(config, request(model))
           assert is_binary(response.text) and response.text != ""
         end)
 
+      {:error, :benchmark_auth_unavailable} ->
+        IO.puts("Live provider smoke skipped: set KOGEN_AUTH_PATH in the benchmark/CI job.")
+        assert true
+
       {:error, %ProviderError{class: :login}} ->
-        IO.puts("Live provider smoke skipped: Codex credentials are unavailable or expired.")
+        IO.puts("Live provider smoke skipped: benchmark credentials are unavailable or expired.")
         assert true
     end
   end

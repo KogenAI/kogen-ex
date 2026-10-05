@@ -30,9 +30,11 @@ defmodule Kogen.Acceptance.CliDefaultsTest do
   @tag intent: "cli-defaults/A2"
   test "help works without a project", %{tmp_dir: tmp_dir} do
     output = cli(["--help"], tmp_dir)
-    assert output =~ "Usage: kogen"
+    assert output =~ ~r/^Commands:/
+    assert output =~ ~r/^  status/m
     refute output =~ "--project <checkout>\n\nUsage"
     refute output =~ "requires --project"
+    refute output =~ "Usage:"
   end
 
   @tag intent: "cli-defaults/A3"

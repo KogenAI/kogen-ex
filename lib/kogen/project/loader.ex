@@ -4,8 +4,9 @@ defmodule Kogen.Project.Loader do
   alias Kogen.Contracts.CheckSpec
   alias Kogen.Contracts.Project
   alias Kogen.Contracts.Yaml
+  alias Kogen.Project.BuildSettings
 
-  @project_keys ~w(name checks format acceptance_checks setup setup_outputs fix diagnose protected_paths domains env sandbox)
+  @project_keys ~w(name checks format acceptance_checks setup setup_outputs fix diagnose protected_paths domains env sandbox base account build)
   @env_name ~r/\A[A-Za-z_][A-Za-z0-9_]*\z/
 
   @type error :: %{line: pos_integer() | nil, message: String.t()}
@@ -38,9 +39,49 @@ defmodule Kogen.Project.Loader do
     {name, name_errors} = name(document)
     {collections, collection_errors} = project_collections(document)
     {settings, setting_errors} = project_settings(document)
+    {identity, identity_errors} = project_identity(document)
 
-    attributes = [root: checkout_root, name: name] ++ collections ++ settings
-    {attributes, name_errors ++ collection_errors ++ setting_errors}
+    attributes = [root: checkout_root, name: name] ++ collections ++ settings ++ identity
+    {attributes, name_errors ++ collection_errors ++ setting_errors ++ identity_errors}
+  end
+
+  defp project_identity(document) do
+    {base, base_errors} = optional_string(document, "base", "base")
+    {account, account_errors} = account(document)
+    {build, build_errors} = build(document)
+    {[base: base, account: account, build: build], base_errors ++ account_errors ++ build_errors}
+  end
+
+  defp optional_string(document, key, label) do
+    case Map.fetch(document, key) do
+      {:ok, value} when is_binary(value) and value != "" -> {value, []}
+      {:ok, _value} -> {nil, [issue("`#{label}` must be a non-empty string")]}
+      :error -> {nil, []}
+    end
+  end
+
+  defp account(document) do
+    {value, errors} = optional_string(document, "account", "account")
+
+    cond do
+      errors != [] -> {"default", errors}
+      is_nil(value) -> {"default", []}
+      Regex.match?(~r/\A[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}\z/, value) -> {value, []}
+      true -> {"default", [issue("`account` must be a valid ChatGPT account label")]}
+    end
+  end
+
+  defp build(document) do
+    case_result =
+      case Map.fetch(document, "build") do
+        {:ok, value} -> BuildSettings.parse(value)
+        :error -> {:ok, nil}
+      end
+
+    case case_result do
+      {:ok, value} -> {value, []}
+      {:error, errors} -> {nil, errors}
+    end
   end
 
   defp project_collections(document) do

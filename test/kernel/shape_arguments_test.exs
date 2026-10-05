@@ -4,7 +4,7 @@ defmodule Kogen.Kernel.ShapeArgumentsTest do
   alias Kogen.Kernel.CLI.Args
   alias Kogen.Kernel.CLI.Arguments
 
-  test "intent shape defaults to the Build model and effort" do
+  test "intent shape accepts its task input and output format" do
     assert {:ok, %Args{} = args} =
              Arguments.parse([
                "intent",
@@ -19,8 +19,6 @@ defmodule Kogen.Kernel.ShapeArgumentsTest do
 
     assert args.command == :intent_shape
     assert args.task_file == "/tmp/task.md"
-    assert args.model == "gpt-6-luna"
-    assert args.effort == "max"
     assert args.json
   end
 

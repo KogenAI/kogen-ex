@@ -1,6 +1,7 @@
 defmodule Kogen.Kernel.StatusTest do
   use Kogen.Testkit.Case
 
+  alias Kogen.Kernel.Origin
   alias Kogen.Kernel.Status
   alias Kogen.State.Json
   alias Kogen.State.Run
@@ -45,6 +46,67 @@ defmodule Kogen.Kernel.StatusTest do
     assert status.status == :landed
     assert status.landed_sha == sha
     assert status.run_id == "stale-run"
+  end
+
+  test "status reads 15 Intents in under one second", %{tmp_dir: tmp_dir} do
+    repo = Git.create!(tmp_dir)
+    branch = repo |> Git.git!(["rev-parse", "--abbrev-ref", "HEAD"]) |> String.trim()
+
+    for index <- 1..15 do
+      slug = "probe-#{index}"
+      intent = Path.join([repo, ".kogen", "intents", slug, "intent.md"])
+      File.mkdir_p!(Path.dirname(intent))
+      File.write!(intent, "Draft #{slug}\n")
+    end
+
+    started = System.monotonic_time(:microsecond)
+
+    assert {:ok, statuses} =
+             Status.list(repo, Path.join(tmp_dir, "state"), repo, branch, Git.env())
+
+    elapsed = System.monotonic_time(:microsecond) - started
+
+    assert length(statuses) == 15
+    assert Enum.all?(statuses, &(&1.status == :draft))
+    assert elapsed <= 1_000_000
+  end
+
+  test "base defaults to configured base, then origin HEAD, then checkout branch", %{
+    tmp_dir: tmp_dir
+  } do
+    project = Git.create!(Path.join(tmp_dir, "project"))
+    Git.git!(project, ["branch", "-M", "checkout-branch"])
+    origin = Git.bare!(Path.join(tmp_dir, "origin.git"))
+    Git.git!(origin, ["symbolic-ref", "HEAD", "refs/heads/origin-branch"])
+
+    assert {:ok, "configured"} =
+             Kogen.Kernel.effective_base(nil, "configured", project, origin, Git.env())
+
+    assert {:ok, "origin-branch"} =
+             Kogen.Kernel.effective_base(nil, nil, project, origin, Git.env())
+
+    File.write!(Path.join(origin, "HEAD"), String.duplicate("a", 40) <> "\n")
+
+    assert {:ok, "checkout-branch"} =
+             Kogen.Kernel.effective_base(nil, nil, project, origin, Git.env())
+  end
+
+  test "a GitHub origin URL resolves locally without fetching", %{tmp_dir: tmp_dir} do
+    repo = Git.create!(tmp_dir)
+    Git.git!(repo, ["remote", "add", "origin", "https://github.com/example/project.git"])
+    Git.git!(repo, ["branch", "-M", "checkout-branch"])
+    sha = repo |> Git.git!(["rev-parse", "HEAD"]) |> String.trim()
+    Git.git!(repo, ["update-ref", "refs/remotes/origin/main", sha])
+
+    Git.git!(repo, [
+      "symbolic-ref",
+      "refs/remotes/origin/HEAD",
+      "refs/remotes/origin/main"
+    ])
+
+    assert {:ok, ^repo} = Origin.resolve(repo, nil, Git.env())
+
+    assert {:ok, "main"} = Kogen.Kernel.effective_base(nil, nil, repo, repo, Git.env())
   end
 
   defp landed_project!(tmp_dir, slug) do

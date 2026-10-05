@@ -31,21 +31,19 @@ defmodule Kogen.Kernel do
   alias Kogen.Engine.Runtime
   alias Kogen.Kernel.Approval
   alias Kogen.Kernel.Approval.Request, as: ApprovalRequest
-  alias Kogen.Kernel.Origin
+  alias Kogen.Kernel.Base
+  alias Kogen.Kernel.BuildConfig
+  alias Kogen.Kernel.ProjectContext
   alias Kogen.Kernel.RuntimeDiscovery
-  alias Kogen.Kernel.ShapePaths
+  alias Kogen.Kernel.ShapeExecution
   alias Kogen.Kernel.StateView
   alias Kogen.Kernel.Types.ApprovalPreview
   alias Kogen.Kernel.Types.BuildOptions
   alias Kogen.Kernel.Types.IntentStatus
-  alias Kogen.Kernel.Types.ShapeInputs
   alias Kogen.Kernel.Workspaces
-  alias Kogen.Proc.Sandbox
   alias Kogen.Provider.ChatGPT
   alias Kogen.Provider.ChatGPT.CredentialStore
   alias Kogen.Provider.ChatGPT.SIWC
-  alias Kogen.Shaper
-  alias Kogen.Shaper.Request, as: ShapeRequest
   alias Kogen.Shaper.Result, as: ShapeResult
 
   @type toolchain_error ::
@@ -81,13 +79,20 @@ defmodule Kogen.Kernel do
     end
   end
 
-  @spec approval_preview(String.t(), Path.t(), Path.t() | nil, String.t(), String.t()) ::
+  @spec approval_preview(String.t(), Path.t(), Path.t() | nil, String.t() | nil, String.t()) ::
           {:ok, ApprovalPreview.t()} | {:error, term()}
   def approval_preview(slug, project_root, origin, base, by) do
     with {:ok, runtime} <- runtime(),
+         {:ok, project} <- Kogen.Project.load(project_root),
          {:ok, process_env} <- project_environment(project_root, runtime),
-         {:ok, origin} <-
-           Origin.resolve(project_root, origin, Runtime.git_environment(process_env)),
+         {:ok, origin, base} <-
+           ProjectContext.resolve(
+             project_root,
+             project,
+             origin,
+             base,
+             Runtime.git_environment(process_env)
+           ),
          {:ok, home} <- runtime_home(runtime) do
       Approval.prepare(%ApprovalRequest{
         slug: slug,
@@ -105,50 +110,40 @@ defmodule Kogen.Kernel do
   @spec approve(ApprovalPreview.t()) :: {:ok, String.t()} | {:error, term()}
   def approve(%ApprovalPreview{} = preview), do: Approval.commit(preview)
 
-  @spec build(String.t(), Path.t(), Path.t() | nil, String.t(), String.t(), String.t()) ::
-          {:ok, Result.t()} | {:error, term()}
-  def build(slug, project_root, origin, base, model, effort) do
-    build(%BuildOptions{
-      slug: slug,
-      project_root: project_root,
-      origin: origin,
-      base: base,
-      model: model,
-      effort: effort
-    })
-  end
-
   @spec build(BuildOptions.t()) :: {:ok, Result.t()} | {:error, term()}
   def build(%BuildOptions{} = options) do
     with {:ok, runtime} <- runtime(),
+         {:ok, home} <- runtime_home(runtime),
+         {:ok, project} <- Kogen.Project.load(options.project_root),
+         {:ok, build_config} <- BuildConfig.load(home, project.build),
          {:ok, process_env} <- project_environment(options.project_root, runtime),
          {:ok, provider_config, source, label} <-
-           provider_config(borrow: options.borrow, label: options.label),
-         {:ok, origin} <-
-           Origin.resolve(
+           provider_config(label: project.account),
+         {:ok, origin, base} <-
+           ProjectContext.resolve(
              options.project_root,
+             project,
              options.origin,
+             options.base,
              Runtime.git_environment(process_env)
-           ),
-         {:ok, home} <- runtime_home(runtime) do
+           ) do
       runtime = Runtime.for_project(runtime, process_env)
+      role_overrides = BuildConfig.role_overrides(build_config.roles)
+      {builder_model, builder_effort} = BuildConfig.builder_settings(build_config.roles)
 
-      request = %Request{
-        slug: options.slug,
-        home: home,
-        project_root: options.project_root,
-        workspace_root: Workspaces.root(options.project_root, home),
-        origin: origin,
-        base: options.base,
-        model: options.model,
-        effort: options.effort,
-        recipe: Engine.build_recipe(options.recipe, options.model, options.effort),
-        runtime: runtime,
-        provider_mod: ChatGPT,
-        provider_config: provider_config,
-        credential_source: source,
-        credential_label: label
-      }
+      request =
+        build_request(%{
+          options: options,
+          home: home,
+          origin: origin,
+          base: base,
+          model: builder_model,
+          effort: builder_effort,
+          roles: role_overrides,
+          build_config: build_config,
+          runtime: runtime,
+          provider: {provider_config, source, label}
+        })
 
       Engine.run(request)
     end
@@ -158,54 +153,43 @@ defmodule Kogen.Kernel do
   @spec build(Request.t()) :: {:ok, Result.t()} | {:error, term()}
   def build(%Request{} = request), do: Engine.run(request)
 
-  @spec shape(String.t(), Path.t(), String.t(), String.t(), String.t()) ::
-          {:ok, ShapeResult.t()} | {:error, term()}
-  def shape(slug, project_root, task, model, effort) do
-    with {:ok, runtime} <- runtime(),
-         {:ok, project} <- Kogen.Project.load(project_root),
-         {:ok, runtime, process_env, run_dir} <-
-           shape_environment(slug, project_root, runtime, project),
-         {:ok, provider_config, _source, _label} <- provider_config(),
-         {:ok, home} <- runtime_home(runtime) do
-      request =
-        shape_request(%ShapeInputs{
-          slug: slug,
-          project_root: project_root,
-          task: task,
-          model: model,
-          effort: effort,
-          project: project,
-          provider_config: provider_config,
-          runtime: runtime,
-          process_env: process_env,
-          run_dir: run_dir,
-          home: home
-        })
+  @spec shape(String.t(), Path.t(), String.t()) :: {:ok, ShapeResult.t()} | {:error, term()}
+  def shape(slug, project_root, task), do: ShapeExecution.run(slug, project_root, task)
 
-      Shaper.shape(request)
-    end
-  end
-
-  @spec status(Path.t(), Path.t() | nil, String.t()) ::
+  @spec status(Path.t(), Path.t() | nil, String.t() | nil) ::
           {:ok, [IntentStatus.t()]} | {:error, term()}
   def status(project_root, origin, base) do
     with {:ok, runtime} <- runtime(),
          {:ok, home} <- runtime_home(runtime),
-         {:ok, origin} <-
-           Origin.resolve(project_root, origin, Runtime.git_environment(runtime.base_env)) do
+         {:ok, project} <- Kogen.Project.load(project_root),
+         {:ok, origin, base} <-
+           ProjectContext.resolve(
+             project_root,
+             project,
+             origin,
+             base,
+             Runtime.git_environment(runtime.base_env)
+           ) do
       git_env = Runtime.git_environment(runtime.base_env)
       root = Workspaces.root(project_root, home)
       Kogen.Kernel.Status.list(project_root, root, origin, base, git_env)
     end
   end
 
-  @spec report(String.t(), Path.t(), Path.t() | nil, String.t()) ::
+  @spec report(String.t(), Path.t(), Path.t() | nil, String.t() | nil) ::
           {:ok, binary()} | {:error, term()}
   def report(slug, project_root, origin, base) do
     with {:ok, runtime} <- runtime(),
          {:ok, home} <- runtime_home(runtime),
-         {:ok, origin} <-
-           Origin.resolve(project_root, origin, Runtime.git_environment(runtime.base_env)) do
+         {:ok, project} <- Kogen.Project.load(project_root),
+         {:ok, origin, base} <-
+           ProjectContext.resolve(
+             project_root,
+             project,
+             origin,
+             base,
+             Runtime.git_environment(runtime.base_env)
+           ) do
       git_env = Runtime.git_environment(runtime.base_env)
 
       with {:ok, root} <-
@@ -219,14 +203,21 @@ defmodule Kogen.Kernel do
     end
   end
 
-  @spec reconcile(String.t(), Path.t(), Path.t() | nil, String.t()) ::
+  @spec reconcile(String.t(), Path.t(), Path.t() | nil, String.t() | nil) ::
           {:ok, :crashed | :landed | :unchanged} | {:error, term()}
   def reconcile(run_id, project_root, origin, base) do
     with {:ok, runtime} <- runtime(),
+         {:ok, project} <- Kogen.Project.load(project_root),
          {:ok, process_env} <- project_environment(project_root, runtime),
-         {:ok, origin} <-
-           Origin.resolve(project_root, origin, Runtime.git_environment(process_env)),
-         {:ok, home} <- runtime_home(runtime) do
+         {:ok, home} <- runtime_home(runtime),
+         {:ok, origin, base} <-
+           ProjectContext.resolve(
+             project_root,
+             project,
+             origin,
+             base,
+             Runtime.git_environment(process_env)
+           ) do
       git_env = Runtime.git_environment(process_env)
 
       Kogen.Kernel.Reconcile.run(
@@ -313,7 +304,7 @@ defmodule Kogen.Kernel do
 
   @doc false
   @spec provider_config(keyword()) ::
-          {:ok, ChatGPT.Config.t(), :kogen_owned | :codex_borrowed | :custom, String.t()}
+          {:ok, ChatGPT.Config.t(), :kogen_owned | :custom, String.t()}
           | {
               :error,
               ProviderError.t()
@@ -321,6 +312,11 @@ defmodule Kogen.Kernel do
   def provider_config(opts \\ []) do
     RuntimeDiscovery.provider_config(opts)
   end
+
+  @doc false
+  @spec benchmark_provider_config() ::
+          {:ok, ChatGPT.Config.t()} | {:error, ProviderError.t() | :benchmark_auth_unavailable}
+  def benchmark_provider_config, do: RuntimeDiscovery.benchmark_provider_config()
 
   defp legacy_state_root(project_root), do: Path.join(project_root, ".kogen")
 
@@ -339,55 +335,41 @@ defmodule Kogen.Kernel do
     end
   end
 
-  defp shape_environment(slug, project_root, runtime, project) do
-    run_dir = ShapePaths.run_dir(runtime.base_env, slug)
+  defp build_request(inputs) do
+    %{
+      options: options,
+      home: home,
+      origin: origin,
+      base: base,
+      model: model,
+      effort: effort,
+      roles: roles,
+      build_config: build_config,
+      runtime: runtime,
+      provider: {provider_config, source, label}
+    } = inputs
 
-    runtime =
-      runtime
-      |> Runtime.add_trusted_workspace(project_root)
-      |> Runtime.for_run(run_dir)
-
-    with {:ok, process_env} <- Engine.candidate_environment(project_root, runtime, project) do
-      process_env =
-        process_env
-        |> Runtime.add_trusted_workspace(project_root)
-        |> Runtime.for_run(run_dir)
-
-      {:ok, runtime, process_env, run_dir}
-    end
-  end
-
-  defp shape_request(%ShapeInputs{} = inputs) do
-    git_env = Runtime.git_environment(inputs.process_env)
-
-    {setup_cache_root, base_tree_sha} =
-      ShapePaths.setup_cache(inputs.project_root, inputs.home, git_env)
-
-    %ShapeRequest{
-      workdir: inputs.project_root,
-      slug: inputs.slug,
-      task: inputs.task,
-      model: inputs.model,
-      effort: inputs.effort,
+    %Request{
+      slug: options.slug,
+      home: home,
+      project_root: options.project_root,
+      workspace_root: Workspaces.root(options.project_root, home),
+      origin: origin,
+      base: base,
+      model: model,
+      effort: effort,
+      recipe: Engine.build_recipe(build_config.recipe, model, effort, roles),
+      runtime: runtime,
       provider_mod: ChatGPT,
-      provider_config: inputs.provider_config,
-      env: inputs.process_env,
-      git_env: git_env,
-      run_dir: inputs.run_dir,
-      setup_cache_root: setup_cache_root,
-      base_tree_sha: base_tree_sha,
-      sandbox: %Sandbox{
-        enabled:
-          inputs.project.sandbox and not Runtime.sandboxed?(inputs.process_env) and
-            not Runtime.sandboxed?(inputs.runtime),
-        home: inputs.home,
-        project_root: inputs.project_root,
-        origin: inputs.project_root,
-        workspace: inputs.project_root,
-        run_dir: inputs.run_dir,
-        tmp_dir: Runtime.temporary_directory(inputs.process_env),
-        workspace_is_project: true
-      }
+      provider_config: provider_config,
+      credential_source: source,
+      credential_label: label
     }
   end
+
+  @doc false
+  @spec effective_base(String.t() | nil, String.t() | nil, Path.t(), Path.t(), map()) ::
+          {:ok, String.t()} | {:error, term()}
+  def effective_base(explicit, configured, project, origin, git_env),
+    do: Base.effective(explicit, configured, project, origin, git_env)
 end

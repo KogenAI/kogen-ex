@@ -1,16 +1,47 @@
 # Kogen
 
-Kogen is an AI-agent software-building system written in Elixir. A human approves a short Markdown Intent; Kogen builds it in an isolated checkout with an LLM Developer loop, verifies the result with deterministic checks, and lands it on the main branch.
+Kogen is an AI-agent software-building system written in Elixir. A human approves a short Markdown Intent; Kogen builds it in an isolated checkout with an LLM Developer loop, verifies the result with deterministic checks, and lands it on the selected base branch.
 
-This repository is the single Mix application that forms Kogen's core. Current work extends its domain foundation with account-scoped ChatGPT login, explicit credential selection, and credential-aware Build receipts.
+This repository is the single Mix application that forms Kogen's core. Kogen owns its ChatGPT logins; each project's `.kogen/project.yaml` selects an account, base branch, Build recipe, and role models. Build receipts record the selected account and model settings.
 
 ## Start here
 
 - [Contracts](lib/kogen/contracts.ex) defines the shared structs and ports.
 - [Domain facades](lib/kogen/) own the dependency map and document each domain.
+- [CLI interfaces](docs/interfaces.md#kogenkernel-and-cli) documents command contracts and project settings.
 - [Makefile](Makefile) owns the local quality gate and fast domain loop.
 - [Distribution and local installation](docs/distribution.md) describes the installed launcher and its pinned runtime.
 - [Custom Credo checks](tools/kogen_checks/) owns Kogen-specific static checks.
+
+## CLI
+
+Commands are noun-first. Use `kogen` or `kogen help` for the short top-level list, then `kogen <command> --help` for that command's options.
+
+```sh
+kogen intent check greet
+kogen intent approve greet --by "Almir" --yes
+kogen build greet
+kogen build show greet
+kogen status
+```
+
+Build settings belong in `.kogen/project.yaml`:
+
+```yaml
+account: default
+base: main
+build:
+  recipe: staged
+  roles:
+    builder:
+      model: gpt-6-luna
+      effort: max
+    planner:
+      model: gpt-6.1-sol
+      effort: high
+```
+
+When `base` is omitted, Kogen uses the origin HEAD branch recorded locally, then the checkout's current branch. Optional machine defaults live in `~/.kogen/config.yaml`; project settings override them.
 
 ## Repository map
 
