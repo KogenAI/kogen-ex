@@ -58,39 +58,6 @@ defmodule Kogen.Harness.Codec do
 
   def parse_review(_text), do: :error
 
-  @audit_verdicts %{
-    "valid" => :valid,
-    "over_strict" => :over_strict,
-    "contradicts" => :contradicts
-  }
-
-  @doc "Auditor verdicts from a JSON reply, tolerating a surrounding code fence; [] if invalid."
-  @spec parse_audit(String.t()) :: [%{id: String.t(), verdict: atom(), reason: String.t()}]
-  def parse_audit(text) when is_binary(text) do
-    case Regex.run(~r/\{.*\}/s, text) do
-      [json] -> json |> decode_json() |> audit_items()
-      nil -> []
-    end
-  end
-
-  defp audit_items({:ok, %{"items" => items}}) when is_list(items),
-    do: Enum.flat_map(items, &audit_item/1)
-
-  defp audit_items(_invalid), do: []
-
-  defp audit_item(%{"id" => id, "verdict" => verdict} = item) when is_binary(id) do
-    case Map.fetch(@audit_verdicts, verdict) do
-      {:ok, value} ->
-        reason = Map.get(item, "reason")
-        [%{id: id, verdict: value, reason: if(is_binary(reason), do: reason, else: "")}]
-
-      :error ->
-        []
-    end
-  end
-
-  defp audit_item(_item), do: []
-
   @spec usage(Usage.t(), map()) :: Usage.t()
   def usage(%Usage{} = total, response_usage) when is_map(response_usage) do
     Usage.add(total, provider_usage(response_usage))

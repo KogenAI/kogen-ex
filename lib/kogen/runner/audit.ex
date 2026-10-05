@@ -13,6 +13,7 @@ defmodule Kogen.Runner.Audit do
   alias Kogen.Engine.Build.GateSupport
   alias Kogen.Engine.Build.Session
   alias Kogen.Harness
+  alias Kogen.Runner.Auditor
   alias Kogen.State
 
   @spec run(map(), Session.t()) :: {:ok, Session.t(), [term()]}
@@ -47,12 +48,19 @@ defmodule Kogen.Runner.Audit do
   defp judge(session, ids) do
     started_at = System.monotonic_time(:millisecond)
 
-    case Harness.audit(GateSupport.harness_options(session), input(session, ids)) do
-      {:ok, audit} ->
+    request = %{
+      stage: :audit,
+      role: :auditor,
+      instructions: Auditor.instructions(),
+      text: Auditor.input(input(session, ids))
+    }
+
+    case Harness.ask(GateSupport.harness_options(session), request) do
+      {:ok, %{text: text, usage: usage}} ->
         {model, effort} = Recipe.auditor(session.request.recipe)
         wall_ms = max(System.monotonic_time(:millisecond) - started_at, 0)
-        _recorded = record_model(session, model, effort, audit.usage, wall_ms)
-        Enum.reduce(audit.verdicts, session, &apply_verdict(&2, &1))
+        _recorded = record_model(session, model, effort, usage, wall_ms)
+        Enum.reduce(Auditor.verdicts(text, ids), session, &apply_verdict(&2, &1))
 
       {:error, reason} ->
         _recorded = record_failure(session, reason)

@@ -38,6 +38,13 @@ defmodule Kogen.Resilience.Policy do
   @spec retryable?(ProviderError.class()) :: boolean()
   def retryable?(class), do: class in @retryable
 
+  @doc """
+  Errors that no retry can fix but that clear by themselves or when the user signs in again:
+  a Build waits them out instead of failing.
+  """
+  @spec waitable?(ProviderError.class()) :: boolean()
+  def waitable?(class), do: class in [:usage_limit, :login]
+
   @doc "Maps an Exchange stage to the model role that serves it."
   @spec role(atom()) :: role()
   def role(:plan), do: :planner

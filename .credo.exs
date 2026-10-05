@@ -135,7 +135,8 @@
                Kogen.Checks.Ledger,
                Kogen.State.ApprovalBaselineCodec,
                Kogen.State.Json,
-               Kogen.Kernel.CLI.ShapeJson
+               Kogen.Kernel.CLI.ShapeJson,
+               Kogen.Runner.Auditor
              ]
            ]},
           {KogenChecks.Check.FailOpenWith, [included_paths: ["lib/"]]},
@@ -174,6 +175,7 @@
                  Kogen.Tooling
                ],
                Kogen.Resilience => [],
+               Kogen.Build => [Kogen.Resilience],
                Kogen.Tooling => [Kogen.Proc],
                Kogen.Queue => [Kogen.Proc, Kogen.State, Kogen.Workspace],
                Kogen.Runner => [

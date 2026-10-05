@@ -9,6 +9,7 @@ defmodule Kogen.Build.Cycle.Steer do
   alias Kogen.Build.Cycle.State
   alias Kogen.Build.Recipe
   alias Kogen.Contracts.Failure
+  alias Kogen.Resilience.Policy
 
   @candidate_stages [:plan, :develop, :fix, :check, :audit]
   @terminal_reasons [:state_write_failed, :landing_failed]
@@ -19,7 +20,7 @@ defmodule Kogen.Build.Cycle.Steer do
     ladder? = Recipe.ladder(state.recipe) != nil
 
     cond do
-      ladder? and reason in [:usage_limit, :login] ->
+      ladder? and Policy.waitable?(reason) ->
         :pause
 
       class == :provider ->

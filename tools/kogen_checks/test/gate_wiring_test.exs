@@ -46,6 +46,7 @@ defmodule KogenChecks.GateWiringTest do
           Kogen.Tooling
         ],
         Kogen.Resilience => [],
+        Kogen.Build => [Kogen.Resilience],
         Kogen.Tooling => [Kogen.Proc],
         Kogen.Queue => [Kogen.Proc, Kogen.State, Kogen.Workspace],
         Kogen.Runner => [
@@ -190,7 +191,8 @@ defmodule KogenChecks.GateWiringTest do
         Kogen.Checks.Ledger,
         Kogen.State.ApprovalBaselineCodec,
         Kogen.State.Json,
-        Kogen.Kernel.CLI.ShapeJson
+        Kogen.Kernel.CLI.ShapeJson,
+        Kogen.Runner.Auditor
       ]
     ],
     KogenChecks.Check.TestModuleShape => [max_tests: 30, serial_allowed: []]
