@@ -35,7 +35,8 @@ defmodule Kogen.E2e.Build.Options do
     :origin_checkout,
     recipe: "staged",
     builder_model: "scripted-model",
-    builder_effort: "medium"
+    builder_effort: "medium",
+    ladder: %{}
   ]
 
   @type t :: %__MODULE__{
@@ -44,7 +45,8 @@ defmodule Kogen.E2e.Build.Options do
           origin_checkout: :clean | :dirty | nil,
           recipe: String.t(),
           builder_model: String.t(),
-          builder_effort: String.t()
+          builder_effort: String.t(),
+          ladder: map()
         }
 end
 

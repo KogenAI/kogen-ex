@@ -8,9 +8,9 @@ defmodule Kogen.E2e.Ladder do
   alias Kogen.State.Event
   alias Kogen.Testkit.Git
 
-  @spec run!(Path.t(), String.t(), [ScriptedProvider.Step.t()], Path.t(), String.t()) ::
+  @spec run!(Path.t(), String.t(), [ScriptedProvider.Step.t()], Path.t(), String.t(), map()) ::
           Result.t()
-  def run!(tmp_dir, name, script, seed, recipe \\ "ladder") do
+  def run!(tmp_dir, name, script, seed, recipe \\ "ladder", ladder \\ %{}) do
     parent = Path.join(tmp_dir, name)
     File.mkdir_p!(parent)
 
@@ -18,7 +18,8 @@ defmodule Kogen.E2e.Ladder do
       seed_project: seed,
       recipe: recipe,
       builder_model: "gpt-6-luna",
-      builder_effort: "max"
+      builder_effort: "max",
+      ladder: ladder
     })
   end
 

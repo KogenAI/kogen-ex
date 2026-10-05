@@ -12,8 +12,13 @@ defmodule Kogen.Build.LadderCycleTest do
     assert @recipe.builder_tools == :shell
     assert Recipe.auditor(@recipe) == {"gpt-6.1-sol", "high"}
 
-    assert %{rungs: rungs, parallel_on_hard: 2, repair_cap: 6, wall_ms: 3_600_000} =
-             Recipe.ladder(@recipe)
+    assert %{
+             rungs: rungs,
+             parallel_on_hard: 2,
+             repair_cap: 6,
+             wall_ms: 3_600_000,
+             repeat_from: 2
+           } = Recipe.ladder(@recipe)
 
     assert Enum.map(rungs, &{&1.name, Recipe.rung_builder(@recipe, &1), &1.input}) == [
              {"builder", {"gpt-6-luna", "max"}, :plan},
@@ -110,7 +115,25 @@ defmodule Kogen.Build.LadderCycleTest do
     assert summary =~ "The sol-medium attempt stopped after turn_cap."
     assert summary =~ "The sol-high attempt stopped after wall_cap."
 
+    # After the last rung the Build keeps making fresh attempts on the strongest rungs.
     {state, effects} = Cycle.step(develop(state, "tree-5"), done_gate(:turn_cap))
+    assert {state.attempt, state.rung, state.result} == {"sol-high-2", 4, nil}
+
+    assert [_record, {:escalate, %{model: "gpt-6.1-sol", effort: "high", input: :plan}}, _] =
+             effects
+
+    {state, _effects} = Cycle.step(develop(state, "tree-6"), done_gate(:turn_cap))
+    assert state.attempt == "raw-request-2"
+    {state, _effects} = Cycle.step(develop(state, "tree-7"), done_gate(:turn_cap))
+    assert state.attempt == "sol-high-3"
+  end
+
+  test "a ladder without repeats ends after its last rung" do
+    recipe = Map.update!(@recipe, :ladder, &%{&1 | repeat_from: nil})
+    state = Cycle.new(%{approval: :approval, repairs: 2, recipe: recipe})
+    state = %{developing(state) | rung: 3, attempt: "raw-request"}
+
+    {state, effects} = Cycle.step(state, done_gate(:turn_cap))
     assert state.result == {:failed, :turn_cap}
 
     assert [{:record, %{event: :finished, attempt: "raw-request"}}, {:finish, :failed, _}] =

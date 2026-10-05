@@ -38,14 +38,7 @@ defmodule Kogen.E2e.Build do
       ScriptedProvider.start_link(steps, provider_hook(fixture, options.move_base_on))
 
     try do
-      result =
-        run_build!(
-          fixture,
-          server,
-          options.recipe,
-          options.builder_model,
-          options.builder_effort
-        )
+      result = run_build!(fixture, server, options)
 
       %{result | provider_requests: ScriptedProvider.requests(%Config{server: server})}
     after
@@ -71,9 +64,20 @@ defmodule Kogen.E2e.Build do
   @doc false
   def workspace_root(project_root, home), do: Kogen.Kernel.workspace_root(project_root, home)
 
-  defp run_build!(%Fixture{} = fixture, server, recipe_name, builder_model, builder_effort) do
+  defp run_build!(%Fixture{} = fixture, server, %Options{} = options) do
     runtime = Environment.runtime!(fixture.project_root, fixture.home)
-    request = build_request!(fixture, server, runtime, recipe_name, builder_model, builder_effort)
+
+    request =
+      build_request!(
+        fixture,
+        server,
+        runtime,
+        options.recipe,
+        options.builder_model,
+        options.builder_effort
+      )
+
+    request = %{request | recipe: ladder_overrides(request.recipe, options.ladder)}
 
     case Kogen.Kernel.build(request) do
       {:ok, build} -> started_result(fixture, build)
@@ -112,6 +116,12 @@ defmodule Kogen.E2e.Build do
       credential_label: "test"
     }
   end
+
+  # Ladder recipe data a test changes, such as ending the ladder after its last rung.
+  defp ladder_overrides(recipe, overrides) when overrides == %{}, do: recipe
+
+  defp ladder_overrides(recipe, overrides),
+    do: Map.update!(recipe, :ladder, &Map.merge(&1, overrides))
 
   defp started_result(fixture, build) do
     run = load_run!(fixture.workspace_root, build.run_id)

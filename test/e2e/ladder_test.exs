@@ -136,7 +136,8 @@ defmodule Kogen.E2e.LadderTest do
       done()
     ]
 
-    result = run!(context, "best", script)
+    result =
+      Ladder.run!(context.tmp_dir, "best", script, context.seed, "ladder", %{repeat_from: nil})
 
     assert %Result{build: %{status: :failed}} = result
     assert "build: needs attention: kogen/build-engine" in result.build.lines

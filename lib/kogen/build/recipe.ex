@@ -27,13 +27,16 @@ defmodule Kogen.Build.Recipe do
   @typedoc """
   Rungs run in order until one Candidate is green. When the planner rates the task hard, the
   first `parallel_on_hard` rungs run at once. Each rung repairs while its failure count falls,
-  at most `repair_cap` times; `wall_ms` bounds the whole Build.
+  at most `repair_cap` times; `wall_ms` bounds the whole Build. After the last rung, fresh
+  attempts cycle through the rungs from index `repeat_from` (named `<rung>-2`, `<rung>-3`, ...)
+  until the budget is spent; `repeat_from: nil` ends the ladder after its last rung.
   """
   @type ladder :: %{
           required(:rungs) => [rung()],
           required(:parallel_on_hard) => non_neg_integer(),
           required(:repair_cap) => pos_integer(),
-          required(:wall_ms) => pos_integer()
+          required(:wall_ms) => pos_integer(),
+          required(:repeat_from) => non_neg_integer() | nil
         }
 
   @type escalation :: %{
@@ -54,7 +57,7 @@ defmodule Kogen.Build.Recipe do
   @sol_high {"gpt-6.1-sol", "high"}
   @sol_medium {"gpt-6.1-sol", "medium"}
   @luna_max {"gpt-6-luna", "max"}
-  @ladder_policy %{parallel_on_hard: 2, repair_cap: 6, wall_ms: 3_600_000}
+  @ladder_policy %{parallel_on_hard: 2, repair_cap: 6, wall_ms: 3_600_000, repeat_from: 2}
 
   @luna_rungs [
     %{name: "builder", builder: @luna_max, input: :plan},
@@ -170,10 +173,20 @@ defmodule Kogen.Build.Recipe do
   @spec rung(t(), non_neg_integer()) :: rung() | nil
   def rung(recipe, index) when is_integer(index) and index >= 0 do
     case ladder(recipe) do
-      %{rungs: rungs} -> Enum.at(rungs, index)
+      %{rungs: rungs} when index < length(rungs) -> Enum.at(rungs, index)
+      %{rungs: rungs} = ladder -> repeated_rung(rungs, Map.get(ladder, :repeat_from), index)
       nil -> nil
     end
   end
+
+  defp repeated_rung(rungs, from, index) when is_integer(from) and from < length(rungs) do
+    cycle = length(rungs) - from
+    past = index - length(rungs)
+    rung = Enum.at(rungs, from + rem(past, cycle))
+    %{rung | name: "#{rung.name}-#{div(past, cycle) + 2}"}
+  end
+
+  defp repeated_rung(_rungs, _from, _index), do: nil
 
   @doc "The Build attempt name of a rung: the first rung keeps `:builder`."
   @spec rung_attempt(t(), non_neg_integer()) :: :builder | String.t()
