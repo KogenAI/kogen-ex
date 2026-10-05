@@ -2,11 +2,13 @@ defmodule Kogen.Shaper.ShapingReliabilityTests do
   @moduledoc false
   use Kogen.Testkit.Case
 
+  alias Kogen.Contracts.ProviderError
   alias Kogen.E2e.ScriptedProvider
   alias Kogen.E2e.ScriptedProvider.Config
   alias Kogen.Kernel.CLI
   alias Kogen.Kernel.CLI.ShapeJson
   alias Kogen.Proc.Sandbox
+  alias Kogen.Resilience.Policy
   alias Kogen.Shaper
   alias Kogen.Shaper.Request
   alias Kogen.Testkit.Git
@@ -218,6 +220,34 @@ defmodule Kogen.Shaper.ShapingReliabilityTests do
       run_log = File.read!(Path.join([tmp_dir, "shape-run", "logs", "shaper.log"]))
       assert run_log =~ "attempt=5 started turns_used=4/60"
       assert run_log =~ "attempt=5 validation_passed"
+    after
+      GenServer.stop(server, :normal)
+    end
+  end
+
+  test "shaping keeps its selected model through repeated overloads when fallback is disabled", %{
+    tmp_dir: tmp_dir
+  } do
+    project = seed_project!(Path.join(tmp_dir, "project"))
+    steps = List.duplicate(ScriptedProvider.fail(:shape, :overload), 5)
+    {:ok, server} = ScriptedProvider.start_link(steps ++ [ScriptedProvider.fail(:shape, :login)])
+    config = %Config{server: server}
+
+    try do
+      shape_request = %{
+        request(project, tmp_dir, config)
+        | resilience: %Policy{model_fallback: false, backoff_base_ms: 1, backoff_max_ms: 2},
+          limits: %{max_turns: 60, wall_ms: 5_000}
+      }
+
+      assert {:error, %ProviderError{class: :login}} = Shaper.shape(shape_request)
+      requests = ScriptedProvider.requests(config)
+      assert length(requests) == 6
+
+      assert Enum.all?(
+               requests,
+               &(&1.model == shape_request.model and &1.effort == shape_request.effort)
+             )
     after
       GenServer.stop(server, :normal)
     end

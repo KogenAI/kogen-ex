@@ -8,6 +8,7 @@ defmodule Kogen.Kernel.ShapeExecution do
   alias Kogen.Kernel.Types.ShapeInputs
   alias Kogen.Proc.Sandbox
   alias Kogen.Provider.ChatGPT
+  alias Kogen.Resilience.Policy
   alias Kogen.Shaper
   alias Kogen.Shaper.Request, as: ShapeRequest
   alias Kogen.Shaper.Result, as: ShapeResult
@@ -33,6 +34,7 @@ defmodule Kogen.Kernel.ShapeExecution do
              effort: default_effort,
              project: project,
              provider_config: provider_config,
+             resilience: %Policy{model_fallback: build_config.model_fallback},
              runtime: runtime,
              process_env: process_env,
              run_dir: run_dir,
@@ -85,6 +87,7 @@ defmodule Kogen.Kernel.ShapeExecution do
       effort: inputs.effort,
       provider_mod: ChatGPT,
       provider_config: inputs.provider_config,
+      resilience: inputs.resilience,
       env: inputs.process_env,
       git_env: git_env,
       run_dir: inputs.run_dir,

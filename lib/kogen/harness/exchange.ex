@@ -111,8 +111,20 @@ defmodule Kogen.Harness.Exchange do
       detail: "Cannot append request record: #{inspect(reason)}"
     }
 
-  defp after_failure(opts, {exchange_request, _request, _deadline}, {error, _retry, :stop}),
-    do: record_response(opts, exchange_request, {:error, error})
+  defp after_failure(opts, {exchange_request, _request, deadline}, {error, _retry, :stop}) do
+    error =
+      if is_integer(deadline) and Policy.overload_budget_bound?(opts.resilience, error.class) do
+        %{
+          error
+          | class: :timeout,
+            message: "Wall budget exhausted retrying overloads: " <> error.message
+        }
+      else
+        error
+      end
+
+    record_response(opts, exchange_request, {:error, error})
+  end
 
   defp after_failure(
          opts,

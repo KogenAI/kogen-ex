@@ -160,6 +160,24 @@ defmodule Kogen.Project.ProjectTest do
     assert message == ~s(build.edge_tests must be true or false; got "sometimes")
   end
 
+  test "build.model_fallback: false turns model fallback off; it is on by default", %{
+    tmp_dir: root
+  } do
+    write_config(root, "name: tiny-app\nchecks: []\nbuild:\n  model_fallback: false\n")
+    assert {:ok, project} = ProjectLoader.load(root)
+    assert project.build.model_fallback == false
+    assert ProjectLoader.effective_build_settings(nil, project.build).model_fallback == false
+
+    assert ProjectLoader.effective_build_settings(%{model_fallback: false}, nil).model_fallback ==
+             false
+
+    assert ProjectLoader.effective_build_settings(nil, nil).model_fallback == true
+
+    write_config(root, "name: tiny-app\nchecks: []\nbuild:\n  model_fallback: sometimes\n")
+    assert {:error, [%{message: message}]} = ProjectLoader.load(root)
+    assert message == ~s(build.model_fallback must be true or false; got "sometimes")
+  end
+
   test "a project commits no account; the machine chooses it", %{tmp_dir: root} do
     write_config(root, "name: tiny-app\nchecks: []\n")
     assert {:ok, project} = ProjectLoader.load(root)

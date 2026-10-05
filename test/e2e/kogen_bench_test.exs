@@ -117,6 +117,42 @@ defmodule Kogen.E2e.KogenBenchTest do
     assert output =~ "KOGEN_BENCH_EDGE_TESTS=1 needs a ladder recipe"
   end
 
+  test "KOGEN_BENCH_NO_FALLBACK=1 records model_fallback: false in usage.json", %{
+    tmp_dir: tmp_dir
+  } do
+    {_status, output, paths} = run_bench!(subdir(tmp_dir, "default"), %{})
+    usage = paths.out_dir |> Path.join("usage.json") |> File.read!() |> :json.decode()
+    assert usage["model_fallback"] == true, output
+
+    copy = Path.join(tmp_dir, "project.yaml")
+
+    {_status, output, paths} =
+      run_bench!(subdir(tmp_dir, "off"), %{
+        "KOGEN_BENCH_NO_FALLBACK" => "1",
+        "FAKE_KOGEN_PROJECT_COPY" => copy
+      })
+
+    usage = paths.out_dir |> Path.join("usage.json") |> File.read!() |> :json.decode()
+    assert usage["model_fallback"] == false, output
+    assert File.read!(copy) =~ "  model_fallback: false\n"
+
+    {status, output, paths} =
+      run_bench!(subdir(tmp_dir, "shape-failed"), %{
+        "KOGEN_BENCH_NO_FALLBACK" => "1",
+        "FAKE_KOGEN_SHAPE_EXIT" => "9"
+      })
+
+    assert status == 9, output
+    usage = paths.out_dir |> Path.join("usage.json") |> File.read!() |> :json.decode()
+    assert usage["model_fallback"] == false
+
+    {status, output, _paths} =
+      run_bench!(subdir(tmp_dir, "bad"), %{"KOGEN_BENCH_NO_FALLBACK" => "yes"})
+
+    assert status == 2
+    assert output =~ "KOGEN_BENCH_NO_FALLBACK must be 0 or 1"
+  end
+
   defp subdir(tmp_dir, name) do
     path = Path.join(tmp_dir, name)
     File.mkdir_p!(path)

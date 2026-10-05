@@ -1,6 +1,8 @@
 defmodule Kogen.Shaper.Request do
   @moduledoc false
 
+  alias Kogen.Resilience.Policy
+
   @default_limits %{max_turns: 60, wall_ms: :infinity}
 
   @enforce_keys [
@@ -16,7 +18,13 @@ defmodule Kogen.Shaper.Request do
     :run_dir
   ]
   defstruct @enforce_keys ++
-              [sandbox: nil, setup_cache_root: nil, base_tree_sha: nil, limits: @default_limits]
+              [
+                sandbox: nil,
+                setup_cache_root: nil,
+                base_tree_sha: nil,
+                limits: @default_limits,
+                resilience: %Policy{}
+              ]
 
   @spec validate(t()) :: :ok | {:error, atom()}
   def validate(%__MODULE__{} = request) do
@@ -89,7 +97,8 @@ defmodule Kogen.Shaper.Request do
           setup_cache_root: Path.t() | nil,
           base_tree_sha: String.t() | nil,
           sandbox: Kogen.Proc.Sandbox.t() | nil,
-          limits: limits()
+          limits: limits(),
+          resilience: Policy.t()
         }
 end
 

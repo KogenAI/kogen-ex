@@ -27,7 +27,8 @@ defmodule Kogen.Engine.Build.RunEvents do
       credential_source: request.credential_source,
       credential_label: request.credential_label,
       recipe: Recipe.name(request.recipe),
-      escalation: Recipe.escalation(request.recipe)
+      escalation: Recipe.escalation(request.recipe),
+      model_fallback: request.resilience.model_fallback
     })
   end
 

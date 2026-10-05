@@ -322,6 +322,7 @@ defmodule Kogen.Shaper.Runner do
       project: project,
       provider_mod: request.provider_mod,
       provider_config: request.provider_config,
+      resilience: request.resilience,
       proc_mod: Proc,
       sandbox: request.sandbox,
       env: Map.merge(request.env, project.env),

@@ -1,10 +1,19 @@
 defmodule Kogen.Kernel.BuildConfig do
   @moduledoc false
 
-  @spec load(Path.t(), map() | nil) :: {:ok, map()} | {:error, term()}
-  def load(home, project_build) do
+  @doc """
+  The effective Build settings. `KOGEN_BENCH_NO_FALLBACK=1` turns model fallback off, whatever the
+  project or machine configuration says.
+  """
+  @spec load(Path.t(), map() | nil, String.t() | nil) ::
+          {:ok, map()} | {:error, term()}
+  def load(home, project_build, no_fallback \\ System.get_env("KOGEN_BENCH_NO_FALLBACK")) do
     with {:ok, machine} <- Kogen.Project.load_machine_build_settings(home) do
-      {:ok, Kogen.Project.effective_build_settings(machine, project_build)}
+      settings = Kogen.Project.effective_build_settings(machine, project_build)
+
+      if no_fallback == "1",
+        do: {:ok, %{settings | model_fallback: false}},
+        else: {:ok, settings}
     end
   end
 

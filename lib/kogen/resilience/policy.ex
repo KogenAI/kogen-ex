@@ -5,6 +5,10 @@ defmodule Kogen.Resilience.Policy do
   `fallbacks` lists, per role, the models to move to (in order) after the current model
   reports `overload_fallback_after` consecutive overloads.
 
+  With `model_fallback: false` (`KOGEN_BENCH_NO_FALLBACK=1` or `build.model_fallback: false`) the
+  model never changes: overloads are retried on the same model, with backoff, for as long as the
+  wall budget lasts.
+
   A request whose stream started but then sends nothing for `stream_idle_ms` is a stall: it is
   aborted and retried. Live Responses streams send a reasoning item every 9–20 s while the
   model thinks, so 90 s of silence is far beyond a legitimate pause. Hard turns reason for over
@@ -25,6 +29,7 @@ defmodule Kogen.Resilience.Policy do
             request_cap_ms: 1_200_000,
             stream_idle_ms: 90_000,
             overload_fallback_after: 2,
+            model_fallback: true,
             fallbacks: %{
               builder: [@sol_medium],
               context: [@sol_medium],
@@ -41,6 +46,7 @@ defmodule Kogen.Resilience.Policy do
           request_cap_ms: pos_integer(),
           stream_idle_ms: pos_integer(),
           overload_fallback_after: pos_integer(),
+          model_fallback: boolean(),
           fallbacks: %{optional(role()) => [model()]}
         }
 
@@ -75,8 +81,15 @@ defmodule Kogen.Resilience.Policy do
     half + if(ceiling - half > 0, do: :rand.uniform(ceiling - half), else: 0)
   end
 
-  @doc "The first configured fallback for the role that is not the model already in use."
+  @doc "True when overloads are retried on the same model for as long as the wall budget lasts."
+  @spec overload_budget_bound?(t(), ProviderError.class()) :: boolean()
+  def overload_budget_bound?(%__MODULE__{model_fallback: false}, :overload), do: true
+  def overload_budget_bound?(%__MODULE__{}, _class), do: false
+
+  @doc "The first configured fallback for the role that is not the model already in use; none when disabled."
   @spec fallback(t(), role(), model()) :: model() | nil
+  def fallback(%__MODULE__{model_fallback: false}, _role, _current), do: nil
+
   def fallback(%__MODULE__{} = policy, role, current) do
     policy.fallbacks
     |> Map.get(role, [])

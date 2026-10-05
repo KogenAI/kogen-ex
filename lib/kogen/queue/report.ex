@@ -51,6 +51,7 @@ defmodule Kogen.Queue.Report do
       {"build_id", run.id},
       {"journal", run.dir},
       {"recipe", nullable(event_value(events, :recipe))},
+      {"model_fallback", model_fallback(events)},
       {"roles", event_value(events, :roles) || %{}},
       {"escalation", nullable(event_value(events, :escalation))},
       {"escalations", escalations(events)},
@@ -296,6 +297,13 @@ defmodule Kogen.Queue.Report do
     events
     |> Enum.reverse()
     |> Enum.find_value(&Map.get(&1, key))
+  end
+
+  defp model_fallback(events) do
+    case Enum.find(events, &(&1.event == "started")) do
+      %Event{model_fallback: enabled} -> nullable(enabled)
+      nil -> :null
+    end
   end
 
   defp event_payload(events, event_name, key, default) do

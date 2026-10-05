@@ -12,6 +12,7 @@ defmodule Kogen.Kernel do
       Kogen.State,
       Kogen.Checks,
       Kogen.Harness,
+      Kogen.Resilience,
       Kogen.Shaper,
       Kogen.Queue,
       Kogen.Runner,
@@ -46,6 +47,7 @@ defmodule Kogen.Kernel do
   alias Kogen.Provider.ChatGPT
   alias Kogen.Provider.ChatGPT.CredentialStore
   alias Kogen.Provider.ChatGPT.SIWC
+  alias Kogen.Resilience.Policy
   alias Kogen.Runner
   alias Kogen.Shaper.Result, as: ShapeResult
   alias Kogen.Workspace
@@ -319,6 +321,7 @@ defmodule Kogen.Kernel do
           roles,
           wall_ms(build_config)
         ),
+      resilience: %Policy{model_fallback: build_config.model_fallback},
       runtime: runtime,
       provider_mod: ChatGPT,
       provider_config: provider_config,

@@ -284,6 +284,11 @@ defmodule Kogen.State.StateTest do
              )
   end
 
+  test "journal decoding retains whether model fallback was disabled" do
+    assert {:ok, %Event{event: "started", model_fallback: false}} =
+             State.decode_event(~s({"event":"started","model_fallback":false}))
+  end
+
   test "journal decoding retains the selected build recipe" do
     assert {:ok, %Event{event: "started", recipe: "direct"}} =
              State.decode_event(~s({"event":"started","recipe":"direct"}))

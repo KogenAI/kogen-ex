@@ -37,6 +37,7 @@ build:
   recipe: ladder        # the default; also ladder-diverse, ladder-luna, ladder-sol-medium, plan-shell, ...
   wall_minutes: 60      # a ladder's whole-Build budget
   edge_tests: false     # true (or a ladder recipe with a +edge suffix) runs the edge probe
+  model_fallback: true # false keeps overload retries on the selected model
   roles:
     builder:
       model: gpt-6-luna
@@ -49,6 +50,8 @@ build:
 The `ladder` recipe plans once, then builds on fresh Candidates rung by rung (configured builder, Sol medium, Sol high, then a raw-request attempt) until one is green, repairing while failures fall. A hard plan runs the first two rungs in parallel; when both are green, each runs the other's new tests and the one passing more of them lands (then fewer gate warnings, then the smaller diff). A test auditor can demote an acceptance test that is over-strict or contradicts the Request. With `edge_tests: true`, the first green Candidates also face up to 20 black-box edge tests that the builder model writes from the verbatim Request; tests every Candidate fails are discarded, the rest rank green Candidates after the cross-check, and a lone green Candidate that fails some gets one repair round whose result competes with it. Edge tests never block landing. When no rung is green, the best Candidate is pushed to `kogen/<slug>` and status shows `needs attention: kogen/<slug>`.
 
 Intent shaping defaults to **gpt-6.1-sol at high effort**, independently of the builder model. An explicit `build.roles.shaper` in `.kogen/project.yaml` or `~/.kogen/config.yaml` overrides this default; project fields take precedence over machine settings.
+
+For benchmarks on one model, use `ladder-luna` or `ladder-sol-medium` with `KOGEN_BENCH_NO_FALLBACK=1`. This overrides project and machine `build.model_fallback` settings, keeps overload retries on the same model and effort with backoff until the Build's wall budget runs out, and records `model_fallback: false` in the run journal, status report and benchmark `usage.json`. Projects can also set `build.model_fallback: false`. Fallback remains enabled by default; shaping without a wall budget still stops at its retry limit.
 
 When `base` is omitted, Kogen uses the origin HEAD branch recorded locally, then the checkout's current branch. Optional machine defaults live in `~/.kogen/config.yaml`; project settings override them.
 

@@ -51,11 +51,14 @@ defmodule Kogen.E2e.BuildTest do
     assert result.provider_requests != []
     assert [started] = Enum.filter(result.events, &(&1.event == "started"))
     assert started.recipe == "direct"
+    assert started.model_fallback == true
     assert [develop] = Enum.filter(result.events, &(&1.event == "model_stage"))
     assert develop.stage == "develop"
 
     assert {:ok, report} = Build.report(result)
-    assert %{"recipe" => "direct", "approved_by" => "Kogen Test"} = :json.decode(report)
+
+    assert %{"recipe" => "direct", "approved_by" => "Kogen Test", "model_fallback" => true} =
+             :json.decode(report)
   end
 
   test "direct-shell lands with shell edits only", context do

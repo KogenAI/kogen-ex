@@ -34,6 +34,13 @@ case "$edge_tests:$recipe" in
   *) echo "KOGEN_BENCH_EDGE_TESTS=1 needs a ladder recipe" >&2; exit 2 ;;
 esac
 export KOGEN_BENCH_EDGE_TESTS="$edge_tests"
+# KOGEN_BENCH_NO_FALLBACK=1 keeps Kogen on the same model after repeated overloads (no fallback).
+no_fallback=${KOGEN_BENCH_NO_FALLBACK:-0}
+case "$no_fallback" in
+  0|1) ;;
+  *) echo "KOGEN_BENCH_NO_FALLBACK must be 0 or 1" >&2; exit 2 ;;
+esac
+export KOGEN_BENCH_NO_FALLBACK="$no_fallback"
 format_scope=${KOGEN_BENCH_FORMAT_SCOPE:-changed}
 case "$format_scope" in
   changed|all) ;;
@@ -235,6 +242,7 @@ with open(path, "w", encoding="utf-8") as output:
     json.dump({
         "recipe": recipe,
         "edge_tests": os.environ.get("KOGEN_BENCH_EDGE_TESTS") == "1",
+        "model_fallback": os.environ.get("KOGEN_BENCH_NO_FALLBACK") != "1",
         "intent_source": intent_source,
         "builder": {"model": model, "effort": effort},
         "shape": {"model": shape_model, "effort": shape_effort, "wall_ms": None},
@@ -343,6 +351,7 @@ lines = [
     "build:",
     "  recipe: " + quote(recipe),
 ] + (["  edge_tests: true"] if os.environ.get("KOGEN_BENCH_EDGE_TESTS") == "1" else []) + [
+    "  model_fallback: " + ("false" if os.environ.get("KOGEN_BENCH_NO_FALLBACK") == "1" else "true"),
     "  roles:",
     "    builder:",
     "      model: " + quote(builder_model),
@@ -737,6 +746,7 @@ totals = {name: sum(stage["tokens"][name] for stage in stages) for name in token
 result = {
     "recipe": recipe,
     "edge_tests": os.environ.get("KOGEN_BENCH_EDGE_TESTS") == "1",
+    "model_fallback": os.environ.get("KOGEN_BENCH_NO_FALLBACK") != "1",
     "intent_source": intent_source,
     "builder": {"model": builder_model, "effort": builder_effort},
     "run_status": "failed",
@@ -1130,6 +1140,7 @@ totals = {name: sum(stage["tokens"][name] for stage in stages) for name in token
 result = {
     "recipe": recipe,
     "edge_tests": os.environ.get("KOGEN_BENCH_EDGE_TESTS") == "1",
+    "model_fallback": os.environ.get("KOGEN_BENCH_NO_FALLBACK") != "1",
     "edge_probe": report.get("edge_probe"),
     "intent_source": intent_source,
     "slug": shape.get("slug") or slug,

@@ -251,6 +251,51 @@ defmodule Kogen.Harness.ExchangeResilienceTest do
     end
   end
 
+  describe "model fallback disabled" do
+    test "repeated overloads retry the same model and never switch", %{tmp_dir: tmp_dir} do
+      script = List.duplicate(@overloaded, 6) ++ [{:ok, "same model"}]
+      {url, server} = FakeResponsesServer.start(script)
+      opts = opts(tmp_dir, url, %{}, %{@fast | model_fallback: false})
+
+      assert {:ok, %{text: "same model"}} = Exchange.respond(opts, request())
+
+      for number <- 1..7 do
+        assert_receive {:fake_request, ^number, %{"model" => "gpt-6-luna"}, _at}
+      end
+
+      refute_received {:fake_request, 8, _body, _at}
+      refute_received {:recorded, %{event: :model_fallback}}
+      FakeResponsesServer.stop(server)
+    end
+
+    test "overloads are retried until the wall budget ends", %{tmp_dir: tmp_dir} do
+      {url, server} = FakeResponsesServer.start(List.duplicate(@overloaded, 40))
+      policy = %{@fast | model_fallback: false, max_attempts: 2}
+      opts = opts(tmp_dir, url, %{}, policy)
+
+      assert {:error, %ProviderError{class: :timeout}} =
+               Exchange.respond(opts, %{request() | remaining_ms: 4_000})
+
+      assert_receive {:fake_request, 3, %{"model" => "gpt-6-luna"}, _at}
+      refute_received {:recorded, %{event: :model_fallback}}
+      FakeResponsesServer.stop(server)
+    end
+
+    test "without a wall budget overloads still stop at max_attempts", %{tmp_dir: tmp_dir} do
+      {url, server} = FakeResponsesServer.start(List.duplicate(@overloaded, 4))
+      policy = %{@fast | model_fallback: false, max_attempts: 2}
+      opts = opts(tmp_dir, url, %{}, policy)
+
+      assert {:error, %ProviderError{class: :overload}} =
+               Exchange.respond(opts, %{request() | remaining_ms: :infinity})
+
+      assert_receive {:fake_request, 2, %{"model" => "gpt-6-luna"}, _at}
+      refute_receive {:fake_request, 3, _body, _at}, 100
+      refute_received {:recorded, %{event: :model_fallback}}
+      FakeResponsesServer.stop(server)
+    end
+  end
+
   defp request do
     %Request{
       stage: :develop,

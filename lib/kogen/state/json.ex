@@ -18,7 +18,7 @@ defmodule Kogen.State.Json do
 
   # Journal keys match the Event struct fields.
   @event_field_names ~w(
-    event recipe roles escalation attempt trigger summary findings gate_summary stop phase
+    event recipe roles escalation model_fallback attempt trigger summary findings gate_summary stop phase
     name stage class reason detail path declared_domains test_ids seed status result
     approval_commit approved_by base_sha ledger receipts candidate_diff excluded_paths
     red_checks acceptance_items model effort started_at finished_at tokens wall_ms setup_key
