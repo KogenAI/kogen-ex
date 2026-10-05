@@ -55,7 +55,7 @@ defmodule Kogen.E2e.BuildTest do
     assert develop.stage == "develop"
 
     assert {:ok, report} = Build.report(result)
-    assert %{"recipe" => "direct"} = :json.decode(report)
+    assert %{"recipe" => "direct", "approved_by" => "Kogen Test"} = :json.decode(report)
   end
 
   test "direct-shell lands with shell edits only", context do
@@ -108,6 +108,8 @@ defmodule Kogen.E2e.BuildTest do
     assert String.trim_trailing(message, "\n") ==
              "#{@intent_title}\n\nKogen-Intent: #{@intent_slug}"
 
+    assert_landed_intent_files(result, sha)
+
     parents = Git.git!(result.fixture.origin, ["rev-list", "--parents", "-n", "1", sha])
     assert String.split(String.trim(parents)) == [sha, result.fixture.approved_base]
     assert Enum.any?(result.events, &(&1.event == "finished" and &1.status == "landed"))
@@ -118,6 +120,23 @@ defmodule Kogen.E2e.BuildTest do
     assert Enum.all?(model_stages, &is_integer(&1.wall_ms))
     assert_staged_roles_and_timing(result)
     :ok
+  end
+
+  defp assert_landed_intent_files(result, sha) do
+    landed_files =
+      result.fixture.origin
+      |> Git.git!(["ls-tree", "-r", "--name-only", sha])
+      |> String.split("\n", trim: true)
+
+    assert ".kogen/intents/#{@intent_slug}/intent.md" in landed_files
+    refute ".kogen/acceptance/#{@intent_slug}_test.exs" in landed_files
+    assert "test/acceptance/#{@intent_slug}_test.exs" in landed_files
+
+    kogen_files = Enum.filter(landed_files, &String.starts_with?(&1, ".kogen/"))
+
+    assert Enum.all?(kogen_files, fn path ->
+             path in [".kogen/project.yaml", ".kogen/intents/#{@intent_slug}/intent.md"]
+           end)
   end
 
   defp assert_staged_roles_and_timing(result) do

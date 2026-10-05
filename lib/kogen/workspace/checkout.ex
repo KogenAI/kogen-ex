@@ -83,6 +83,25 @@ defmodule Kogen.Workspace.Checkout do
     end
   end
 
+  @spec commit_paths(Path.t(), String.t(), [String.t()], [{String.t(), String.t()}], %{
+          String.t() => String.t()
+        }) :: {:ok, String.t()} | {:error, term()}
+  def commit_paths(path, message, paths, trailers, git_env) do
+    with :ok <- validate_commit(message, trailers),
+         :ok <- validate_commit_paths(paths),
+         {:ok, _output} <- git_ok(path, ["add", "-A", "--" | paths], git_env),
+         {:ok, _output} <-
+           git_stdin(
+             path,
+             ["commit", "--only", "--no-verify", "--file=-" | ["--" | paths]],
+             message_with_trailers(message, trailers),
+             git_env
+           ),
+         {:ok, sha} <- git_ok(path, ["rev-parse", "--verify", "HEAD"], git_env) do
+      {:ok, Git.trim_line(sha)}
+    end
+  end
+
   @spec reset_soft(Path.t(), String.t(), %{String.t() => String.t()}) :: :ok | {:error, term()}
   def reset_soft(path, base_sha, git_env) do
     run_base_command(path, base_sha, ["reset", "--soft", base_sha], git_env)
@@ -325,6 +344,12 @@ defmodule Kogen.Workspace.Checkout do
   end
 
   defp validate_commit(_message, _trailers), do: {:error, :invalid_commit_message}
+
+  defp validate_commit_paths(paths) when is_list(paths) and paths != [] do
+    if Enum.all?(paths, &Git.safe_relative_path?/1), do: :ok, else: {:error, :invalid_paths}
+  end
+
+  defp validate_commit_paths(_paths), do: {:error, :invalid_paths}
 
   @spec valid_sha?(String.t()) :: boolean()
   @doc false

@@ -1,14 +1,15 @@
 defmodule Kogen.Kernel.CLI.Runner do
   @moduledoc false
 
+  alias Kogen.Cli.Args
   alias Kogen.Contracts.Failure
-  alias Kogen.Contracts.ProviderError
   alias Kogen.Engine.Build.Result
-  alias Kogen.Engine.Runtime
   alias Kogen.Kernel.Approval
-  alias Kogen.Kernel.CLI.Args
+  alias Kogen.Kernel.CLI.ErrorOutput
+  alias Kogen.Kernel.CLI.IntentRemoval
   alias Kogen.Kernel.CLI.ShapeJson
   alias Kogen.Kernel.CLI.StatusOutput
+  alias Kogen.Kernel.CLI.TaskInput
   alias Kogen.Kernel.Types.ApprovalPreview
   alias Kogen.Kernel.Types.BuildOptions
 
@@ -17,6 +18,7 @@ defmodule Kogen.Kernel.CLI.Runner do
   def run(%Args{command: :intent_check} = args), do: intent_check(args)
   def run(%Args{command: :intent_shape} = args), do: intent_shape(args)
   def run(%Args{command: :intent_approve} = args), do: approve(args)
+  def run(%Args{command: :intent_remove} = args), do: IntentRemoval.run(args)
   def run(%Args{command: :build} = args), do: build(args)
   def run(%Args{command: :build_show} = args), do: build_show(args)
   def run(%Args{command: :status} = args), do: status(args)
@@ -48,7 +50,7 @@ defmodule Kogen.Kernel.CLI.Runner do
 
   defp intent_shape(args) do
     with :ok <- project_directory(args),
-         {:ok, task} <- read_task_file(args.task_file),
+         {:ok, task} <- TaskInput.read(args.task_file),
          {:ok, result} <-
            Kogen.Kernel.shape(
              hd(args.positionals),
@@ -57,25 +59,11 @@ defmodule Kogen.Kernel.CLI.Runner do
            ) do
       render_shape(result, args.json)
     else
-      {:error, {:task_file_unavailable, path, reason}} ->
-        {2, "task file unavailable #{path}: #{inspect(reason)}\n"}
+      {:error, {:task_input_unavailable, source, reason}} ->
+        {2, "task input unavailable #{source}: #{inspect(reason)}\n"}
 
       {:error, reason} ->
         command_error(reason)
-    end
-  end
-
-  defp read_task_file(path) do
-    expanded = Path.expand(path)
-
-    case File.read(expanded) do
-      {:ok, task} ->
-        if String.trim(task) == "",
-          do: {:error, {:task_file_unavailable, expanded, :empty}},
-          else: {:ok, task}
-
-      {:error, reason} ->
-        {:error, {:task_file_unavailable, expanded, reason}}
     end
   end
 
@@ -312,51 +300,7 @@ defmodule Kogen.Kernel.CLI.Runner do
       else: Path.join([project, ".kogen", "intents", value, "intent.md"])
   end
 
-  defp command_error(%Failure{} = failure) do
-    code = failure_code(failure)
-    {code, "#{failure.class}/#{failure.reason}: #{failure.detail}\n"}
-  end
-
-  defp command_error(%ProviderError{class: class, message: message}),
-    do: {4, "provider/#{class}: #{message}\n"}
-
-  defp command_error(:mise_missing), do: {3, "environment/mise_missing: mise was not found\n"}
-
-  defp command_error({:toolchain_failed, detail}),
-    do: {3, "environment/toolchain_failed: #{detail}\n"}
-
-  defp command_error(:invalid_toolchain_environment),
-    do: {3, "environment/invalid_toolchain_environment: mise returned invalid JSON\n"}
-
-  defp command_error({:script_path_unavailable, reason}),
-    do: {3, "environment/script_path_unavailable: #{inspect(reason)}\n"}
-
-  defp command_error(:too_many_script_symlinks),
-    do: {3, "environment/too_many_script_symlinks: cannot resolve kogen path\n"}
-
-  defp command_error(:intent_not_approved),
-    do: {3, "environment/not_approved: Intent has no approval ref\n"}
-
-  defp command_error(:approval_branch_mismatch),
-    do: {3, "environment/approval_branch_mismatch: approval targets another branch\n"}
-
-  defp command_error({:project_unavailable, project}),
-    do: {3, "environment/project_unavailable: #{project}\n"}
-
-  defp command_error({:acceptance_check_failed, name, {:ok, result}}) do
-    status = if result.timed_out, do: "timed out", else: "failed"
-    detail = "check/acceptance_check_failed: acceptance check #{name} #{status}\n"
-    {1, detail <> Runtime.output_tail(result.output_tail)}
-  end
-
-  defp command_error({:acceptance_check_failed, name, _}),
-    do: {1, "check/acceptance_check_failed: acceptance check #{name} failed\n"}
-
-  defp command_error({:base_moved, expected, current}) do
-    {3, "environment/base_moved: expected #{expected}, found #{inspect(current)}\n"}
-  end
-
-  defp command_error(reason), do: {70, "controller/#{inspect(reason)}\n"}
+  defp command_error(reason), do: ErrorOutput.format(reason)
 
   defp failure_code(%Failure{class: :candidate}), do: 1
   defp failure_code(%Failure{class: :environment}), do: 3

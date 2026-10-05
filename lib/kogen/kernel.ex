@@ -12,7 +12,8 @@ defmodule Kogen.Kernel do
       Kogen.State,
       Kogen.Checks,
       Kogen.Harness,
-      Kogen.Shaper
+      Kogen.Shaper,
+      Kogen.Cli
     ],
     exports: [
       Approval,
@@ -33,6 +34,7 @@ defmodule Kogen.Kernel do
   alias Kogen.Kernel.Approval.Request, as: ApprovalRequest
   alias Kogen.Kernel.Base
   alias Kogen.Kernel.BuildConfig
+  alias Kogen.Kernel.IntentRemoval
   alias Kogen.Kernel.ProjectContext
   alias Kogen.Kernel.RuntimeDiscovery
   alias Kogen.Kernel.ShapeExecution
@@ -45,6 +47,7 @@ defmodule Kogen.Kernel do
   alias Kogen.Provider.ChatGPT.CredentialStore
   alias Kogen.Provider.ChatGPT.SIWC
   alias Kogen.Shaper.Result, as: ShapeResult
+  alias Kogen.Workspace
 
   @type toolchain_error ::
           :mise_missing
@@ -79,7 +82,13 @@ defmodule Kogen.Kernel do
     end
   end
 
-  @spec approval_preview(String.t(), Path.t(), Path.t() | nil, String.t() | nil, String.t()) ::
+  @spec approval_preview(
+          String.t(),
+          Path.t(),
+          Path.t() | nil,
+          String.t() | nil,
+          String.t() | nil
+        ) ::
           {:ok, ApprovalPreview.t()} | {:error, term()}
   def approval_preview(slug, project_root, origin, base, by) do
     with {:ok, runtime} <- runtime(),
@@ -93,6 +102,7 @@ defmodule Kogen.Kernel do
              base,
              Runtime.git_environment(process_env)
            ),
+         {:ok, by} <- approval_by(by, project_root, Runtime.git_environment(process_env)),
          {:ok, home} <- runtime_home(runtime) do
       Approval.prepare(%ApprovalRequest{
         slug: slug,
@@ -107,8 +117,17 @@ defmodule Kogen.Kernel do
     end
   end
 
+  defp approval_by(nil, project_root, git_env), do: Workspace.git_identity(project_root, git_env)
+  defp approval_by(by, _project_root, _git_env), do: {:ok, by}
+
   @spec approve(ApprovalPreview.t()) :: {:ok, String.t()} | {:error, term()}
   def approve(%ApprovalPreview{} = preview), do: Approval.commit(preview)
+
+  @spec remove_intent(String.t(), Path.t(), Path.t() | nil, String.t() | nil, boolean()) ::
+          {:ok, String.t()} | {:error, term()}
+  def remove_intent(slug, project_root, origin, base, force) do
+    IntentRemoval.run(slug, project_root, origin, base, force)
+  end
 
   @spec build(BuildOptions.t()) :: {:ok, Result.t()} | {:error, term()}
   def build(%BuildOptions{} = options) do

@@ -2,8 +2,12 @@ defmodule Kogen.Workspace do
   @moduledoc "Creates isolated checkouts and performs safe Git ref operations."
   use Boundary, deps: [Kogen.Contracts, Kogen.Proc], exports: []
 
+  alias Kogen.Workspace.ApprovalManifest
   alias Kogen.Workspace.Checkout
   alias Kogen.Workspace.Diff
+  alias Kogen.Workspace.Identity
+  alias Kogen.Workspace.Index
+  alias Kogen.Workspace.IntentFiles
   alias Kogen.Workspace.Landing
   alias Kogen.Workspace.Rebase
   alias Kogen.Workspace.Refs
@@ -21,6 +25,26 @@ defmodule Kogen.Workspace do
 
   @spec insert_files(Path.t(), %{String.t() => binary()}) :: :ok | {:error, term()}
   def insert_files(path, files), do: Checkout.insert_files(path, files)
+
+  @spec install_intent_files(Path.t(), String.t(), binary(), %{String.t() => binary()}) ::
+          :ok | {:error, term()}
+  def install_intent_files(workdir, slug, intent_bytes, acceptance_files),
+    do: IntentFiles.install(workdir, slug, intent_bytes, acceptance_files)
+
+  @spec remove_acceptance_source(Path.t(), String.t()) ::
+          {:ok, String.t() | nil} | {:error, term()}
+  def remove_acceptance_source(workdir, slug),
+    do: IntentFiles.remove_acceptance_source(workdir, slug)
+
+  @spec approval_manifest_unchanged_between(
+          Path.t(),
+          String.t(),
+          String.t(),
+          %{String.t() => String.t()},
+          git_env()
+        ) :: :ok | {:error, term()}
+  def approval_manifest_unchanged_between(origin, approved_sha, current_sha, manifest, git_env),
+    do: ApprovalManifest.unchanged_between(origin, approved_sha, current_sha, manifest, git_env)
 
   @spec tree_hash(Path.t(), git_env()) :: {:ok, String.t()} | {:error, term()}
   def tree_hash(path, git_env), do: Checkout.tree_hash(path, git_env)
@@ -45,6 +69,17 @@ defmodule Kogen.Workspace do
           {:ok, String.t()} | {:error, term()}
   def commit(path, message, trailers, git_env),
     do: Checkout.commit(path, message, trailers, git_env)
+
+  @spec commit_paths(Path.t(), String.t(), [String.t()], [{String.t(), String.t()}], git_env()) ::
+          {:ok, String.t()} | {:error, term()}
+  def commit_paths(path, message, paths, trailers, git_env),
+    do: Checkout.commit_paths(path, message, paths, trailers, git_env)
+
+  @spec git_identity(Path.t(), git_env()) :: {:ok, String.t()} | {:error, term()}
+  def git_identity(repo, git_env), do: Identity.read(repo, git_env)
+
+  @spec tracked_paths(Path.t(), String.t(), git_env()) :: {:ok, [String.t()]} | {:error, term()}
+  def tracked_paths(repo, pathspec, git_env), do: Index.tracked_paths(repo, pathspec, git_env)
 
   @spec reset_soft(Path.t(), String.t(), git_env()) :: :ok | {:error, term()}
   def reset_soft(path, base_sha, git_env), do: Checkout.reset_soft(path, base_sha, git_env)

@@ -18,7 +18,7 @@ defmodule Kogen.Shaper.Runner.State do
           request: Kogen.Shaper.Request.t(),
           project: Kogen.Contracts.Project.t(),
           opts: Kogen.Harness.Opts.t(),
-          deadline: integer(),
+          deadline: integer() | nil,
           history: [map()],
           failure_text: String.t() | nil,
           turn_offset: non_neg_integer(),

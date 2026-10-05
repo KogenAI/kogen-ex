@@ -4,7 +4,7 @@ defmodule Kogen.MixProject do
   def project do
     [
       app: :kogen,
-      version: "0.0.0",
+      version: version(),
       elixir: "~> 1.20",
       elixirc_paths: elixirc_paths(Mix.env()),
       compilers: [:boundary] ++ Mix.compilers(),
@@ -40,5 +40,17 @@ defmodule Kogen.MixProject do
       {:styler, "== 1.12.2", only: [:dev, :test], runtime: false},
       {:kogen_checks, path: "tools/kogen_checks", only: [:dev, :test], runtime: false}
     ]
+  end
+
+  defp version do
+    case System.cmd("git", ["describe", "--always", "--dirty"],
+           cd: __DIR__,
+           stderr_to_stdout: true
+         ) do
+      {description, 0} -> "0.0.0+#{String.trim(description)}"
+      _unavailable -> "0.0.0+unknown"
+    end
+  rescue
+    _error -> "0.0.0+unknown"
   end
 end

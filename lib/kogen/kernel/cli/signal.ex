@@ -2,8 +2,8 @@ defmodule Kogen.Kernel.CLI.Signal do
   @moduledoc false
   @behaviour :gen_event
 
-  alias Kogen.Kernel.CLI.Args
-  alias Kogen.Kernel.CLI.Arguments
+  alias Kogen.Cli.Args
+  alias Kogen.Cli.Arguments
 
   @spec run([String.t()], ([String.t()] -> {non_neg_integer(), String.t()})) ::
           {non_neg_integer(), String.t()}
@@ -101,7 +101,7 @@ defmodule Kogen.Kernel.CLI.Signal do
   defp record_interruption(argv) do
     case Arguments.parse(argv) do
       {:ok, %Args{command: :build, positionals: [slug], project: project}} ->
-        project = project || File.cwd!()
+        project = Path.expand(project || ".")
         _result = Kogen.Kernel.interrupt_build(project, slug)
         :ok
 

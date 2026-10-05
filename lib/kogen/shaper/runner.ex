@@ -27,7 +27,7 @@ defmodule Kogen.Shaper.Runner do
          {:ok, opts} <- harness_options(request, project),
          :ok <- ShapeWarnings.clear(request.workdir, request.slug),
          :ok <- Setup.run(request, project) do
-      deadline = System.monotonic_time(:millisecond) + request.limits.wall_ms
+      deadline = wall_deadline(request.limits.wall_ms)
       attempt(%State{request: request, project: project, opts: opts, deadline: deadline})
     end
   end
@@ -36,7 +36,7 @@ defmodule Kogen.Shaper.Runner do
     request = state.request
     attempt_number = state.repairs + 1
     remaining_turns = request.limits.max_turns - state.turn_offset
-    remaining_ms = max(state.deadline - System.monotonic_time(:millisecond), 0)
+    remaining_ms = remaining_ms(state.deadline)
 
     progress(
       request,
@@ -54,7 +54,7 @@ defmodule Kogen.Shaper.Runner do
           "Shaper exhausted its turn limit."
         )
 
-      remaining_ms < 1 ->
+      is_integer(remaining_ms) and remaining_ms < 1 ->
         limit_failure(
           request,
           attempt_number,
@@ -66,6 +66,12 @@ defmodule Kogen.Shaper.Runner do
         run_attempt(state, attempt_number, remaining_turns, remaining_ms)
     end
   end
+
+  defp wall_deadline(:infinity), do: nil
+  defp wall_deadline(wall_ms), do: System.monotonic_time(:millisecond) + wall_ms
+
+  defp remaining_ms(nil), do: :infinity
+  defp remaining_ms(deadline), do: max(deadline - System.monotonic_time(:millisecond), 0)
 
   defp run_attempt(state, attempt_number, remaining_turns, remaining_ms) do
     opts = %{state.opts | limits: %{max_turns: remaining_turns, wall_ms: remaining_ms}}

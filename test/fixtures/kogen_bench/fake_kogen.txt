@@ -9,7 +9,43 @@ case "$1" in
     exit 0
     ;;
   build)
-    exit 1
+    if [ "${2:-}" != show ]; then
+      exit 1
+    fi
+    shift 2
+    project=
+    while [ "$#" -gt 0 ]; do
+      if [ "$1" = --project ]; then
+        project=$2
+        shift 2
+      else
+        shift
+      fi
+    done
+    run_dir="$project/.kogen/test-run"
+    mkdir -p "$run_dir"
+    printf '%s\n' 'candidate implementation' > "$run_dir/candidate.diff"
+    python3 - "$run_dir/candidate.diff" <<'PY'
+import json
+import sys
+
+source_path = sys.argv[1]
+print(json.dumps({
+    "status": "failed",
+    "candidate_diffs": [{
+        "attempt": "builder",
+        "file": "candidate.diff",
+        "source_path": source_path,
+        "protected_paths_changed": [],
+        "red_checks": [{"name": "tests", "exit_level": 1}],
+        "acceptance_items": [{"id": "A1"}],
+    }],
+    "attempts": [],
+    "escalations": [],
+    "model_stages": [],
+    "phase_timings": [],
+}))
+PY
     ;;
   report)
     shift

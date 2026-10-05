@@ -1,4 +1,4 @@
-defmodule Kogen.Engine.Build.ApprovalManifest do
+defmodule Kogen.Workspace.ApprovalManifest do
   @moduledoc false
 
   alias Kogen.Workspace

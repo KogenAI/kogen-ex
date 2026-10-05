@@ -27,8 +27,21 @@ defmodule Kogen.Engine.Build.ProtectedPaths do
       end
     end)
     |> case do
-      {:ok, paths} -> {:ok, Enum.reverse(paths)}
+      {:ok, paths} -> clean_acceptance_source(session, paths)
       error -> error
+    end
+  end
+
+  defp clean_acceptance_source(session, paths) do
+    case Workspace.remove_acceptance_source(session.workdir, session.approval.slug) do
+      {:ok, nil} ->
+        {:ok, Enum.reverse(paths)}
+
+      {:ok, path} ->
+        {:ok, Enum.reverse([path | paths])}
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 

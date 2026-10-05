@@ -1,7 +1,7 @@
 defmodule Kogen.Shaper.Request do
   @moduledoc false
 
-  @default_limits %{max_turns: 60, wall_ms: 1_800_000}
+  @default_limits %{max_turns: 60, wall_ms: :infinity}
 
   @enforce_keys [
     :workdir,
@@ -67,11 +67,13 @@ defmodule Kogen.Shaper.Request do
     do: is_binary(slug) and Regex.match?(~r/\A[a-z0-9]+(?:-[a-z0-9]+)*\z/, slug)
 
   defp valid_limits?(%{max_turns: turns, wall_ms: wall_ms}),
-    do: is_integer(turns) and turns > 0 and is_integer(wall_ms) and wall_ms > 0
+    do:
+      is_integer(turns) and turns > 0 and
+        (wall_ms == :infinity or (is_integer(wall_ms) and wall_ms > 0))
 
   defp valid_limits?(_limits), do: false
 
-  @type limits :: %{max_turns: pos_integer(), wall_ms: pos_integer()}
+  @type limits :: %{max_turns: pos_integer(), wall_ms: pos_integer() | :infinity}
 
   @type t :: %__MODULE__{
           workdir: Path.t(),

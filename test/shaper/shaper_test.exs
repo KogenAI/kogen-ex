@@ -37,7 +37,7 @@ defmodule Kogen.Shaper.Tests do
 
     try do
       shape_request = request(project, tmp_dir, config)
-      assert shape_request.limits == %{max_turns: 60, wall_ms: 1_800_000}
+      assert shape_request.limits == %{max_turns: 60, wall_ms: :infinity}
       assert {:ok, result} = Shaper.shape(shape_request)
       assert result.rounds == 3
       assert length(result.calls) == 4

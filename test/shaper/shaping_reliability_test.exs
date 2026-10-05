@@ -215,7 +215,7 @@ defmodule Kogen.Shaper.ShapingReliabilityTests do
 
     try do
       shape_request = request(project, tmp_dir, config)
-      assert shape_request.limits == %{max_turns: 60, wall_ms: 1_800_000}
+      assert shape_request.limits == %{max_turns: 60, wall_ms: :infinity}
       assert {:ok, result} = Shaper.shape(shape_request)
       assert result.rounds == 5
       assert length(result.calls) == 5

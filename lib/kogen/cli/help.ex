@@ -1,10 +1,10 @@
-defmodule Kogen.Kernel.CLI.Help do
+defmodule Kogen.Cli.Help do
   @moduledoc false
 
   @top_level """
   Commands:
     status      Show project and Intent state
-    intent      Check, shape, or approve an Intent
+    intent      Check, shape, approve, or remove an Intent
     build       Build an Intent or show a Build report
     reconcile   Reconcile a Build after a crash
     provider    Manage Kogen ChatGPT logins
@@ -31,8 +31,9 @@ defmodule Kogen.Kernel.CLI.Help do
     {0,
      "Usage: kogen intent <command> [arguments] [options]\n\n" <>
        "Commands:\n  check <slug|path>     Parse and lint an Intent\n" <>
-       "  shape <slug>          Create an Intent from --task-file\n" <>
-       "  approve <slug>        Review and record an Intent approval\n\n" <>
+       "  shape <slug>          Create an Intent from task text\n" <>
+       "  approve <slug>        Review and record an Intent approval\n" <>
+       "  remove <slug>         Remove an Intent in one commit\n\n" <>
        @project_options}
   end
 
@@ -45,18 +46,29 @@ defmodule Kogen.Kernel.CLI.Help do
 
   def render(["intent", "shape"]) do
     {0,
-     "Usage: kogen intent shape <slug> --task-file <path> [options]\n\n" <>
+     "Usage: kogen intent shape <slug> [--task-file <path>] [options]\n\n" <>
+       "Reads task text from stdin when --task-file is omitted or set to -.\n" <>
+       "Shaping waits until complete (60-turn limit, no wall timeout).\n" <>
        "Creates and validates the Intent and its acceptance test. Model and effort come from project build settings.\n\n" <>
        @project_options <>
-       "    --task-file <path>    Task statement text file\n    --json                Emit shaping usage as JSON\n"}
+       "  --task-file <path>    Task statement file (- reads stdin)\n  --json                Emit shaping usage as JSON\n"}
   end
 
   def render(["intent", "approve"]) do
     {0,
-     "Usage: kogen intent approve <slug> --by <name> [options]\n\n" <>
-       "Records an approval after review. Without --yes, approval requires a TTY.\n\n" <>
+     "Usage: kogen intent approve <slug> [--by <name>] [options]\n\n" <>
+       "Records an approval after review. The default approver is Git's author identity.\n" <>
+       "Drivers acting for someone should identify themselves in --by. Without --yes, approval requires a TTY.\n\n" <>
        @project_options <>
-       "    --by <name>          Approval provenance\n    --yes                 Skip the TTY prompt\n"}
+       "  --by <name>          Explicit approval provenance override\n" <>
+       "  --yes                 Skip the TTY prompt\n"}
+  end
+
+  def render(["intent", "remove"]) do
+    {0,
+     "Usage: kogen intent remove <slug> [--force] [options]\n\n" <>
+       "Removes the Intent files and records the removal in one commit. Approved Intents require --force.\n\n" <>
+       @project_options <> "  --force               Remove an approved or queued Intent\n"}
   end
 
   def render(["build"]) do
@@ -71,7 +83,7 @@ defmodule Kogen.Kernel.CLI.Help do
     {0,
      "Usage: kogen build show <slug> [options]\n\n" <>
        "Prints the latest Build report as JSON.\n\n" <>
-       @project_options <> "    --json                Accepted for explicit machine output\n"}
+       @project_options <> "  --json                Accepted for explicit machine output\n"}
   end
 
   def render(["provider"]) do

@@ -19,7 +19,7 @@ Commands are noun-first. Use `kogen` or `kogen help` for the short top-level lis
 
 ```sh
 kogen intent check greet
-kogen intent approve greet --by "Almir" --yes
+kogen intent approve greet --yes
 kogen build greet
 kogen build show greet
 kogen status

@@ -3,7 +3,6 @@ defmodule Kogen.Engine.Build.Engine do
 
   alias Kogen.Build.Cycle
   alias Kogen.Contracts.Failure
-  alias Kogen.Engine.Build.ApprovalManifest
   alias Kogen.Engine.Build.Escalation
   alias Kogen.Engine.Build.Finish
   alias Kogen.Engine.Build.Prepared
@@ -14,6 +13,7 @@ defmodule Kogen.Engine.Build.Engine do
   alias Kogen.Engine.Build.Setup
   alias Kogen.Engine.Build.StageRunner
   alias Kogen.Engine.Runtime
+  alias Kogen.Intent
   alias Kogen.Proc.Sandbox
   alias Kogen.Project
   alias Kogen.State
@@ -46,6 +46,7 @@ defmodule Kogen.Engine.Build.Engine do
         case RunEvents.started(
                prepared.run,
                prepared.request,
+               prepared.approval,
                prepared.approval_commit,
                prepared.base_sha
              ) do
@@ -90,11 +91,11 @@ defmodule Kogen.Engine.Build.Engine do
         with true <-
                Workspace.ancestor?(request.origin, approved_sha, current, request.runtime.git_env),
              :ok <-
-               ApprovalManifest.unchanged_between(
+               Workspace.approval_manifest_unchanged_between(
                  request.origin,
                  approved_sha,
                  current,
-                 approval.protected_manifest,
+                 approved_base_manifest(approval),
                  request.runtime.git_env
                ) do
           {:ok, current}
@@ -111,12 +112,17 @@ defmodule Kogen.Engine.Build.Engine do
     end
   end
 
+  defp approved_base_manifest(%Approval{} = a) do
+    p = ".kogen/acceptance/#{a.slug}_test.exs"
+    Map.put(a.protected_manifest, p, Intent.hash(Map.fetch!(a.acceptance_files, p)))
+  end
+
   defp approved_intent(%Approval{} = approval) do
     path = ".kogen/intents/#{approval.slug}/intent.md"
 
-    with {:ok, intent} <- Kogen.Intent.parse_binary(approval.intent_bytes, path),
+    with {:ok, intent} <- Intent.parse_binary(approval.intent_bytes, path),
          true <- intent.slug == approval.slug,
-         [] <- Kogen.Intent.lint(intent) do
+         [] <- Intent.lint(intent) do
       {:ok, intent, approval.intent_bytes}
     else
       false -> {:error, :approved_intent_slug_mismatch}
@@ -161,7 +167,13 @@ defmodule Kogen.Engine.Build.Engine do
   defp setup_candidate(%Prepared{} = prepared, path) do
     request = prepared.request
 
-    with :ok <- Workspace.insert_files(path, approved_files(prepared.approval)),
+    with :ok <-
+           Workspace.install_intent_files(
+             path,
+             prepared.approval.slug,
+             prepared.approval.intent_bytes,
+             prepared.approval.acceptance_files
+           ),
          {:ok, candidate_project} <- Project.load(path),
          {:ok, process_env} <-
            workspace_environment(
@@ -238,17 +250,6 @@ defmodule Kogen.Engine.Build.Engine do
       :ok -> failed_setup(request, run, reason)
       {:error, cleanup} -> failed_setup(request, run, {:setup_cleanup_failed, reason, cleanup})
     end
-  end
-
-  defp approved_files(%Approval{} = approval) do
-    acceptance_path = ".kogen/acceptance/#{approval.slug}_test.exs"
-    acceptance = Map.fetch!(approval.acceptance_files, acceptance_path)
-
-    %{
-      ".kogen/intents/#{approval.slug}/intent.md" => approval.intent_bytes,
-      acceptance_path => acceptance,
-      "test/acceptance/#{approval.slug}_test.exs" => acceptance
-    }
   end
 
   defp start_cycle(session) do

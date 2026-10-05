@@ -1,7 +1,7 @@
-defmodule Kogen.Kernel.CLI.Arguments do
+defmodule Kogen.Cli.Arguments do
   @moduledoc false
 
-  alias Kogen.Kernel.CLI.Args
+  alias Kogen.Cli.Args
 
   @switches [
     project: :string,
@@ -10,6 +10,7 @@ defmodule Kogen.Kernel.CLI.Arguments do
     by: :string,
     task_file: :string,
     as: :string,
+    force: :boolean,
     yes: :boolean,
     json: :boolean
   ]
@@ -28,9 +29,19 @@ defmodule Kogen.Kernel.CLI.Arguments do
   def parse(["intent", "check", "--help"]), do: help_args(["intent", "check"])
   def parse(["intent", "shape", "--help"]), do: help_args(["intent", "shape"])
   def parse(["intent", "approve", "--help"]), do: help_args(["intent", "approve"])
+  def parse(["intent", "remove", "--help"]), do: help_args(["intent", "remove"])
+  def parse(["intent", "remove"]), do: {:error, "intent remove requires <slug>"}
   def parse(["intent", "check", path | rest]), do: parse_options(:intent_check, [path], rest)
   def parse(["intent", "shape", slug | rest]), do: parse_options(:intent_shape, [slug], rest)
   def parse(["intent", "approve", slug | rest]), do: parse_options(:intent_approve, [slug], rest)
+
+  def parse(["intent", "remove", slug | rest]) do
+    if String.starts_with?(slug, "-"),
+      do: {:error, "intent remove requires <slug>"},
+      else: parse_options(:intent_remove, [slug], rest)
+  end
+
+  def parse(["intent", "close" | _rest]), do: {:error, "moved: use kogen intent remove <slug>"}
   def parse(["approve" | _rest]), do: {:error, "moved: use kogen intent approve <slug>"}
   def parse(["build"]), do: help_args(["build"])
   def parse(["build", "--help"]), do: help_args(["build"])
@@ -90,6 +101,7 @@ defmodule Kogen.Kernel.CLI.Arguments do
          by: Keyword.get(options, :by),
          task_file: Keyword.get(options, :task_file),
          account_label: Keyword.get(options, :as),
+         force: Keyword.get(options, :force, false),
          yes: Keyword.get(options, :yes, false),
          json: Keyword.get(options, :json, false)
        }}
@@ -124,6 +136,7 @@ defmodule Kogen.Kernel.CLI.Arguments do
   defp allowed_flags(:intent_shape), do: project_flags() ++ [:task_file, :json]
 
   defp allowed_flags(:intent_approve), do: project_flags() ++ [:by, :yes]
+  defp allowed_flags(:intent_remove), do: project_flags() ++ [:force]
   defp allowed_flags(:version), do: []
   defp allowed_flags(:build), do: project_flags()
   defp allowed_flags(:build_show), do: project_flags() ++ [:json]
@@ -134,17 +147,6 @@ defmodule Kogen.Kernel.CLI.Arguments do
   defp allowed_flags(:reconcile), do: project_flags()
 
   defp project_flags, do: [:project, :origin, :base]
-
-  defp required_flags(:intent_approve, options) do
-    if Keyword.has_key?(options, :by), do: :ok, else: {:error, "intent approve requires --by"}
-  end
-
-  defp required_flags(:intent_shape, options) do
-    case Keyword.get(options, :task_file) do
-      path when is_binary(path) and path != "" -> :ok
-      _missing -> {:error, "intent shape requires --task-file"}
-    end
-  end
 
   defp required_flags(_command, _options), do: :ok
 
@@ -157,19 +159,15 @@ defmodule Kogen.Kernel.CLI.Arguments do
         {:ok, nil, nil, nil}
 
       :error ->
-        project_paths(File.cwd!(), options)
+        {:ok, nil, Keyword.get(options, :origin), Keyword.get(options, :base)}
     end
   end
 
   defp project_paths(project, options) do
-    project = Path.expand(project)
-    origin = options |> Keyword.get(:origin) |> expand_optional_path()
+    origin = Keyword.get(options, :origin)
     base = Keyword.get(options, :base)
     {:ok, project, origin, base}
   end
-
-  defp expand_optional_path(nil), do: nil
-  defp expand_optional_path(path), do: Path.expand(path)
 
   defp moved_option(command, argv) do
     case moved_borrow(argv) do

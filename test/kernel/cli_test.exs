@@ -1,14 +1,16 @@
 defmodule Kogen.Kernel.CLITest do
   use Kogen.Testkit.Case
 
+  alias Kogen.Cli.Arguments
   alias Kogen.Kernel.CLI
-  alias Kogen.Kernel.CLI.Arguments
   alias Kogen.Testkit.Git
 
   @fixture Path.expand("../../fixtures/hello_app", __DIR__)
 
   test "version works without a project path" do
-    assert {0, "kogen 0.0.0\n"} = CLI.execute(["version"])
+    assert {0, output} = CLI.execute(["version"])
+    ["kogen", version] = String.split(String.trim(output), " ")
+    assert Regex.match?(~r/\A0\.0\.0\+[0-9A-Za-z.-]+\z/, version)
   end
 
   test "top-level help is the compact golden command list" do
@@ -20,12 +22,26 @@ defmodule Kogen.Kernel.CLITest do
   test "command help is a golden subcommand and option list" do
     assert CLI.execute(["intent", "--help"]) == {0, intent_help()}
     assert CLI.execute(["help", "intent"]) == {0, intent_help()}
+    assert CLI.execute(["intent", "remove", "--help"]) == {0, remove_help()}
+    assert CLI.execute(["intent", "shape", "--help"]) == {0, shape_help()}
+    assert CLI.execute(["intent", "approve", "--help"]) == {0, approve_help()}
     assert ["build", "--help"] |> CLI.execute() |> elem(1) =~ "build show <slug>"
+  end
+
+  test "obsolete intent close and incomplete remove errors are golden" do
+    assert CLI.execute(["intent", "close", "greet"]) ==
+             {2, "kogen: moved: use kogen intent remove <slug>\n\n" <> top_level_help()}
+
+    assert CLI.execute(["intent", "remove"]) ==
+             {2, "kogen: intent remove requires <slug>\n\n" <> top_level_help()}
+
+    assert CLI.execute(["intent", "remove", "--force"]) ==
+             {2, "kogen: intent remove requires <slug>\n\n" <> top_level_help()}
   end
 
   test "project commands default to cwd and defer base selection" do
     assert {:ok, args} = Arguments.parse(["status"])
-    assert Path.type(args.project) == :absolute
+    assert args.project == nil
     assert args.origin == nil
     assert args.base == nil
 
@@ -55,6 +71,16 @@ defmodule Kogen.Kernel.CLITest do
     assert {:ok, list} = Arguments.parse(["provider", "list"])
     assert list.command == :provider_list
     assert list.project == nil
+  end
+
+  test "approval identity defaults to Git and --by is an explicit override" do
+    assert {:ok, default} = Arguments.parse(["intent", "approve", "greet", "--yes"])
+    assert default.by == nil
+
+    assert {:ok, override} =
+             Arguments.parse(["intent", "approve", "greet", "--by", "agent:codex for almir"])
+
+    assert override.by == "agent:codex for almir"
   end
 
   test "old command and flag forms return moved errors" do
@@ -137,7 +163,7 @@ defmodule Kogen.Kernel.CLITest do
     """
     Commands:
       status      Show project and Intent state
-      intent      Check, shape, or approve an Intent
+      intent      Check, shape, approve, or remove an Intent
       build       Build an Intent or show a Build report
       reconcile   Reconcile a Build after a crash
       provider    Manage Kogen ChatGPT logins
@@ -152,13 +178,61 @@ defmodule Kogen.Kernel.CLITest do
 
     Commands:
       check <slug|path>     Parse and lint an Intent
-      shape <slug>          Create an Intent from --task-file
+      shape <slug>          Create an Intent from task text
       approve <slug>        Review and record an Intent approval
+      remove <slug>         Remove an Intent in one commit
 
     Options:
       --project <checkout>  Project checkout (default: current directory)
       --origin <repo>       Local Git repository used for state and landing
       --base <branch>       Target branch (project setting, origin HEAD, then current branch)
+    """
+  end
+
+  defp remove_help do
+    """
+    Usage: kogen intent remove <slug> [--force] [options]
+
+    Removes the Intent files and records the removal in one commit. Approved Intents require --force.
+
+    Options:
+      --project <checkout>  Project checkout (default: current directory)
+      --origin <repo>       Local Git repository used for state and landing
+      --base <branch>       Target branch (project setting, origin HEAD, then current branch)
+      --force               Remove an approved or queued Intent
+    """
+  end
+
+  defp shape_help do
+    """
+    Usage: kogen intent shape <slug> [--task-file <path>] [options]
+
+    Reads task text from stdin when --task-file is omitted or set to -.
+    Shaping waits until complete (60-turn limit, no wall timeout).
+    Creates and validates the Intent and its acceptance test. Model and effort come from project build settings.
+
+    Options:
+      --project <checkout>  Project checkout (default: current directory)
+      --origin <repo>       Local Git repository used for state and landing
+      --base <branch>       Target branch (project setting, origin HEAD, then current branch)
+      --task-file <path>    Task statement file (- reads stdin)
+      --json                Emit shaping usage as JSON
+    """
+  end
+
+  defp approve_help do
+    """
+    Usage: kogen intent approve <slug> [--by <name>] [options]
+
+    Records an approval after review. The default approver is Git's author identity.
+    Drivers acting for someone should identify themselves in --by. Without --yes, approval requires a TTY.
+
+    Options:
+      --project <checkout>  Project checkout (default: current directory)
+      --origin <repo>       Local Git repository used for state and landing
+      --base <branch>       Target branch (project setting, origin HEAD, then current branch)
+      --by <name>          Explicit approval provenance override
+      --yes                 Skip the TTY prompt
     """
   end
 end

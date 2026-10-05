@@ -25,6 +25,7 @@ protected_paths:
   - test/support/**
   - test/test_helper.exs
 domains:
+  cli: [lib/kogen/cli.ex, lib/kogen/cli]
   contracts: [lib/kogen/contracts.ex, lib/kogen/contracts, test/contracts]
   intent: [lib/kogen/intent.ex, lib/kogen/intent, test/intent]
   project: [lib/kogen/project.ex, lib/kogen/project, test/project]

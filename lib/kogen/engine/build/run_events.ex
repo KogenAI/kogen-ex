@@ -4,13 +4,22 @@ defmodule Kogen.Engine.Build.RunEvents do
   alias Kogen.Build.Recipe
   alias Kogen.Engine.Build.Request
   alias Kogen.State
+  alias Kogen.State.Approval
   alias Kogen.State.Run
 
-  @spec started(Run.t(), Request.t(), String.t(), String.t()) :: :ok | {:error, term()}
-  def started(%Run{} = run, %Request{} = request, approval_commit, base_sha) do
+  @spec started(Run.t(), Request.t(), Approval.t(), String.t(), String.t()) ::
+          :ok | {:error, term()}
+  def started(
+        %Run{} = run,
+        %Request{} = request,
+        %Approval{} = approval,
+        approval_commit,
+        base_sha
+      ) do
     State.record(run, %{
       event: :started,
       approval_commit: approval_commit,
+      approved_by: approval.by,
       base_sha: base_sha,
       model: request.model,
       effort: request.effort,

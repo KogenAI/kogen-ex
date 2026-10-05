@@ -12,7 +12,7 @@ defmodule Kogen.Harness.Shaping.State do
           calls: [Kogen.Harness.ShapeCall.t()],
           turns: non_neg_integer(),
           turn_offset: non_neg_integer(),
-          deadline: integer()
+          deadline: integer() | nil
         }
 end
 
@@ -138,7 +138,7 @@ defmodule Kogen.Harness.Shaping do
              failure_text,
              opts.workdir
            ) do
-      started_at = System.monotonic_time(:millisecond)
+      deadline = wall_deadline(opts.limits.wall_ms)
 
       state = %State{
         opts: opts,
@@ -148,7 +148,7 @@ defmodule Kogen.Harness.Shaping do
         calls: [],
         turns: turn_offset,
         turn_offset: turn_offset,
-        deadline: started_at + opts.limits.wall_ms
+        deadline: deadline
       }
 
       shape_loop(state)
@@ -157,13 +157,13 @@ defmodule Kogen.Harness.Shaping do
 
   defp shape_loop(%State{} = state) do
     local_turns = state.turns - state.turn_offset
-    remaining_ms = max(state.deadline - System.monotonic_time(:millisecond), 0)
+    remaining_ms = remaining_ms(state.deadline)
 
     cond do
       local_turns >= state.opts.limits.max_turns ->
         error(:shape_turn_limit, "Shaper exhausted its turn limit.")
 
-      remaining_ms == 0 ->
+      is_integer(remaining_ms) and remaining_ms == 0 ->
         error(:shape_wall_limit, "Shaper exhausted its wall time limit.")
 
       true ->
@@ -340,7 +340,8 @@ defmodule Kogen.Harness.Shaping do
       not is_integer(opts.limits.max_turns) or opts.limits.max_turns < 1 ->
         error(:invalid_turn_limit, "max_turns must be positive.")
 
-      not is_integer(opts.limits.wall_ms) or opts.limits.wall_ms < 1 ->
+      opts.limits.wall_ms != :infinity and
+          (not is_integer(opts.limits.wall_ms) or opts.limits.wall_ms < 1) ->
         error(:invalid_wall_limit, "wall_ms must be positive.")
 
       true ->
@@ -358,5 +359,11 @@ defmodule Kogen.Harness.Shaping do
     do: [".kogen/intents/#{slug}/intent.md", ".kogen/acceptance/#{slug}_test.exs"]
 
   defp elapsed(started), do: max(System.monotonic_time(:millisecond) - started, 0)
+
+  defp wall_deadline(:infinity), do: nil
+  defp wall_deadline(wall_ms), do: System.monotonic_time(:millisecond) + wall_ms
+
+  defp remaining_ms(nil), do: :infinity
+  defp remaining_ms(deadline), do: max(deadline - System.monotonic_time(:millisecond), 0)
   defp error(reason, detail), do: {:error, %Error{reason: reason, detail: detail}}
 end

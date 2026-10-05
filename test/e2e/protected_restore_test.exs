@@ -10,7 +10,7 @@ defmodule Kogen.E2e.ProtectedRestoreTest do
   @moduletag :e2e
   @tag timeout: 120_000
 
-  test "a shell edit to approved tests and Intent is restored before checks", %{tmp_dir: tmp_dir} do
+  test "a shell edit to approved tests and Intent is repaired before checks", %{tmp_dir: tmp_dir} do
     parent = Path.join(tmp_dir, "protected-shell-edits")
     File.mkdir_p!(parent)
     seed_project = Build.prepare_seed!(parent)
@@ -53,9 +53,15 @@ defmodule Kogen.E2e.ProtectedRestoreTest do
                "test/acceptance/build-engine_test.exs"
              ]
 
+    landed_files =
+      result.fixture.origin
+      |> Git.git!(["ls-tree", "-r", "--name-only", landed_sha])
+      |> String.split("\n", trim: true)
+
+    refute ".kogen/acceptance/build-engine_test.exs" in landed_files
+
     for path <- [
           ".kogen/intents/build-engine/intent.md",
-          ".kogen/acceptance/build-engine_test.exs",
           "test/acceptance/build-engine_test.exs"
         ] do
       approved_path =

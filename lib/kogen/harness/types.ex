@@ -54,7 +54,7 @@ defmodule Kogen.Harness.Opts do
             optional(:planner) => model(),
             optional(:reviewer) => model()
           },
-          limits: %{max_turns: pos_integer(), wall_ms: pos_integer()},
+          limits: %{max_turns: pos_integer(), wall_ms: pos_integer() | :infinity},
           repairs_left: non_neg_integer(),
           protected: [String.t()]
         }

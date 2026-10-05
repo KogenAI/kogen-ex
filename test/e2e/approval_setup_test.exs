@@ -43,8 +43,9 @@ defmodule Kogen.E2e.ApprovalSetupTest do
       previous_logs = setup_logs(approval_tmp)
 
       assert {:ok, preview} =
-               Kogen.Kernel.approval_preview(@slug, project, project, "main", "e2e test")
+               Kogen.Kernel.approval_preview(@slug, project, project, "main", nil)
 
+      assert preview.approval.by == "Kogen Test <test@kogen.invalid>"
       assert File.read!(Path.join(project, ".kogen/setup-ready")) == "fixture ready\n"
       assert [setup_log] = setup_logs(approval_tmp) -- previous_logs
       assert File.read!(setup_log) =~ "approval-setup-ran"

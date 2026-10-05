@@ -303,11 +303,15 @@ defmodule Kogen.Kernel.Approval do
   end
 
   defp protected_manifest(project_root, %ProjectData{} = project, slug, intent_bytes, files) do
-    protected_paths = Enum.flat_map(project.protected_paths, &expand_glob(project_root, &1))
+    source_path = acceptance_source_path(slug)
+
+    protected_paths =
+      project.protected_paths
+      |> Enum.flat_map(&expand_glob(project_root, &1))
+      |> Enum.reject(&(&1 == source_path))
 
     approved_files = [
       {intent_path(slug), intent_bytes},
-      {acceptance_source_path(slug), Map.fetch!(files, acceptance_source_path(slug))},
       {candidate_acceptance_path(slug), Map.fetch!(files, acceptance_source_path(slug))}
     ]
 

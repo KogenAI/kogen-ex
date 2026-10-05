@@ -21,7 +21,7 @@ defmodule Kogen.Harness.Exchange.Request do
           instructions: String.t(),
           items: [map()],
           tool_names: [Kogen.Harness.Codec.tool_name()],
-          remaining_ms: non_neg_integer()
+          remaining_ms: non_neg_integer() | :infinity
         }
 end
 
@@ -51,7 +51,7 @@ defmodule Kogen.Harness.Exchange do
              exchange_request.turn,
              request
            ) do
-      deadline = System.monotonic_time(:millisecond) + exchange_request.remaining_ms
+      deadline = wall_deadline(exchange_request.remaining_ms)
       result = provider_call(opts, request, exchange_request.remaining_ms)
       respond_after_first_attempt(opts, exchange_request, request, deadline, result)
     end
@@ -65,7 +65,9 @@ defmodule Kogen.Harness.Exchange do
          {:error, %ProviderError{class: class} = error}
        )
        when class in [:timeout, :transport] do
-    if remaining_ms(deadline) > @retry_backoff_ms do
+    remaining = remaining_ms(deadline)
+
+    if remaining == :infinity or remaining > @retry_backoff_ms do
       retry_after_transient_error(opts, exchange_request, request, deadline, error)
     else
       record_response(opts, exchange_request, {:error, error})
@@ -131,7 +133,11 @@ defmodule Kogen.Harness.Exchange do
     end
   end
 
+  defp remaining_ms(:infinity), do: :infinity
   defp remaining_ms(deadline), do: max(deadline - System.monotonic_time(:millisecond), 0)
+
+  defp wall_deadline(:infinity), do: :infinity
+  defp wall_deadline(remaining_ms), do: System.monotonic_time(:millisecond) + remaining_ms
 
   defp build_request(opts, request) do
     %{
@@ -146,7 +152,20 @@ defmodule Kogen.Harness.Exchange do
     }
   end
 
-  defp provider_call(_opts, _request, remaining_ms) when remaining_ms <= 0, do: timeout_error()
+  defp provider_call(_opts, _request, remaining_ms)
+       when is_integer(remaining_ms) and remaining_ms <= 0, do: timeout_error()
+
+  defp provider_call(opts, %ModelRequest{} = request, :infinity) do
+    caller = self()
+    result_ref = make_ref()
+
+    {worker, monitor} =
+      spawn_monitor(fn ->
+        send(caller, {result_ref, opts.provider_mod.respond(opts.provider_config, request)})
+      end)
+
+    await_provider(result_ref, worker, monitor, :infinity)
+  end
 
   defp provider_call(opts, %ModelRequest{} = request, remaining_ms) do
     caller = self()
@@ -160,7 +179,26 @@ defmodule Kogen.Harness.Exchange do
     await_provider(result_ref, worker, monitor, remaining_ms)
   end
 
-  defp await_provider(result_ref, worker, monitor, remaining_ms) do
+  defp await_provider(result_ref, worker, monitor, :infinity) do
+    receive do
+      {^result_ref, {:ok, %ModelResponse{} = response}} ->
+        Process.demonitor(monitor, [:flush])
+        {:ok, response}
+
+      {^result_ref, {:error, %ProviderError{} = error}} ->
+        Process.demonitor(monitor, [:flush])
+        {:error, error}
+
+      {^result_ref, _invalid} ->
+        Process.demonitor(monitor, [:flush])
+        provider_error(:malformed, "Provider returned an invalid response.")
+
+      {:DOWN, ^monitor, :process, ^worker, reason} ->
+        provider_error(:transport, "Provider process failed: #{inspect(reason)}")
+    end
+  end
+
+  defp await_provider(result_ref, worker, monitor, remaining_ms) when is_integer(remaining_ms) do
     receive do
       {^result_ref, {:ok, %ModelResponse{} = response}} ->
         Process.demonitor(monitor, [:flush])

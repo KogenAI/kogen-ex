@@ -39,6 +39,7 @@ defmodule Kogen.State.Json do
     status: "status",
     result: "result",
     approval_commit: "approval_commit",
+    approved_by: "approved_by",
     base_sha: "base_sha",
     ledger: "ledger",
     receipts: "receipts",

@@ -40,6 +40,7 @@ defmodule Kogen.Kernel.Report do
         {"escalations", escalations(events)},
         {"attempts", attempts(events)},
         {"approval", nullable(run.approval_commit)},
+        {"approved_by", nullable(event_value(events, :approved_by))},
         {"base",
          nullable(event_value(events, :base_sha) || landing_value(run, :expected_parent))},
         {"candidate", nullable(landing_value(run, :candidate_commit))},
