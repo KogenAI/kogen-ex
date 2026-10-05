@@ -1,4 +1,4 @@
-defmodule Kogen.Acceptance.PlanShellIsDefaultTest do
+defmodule Kogen.Acceptance.LadderIsDefaultTest do
   use Kogen.Testkit.Case
 
   alias Kogen.Contracts.ProcResult
@@ -7,10 +7,20 @@ defmodule Kogen.Acceptance.PlanShellIsDefaultTest do
 
   @moduletag :acceptance
   @project_root Path.expand("../..", __DIR__)
-  @recipes ["staged", "plan-shell", "direct", "direct-shell", "direct-escalate", "escalate-shell"]
+  @recipes [
+    "ladder",
+    "ladder-luna",
+    "ladder-sol-medium",
+    "staged",
+    "plan-shell",
+    "direct",
+    "direct-shell",
+    "direct-escalate",
+    "escalate-shell"
+  ]
 
-  @tag intent: "plan-shell-is-default/A1"
-  test "omitted project and machine recipes default to plan-shell", %{tmp_dir: tmp_dir} do
+  @tag intent: "ladder-is-default/A1"
+  test "omitted project and machine recipes default to ladder", %{tmp_dir: tmp_dir} do
     project_root = write_project!(Path.join(tmp_dir, "project"), "name: probe\nchecks: []\n")
     assert {:ok, project} = Kogen.Project.load(project_root)
 
@@ -21,14 +31,14 @@ defmodule Kogen.Acceptance.PlanShellIsDefaultTest do
 
     assert {:ok, machine} = Kogen.Project.load_machine_build_settings(home)
     assert machine.recipe == nil
-    assert Kogen.Project.effective_build_settings(machine, project.build).recipe == "plan-shell"
+    assert Kogen.Project.effective_build_settings(machine, project.build).recipe == "ladder"
 
     empty_home = Path.join(tmp_dir, "empty-home")
     assert {:ok, nil} = Kogen.Project.load_machine_build_settings(empty_home)
-    assert Kogen.Project.effective_build_settings(nil, project.build).recipe == "plan-shell"
+    assert Kogen.Project.effective_build_settings(nil, project.build).recipe == "ladder"
   end
 
-  @tag intent: "plan-shell-is-default/A2"
+  @tag intent: "ladder-is-default/A2"
   test "explicit project and machine recipes retain their precedence" do
     machine = %{recipe: "direct-shell", roles: %{}}
     project = %{recipe: "direct", roles: %{}}
@@ -37,26 +47,30 @@ defmodule Kogen.Acceptance.PlanShellIsDefaultTest do
     assert Kogen.Project.effective_build_settings(machine, nil).recipe == "direct-shell"
   end
 
-  @tag intent: "plan-shell-is-default/A3"
-  test "the benchmark runner defaults to plan-shell", %{tmp_dir: tmp_dir} do
+  @tag intent: "ladder-is-default/A3"
+  test "the benchmark runner defaults to ladder", %{tmp_dir: tmp_dir} do
     usage = run_benchmark!(Path.join(tmp_dir, "default"), nil)
-    assert usage["recipe"] == "plan-shell"
+    assert usage["recipe"] == "ladder"
   end
 
-  @tag intent: "plan-shell-is-default/A4"
-  test "the benchmark runner honors an explicit recipe", %{tmp_dir: tmp_dir} do
-    usage = run_benchmark!(Path.join(tmp_dir, "override"), "direct-shell")
-    assert usage["recipe"] == "direct-shell"
+  @tag intent: "ladder-is-default/A4"
+  test "the benchmark runner honors an explicit recipe, including single-model ladders", %{
+    tmp_dir: tmp_dir
+  } do
+    for recipe <- ["direct-shell", "ladder-luna", "ladder-sol-medium"] do
+      usage = run_benchmark!(Path.join(tmp_dir, recipe), recipe)
+      assert usage["recipe"] == recipe
+    end
   end
 
-  @tag intent: "plan-shell-is-default/A5"
-  test "Kogen's project configuration selects plan-shell" do
+  @tag intent: "ladder-is-default/A5"
+  test "Kogen's project configuration keeps its explicit plan-shell recipe" do
     assert {:ok, project} = Kogen.Project.load(@project_root)
     assert project.build.recipe == "plan-shell"
   end
 
-  @tag intent: "plan-shell-is-default/A6"
-  test "all currently supported recipes remain selectable", %{tmp_dir: tmp_dir} do
+  @tag intent: "ladder-is-default/A6"
+  test "every supported recipe, including the ladders, is selectable", %{tmp_dir: tmp_dir} do
     project_root = Path.join(tmp_dir, "project")
 
     for recipe <- @recipes do

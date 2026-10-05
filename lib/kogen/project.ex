@@ -15,7 +15,11 @@ defmodule Kogen.Project do
   @spec load_machine_build_settings(Path.t()) :: {:ok, map() | nil} | {:error, [load_error()]}
   def load_machine_build_settings(home), do: BuildSettings.load_machine(home)
 
-  @spec effective_build_settings(map() | nil, map() | nil) :: %{recipe: String.t(), roles: map()}
+  @spec effective_build_settings(map() | nil, map() | nil) :: %{
+          recipe: String.t(),
+          roles: map(),
+          wall_minutes: pos_integer() | nil
+        }
   def effective_build_settings(machine, project), do: BuildSettings.effective(machine, project)
 
   @spec run_setup(

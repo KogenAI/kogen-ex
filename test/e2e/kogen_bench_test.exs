@@ -10,6 +10,47 @@ defmodule Kogen.E2e.KogenBenchTest do
   test "copies failed candidate diffs into the benchmark output and usage receipt", %{
     tmp_dir: tmp_dir
   } do
+    {status, output, paths} = run_bench!(tmp_dir, %{})
+    out_dir = paths.out_dir
+
+    assert status == 1, output
+    assert File.read!(Path.join(out_dir, "candidate.diff")) =~ "candidate implementation"
+    assert File.read!(Path.join(out_dir, "final.diff")) == ""
+
+    usage = out_dir |> Path.join("usage.json") |> File.read!() |> :json.decode()
+    assert {usage["landed"], usage["best_candidate"]} == {false, false}
+
+    assert [
+             %{
+               "attempt" => "builder",
+               "file" => "candidate.diff",
+               "red_checks" => [%{"name" => "tests"}]
+             }
+           ] =
+             usage["candidate_diffs"]
+  end
+
+  test "grades a Build's best candidate branch as the final diff when it did not land", %{
+    tmp_dir: tmp_dir
+  } do
+    {status, output, paths} = run_bench!(tmp_dir, %{"FAKE_KOGEN_BEST" => "1"})
+
+    assert status == 0, output
+    final = File.read!(Path.join(paths.out_dir, "final.diff"))
+    assert final =~ "+++ b/best.txt"
+    assert final =~ "+best candidate implementation"
+    assert File.read!(Path.join(paths.work_dir, "best.txt")) == "best candidate implementation\n"
+
+    usage = paths.out_dir |> Path.join("usage.json") |> File.read!() |> :json.decode()
+    assert usage["recipe"] == "ladder"
+    assert {usage["landed"], usage["best_candidate"]} == {false, true}
+    assert usage["best_candidate_detail"]["branch"] == "kogen/task"
+
+    assert File.read!(Path.join(paths.out_dir, "log.txt")) =~
+             "grading its best candidate kogen/task"
+  end
+
+  defp run_bench!(tmp_dir, extra_env) do
     task_dir = Path.join(tmp_dir, "task")
     out_dir = Path.join(tmp_dir, "out")
     fake_kogen = Path.join(tmp_dir, "fake-kogen")
@@ -31,28 +72,19 @@ defmodule Kogen.E2e.KogenBenchTest do
     assert {:ok, %ProcResult{exit_status: status, output_tail: output}} =
              Proc.run(["/bin/sh", script, task_dir, work_dir, out_dir],
                cd: tmp_dir,
-               env: %{
-                 "HOME" => home,
-                 "KOGEN_BIN" => fake_kogen,
-                 "PATH" => runtime.base_env["PATH"],
-                 "TMPDIR" => tmp_dir
-               },
+               env:
+                 Map.merge(
+                   %{
+                     "HOME" => home,
+                     "KOGEN_BIN" => fake_kogen,
+                     "PATH" => runtime.base_env["PATH"],
+                     "TMPDIR" => tmp_dir
+                   },
+                   extra_env
+                 ),
                timeout_ms: 120_000
              )
 
-    assert status == 1, output
-    assert File.read!(Path.join(out_dir, "candidate.diff")) =~ "candidate implementation"
-    assert File.read!(Path.join(out_dir, "final.diff")) == ""
-
-    usage = out_dir |> Path.join("usage.json") |> File.read!() |> :json.decode()
-
-    assert [
-             %{
-               "attempt" => "builder",
-               "file" => "candidate.diff",
-               "red_checks" => [%{"name" => "tests"}]
-             }
-           ] =
-             usage["candidate_diffs"]
+    {status, output, %{out_dir: out_dir, work_dir: work_dir}}
   end
 end

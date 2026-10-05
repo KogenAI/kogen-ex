@@ -21,6 +21,25 @@ case "$1 ${2:-}" in
     exit 0
     ;;
   "queue start")
+    if [ -n "${FAKE_KOGEN_BEST:-}" ]; then
+      shift 2
+      project=
+      origin=
+      while [ "$#" -gt 0 ]; do
+        case "$1" in
+          --project) project=$2; shift 2 ;;
+          --origin) origin=$2; shift 2 ;;
+          *) shift ;;
+        esac
+      done
+      clone="$project/.kogen/best-candidate"
+      git clone --quiet "$origin" "$clone"
+      printf '%s\n' 'best candidate implementation' > "$clone/best.txt"
+      git -C "$clone" add best.txt
+      git -C "$clone" -c user.name='Fake Kogen' -c user.email=fake@kogen.invalid \
+        -c commit.gpgsign=false commit --quiet -m 'Best candidate'
+      git -C "$clone" push --quiet origin HEAD:refs/heads/kogen/task
+    fi
     exit 1
     ;;
   "status "*)
@@ -39,11 +58,20 @@ case "$1 ${2:-}" in
     printf '%s\n' 'candidate implementation' > "$run_dir/candidate.diff"
     python3 - "$run_dir/candidate.diff" <<'PY'
 import json
+import os
 import sys
 
 source_path = sys.argv[1]
+best = None
+if os.environ.get("FAKE_KOGEN_BEST"):
+    best = {
+        "attempt": "sol-high",
+        "branch": "kogen/task",
+        "failing": {"acceptance": ["A1"], "red_checks": ["tests"]},
+    }
 print(json.dumps({
     "status": "failed",
+    "best_candidate": best,
     "candidate_diffs": [{
         "attempt": "builder",
         "file": "candidate.diff",

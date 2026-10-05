@@ -14,10 +14,10 @@ case "$script_path" in
 esac
 script_dir=$(cd "$(dirname "$script_path")" && pwd -P)
 format_check_script="$script_dir/kogen-format-check"
-recipe=${KOGEN_BENCH_RECIPE:-plan-shell}
+recipe=${KOGEN_BENCH_RECIPE:-ladder}
 case "$recipe" in
-  staged|plan-shell|direct|direct-shell|direct-escalate|escalate-shell) ;;
-  *) echo "KOGEN_BENCH_RECIPE must be staged, plan-shell, direct, direct-shell, direct-escalate, or escalate-shell" >&2; exit 2 ;;
+  ladder|ladder-luna|ladder-sol-medium|staged|plan-shell|direct|direct-shell|direct-escalate|escalate-shell) ;;
+  *) echo "KOGEN_BENCH_RECIPE must be ladder, ladder-luna, ladder-sol-medium, staged, plan-shell, direct, direct-shell, direct-escalate, or escalate-shell" >&2; exit 2 ;;
 esac
 format_scope=${KOGEN_BENCH_FORMAT_SCOPE:-changed}
 case "$format_scope" in
@@ -659,6 +659,8 @@ result = {
     "builder": {"model": builder_model, "effort": builder_effort},
     "run_status": "failed",
     "status": "failed",
+    "landed": False,
+    "best_candidate": False,
     "failed_stage": failed_stage,
     "exit_code": int(status),
     "shape": {"model": shape_model, "effort": shape_effort, "wall_ms": int(shape_wall_ms)},
@@ -843,25 +845,55 @@ else
   fi
 fi
 
+# A Build that did not land may still have pushed its best Candidate to kogen/<slug>; the
+# benchmark grades that Candidate as the final diff.
+best_candidate_branch() {
+  [ -f "$out_dir/report.json" ] || return 0
+  python3 - "$out_dir/report.json" <<'PY'
+import json
+import re
+import sys
+
+try:
+    with open(sys.argv[1], encoding="utf-8") as source:
+        best = json.load(source).get("best_candidate") or {}
+except (OSError, ValueError, AttributeError):
+    best = {}
+branch = best.get("branch") if isinstance(best, dict) else None
+if isinstance(branch, str) and re.fullmatch(r"kogen/[a-z0-9]+(?:-[a-z0-9]+)*", branch):
+    print(branch)
+PY
+}
+
+final_ref=refs/heads/main
+landed=true
 if [ "$build_ok" -eq 0 ]; then
   build_wall_ms=$CAPTURE_WALL_MS
   # status recovers an interrupted (143) or crashed Build first, so the report is terminal.
   run_status_report || :
   copy_candidate_diffs
-  write_failed_usage build "$builder_model" "$builder_effort" "$stage_status" "$build_wall_ms"
-  exit "$stage_status"
-fi
-
-if run_status_report; then
-  :
+  best_branch=$(best_candidate_branch)
+  if [ -n "$best_branch" ] &&
+    git --git-dir="$origin" rev-parse --verify --quiet "refs/heads/$best_branch^{commit}" >/dev/null; then
+    final_ref="refs/heads/$best_branch"
+    landed=false
+    log_line "Build did not land; grading its best candidate $best_branch"
+  else
+    write_failed_usage build "$builder_model" "$builder_effort" "$stage_status" "$build_wall_ms"
+    exit "$stage_status"
+  fi
 else
-  stage_status=$?
-  write_failed_usage report "" "" "$stage_status" "$CAPTURE_WALL_MS"
-  exit "$stage_status"
+  if run_status_report; then
+    :
+  else
+    stage_status=$?
+    write_failed_usage report "" "" "$stage_status" "$CAPTURE_WALL_MS"
+    exit "$stage_status"
+  fi
+  copy_candidate_diffs
 fi
-copy_candidate_diffs
 
-git --git-dir="$origin" diff --binary "$base_sha" refs/heads/main > "$out_dir/final.diff"
+git --git-dir="$origin" diff --binary "$base_sha" "$final_ref" > "$out_dir/final.diff"
 git -C "$work_dir" apply --check "$out_dir/final.diff"
 git -C "$work_dir" apply "$out_dir/final.diff"
 [ "$(git -C "$work_dir" rev-parse HEAD)" = "$work_base" ] || {
@@ -869,21 +901,30 @@ git -C "$work_dir" apply "$out_dir/final.diff"
   exit 4
 }
 
-log_line "--- landed diff applied to work_dir ---"
+if [ "$landed" = true ]; then
+  log_line "--- landed diff applied to work_dir ---"
+else
+  log_line "--- best candidate diff applied to work_dir ---"
+fi
 git -C "$work_dir" status --short | while IFS= read -r line; do log_line "$line"; done
 log_line "work_dir base: $work_base"
-log_line "Kogen landed: $(git --git-dir="$origin" rev-parse refs/heads/main)"
+if [ "$landed" = true ]; then
+  log_line "Kogen landed: $(git --git-dir="$origin" rev-parse refs/heads/main)"
+else
+  log_line "Kogen best candidate: $final_ref $(git --git-dir="$origin" rev-parse "$final_ref")"
+fi
 bench_finished_ns=$(python3 -c 'import time; print(time.monotonic_ns())')
 
 python3 - "$out_dir/shape.json" "$out_dir/report.json" "$out_dir/usage.json" \
   "$recipe" "$timings_file" "$events_file" "$bench_started_ns" "$bench_finished_ns" \
   "$builder_model" "$builder_effort" "$shape_model" "$shape_effort" "$shape_wall_ms" \
-  "$slug" "$intent_source" <<'PY'
+  "$slug" "$intent_source" "$landed" <<'PY'
 import json
 import os
 import sys
 
-shape_path, report_path, output_path, recipe, timing_input, events_output, started_ns, finished_ns, builder_model, builder_effort, shape_model, shape_effort, shape_wall_ms, slug, intent_source = sys.argv[1:]
+shape_path, report_path, output_path, recipe, timing_input, events_output, started_ns, finished_ns, builder_model, builder_effort, shape_model, shape_effort, shape_wall_ms, slug, intent_source, landed = sys.argv[1:]
+landed = landed == "true"
 started_ns = int(started_ns)
 finished_ns = int(finished_ns)
 shape_wall_ms = int(shape_wall_ms)
@@ -996,6 +1037,9 @@ result = {
     "slug": shape.get("slug") or slug,
     "run_status": "complete",
     "status": report.get("status"),
+    "landed": landed,
+    "best_candidate": not landed,
+    "best_candidate_detail": None if landed else report.get("best_candidate"),
     "roles": report.get("roles", {}),
     "builder": {"model": builder_model, "effort": builder_effort},
     "shape": {"model": shape_model, "effort": shape_effort, "wall_ms": shape_wall_ms},

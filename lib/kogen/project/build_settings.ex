@@ -3,12 +3,14 @@ defmodule Kogen.Project.BuildSettings do
 
   alias Kogen.Contracts.Yaml
 
-  @recipes ~w(staged plan-shell direct direct-shell direct-escalate escalate-shell)
+  @recipes ~w(ladder ladder-luna ladder-sol-medium staged plan-shell direct) ++
+             ~w(direct-shell direct-escalate escalate-shell)
   @roles %{
     "builder" => :builder,
     "planner" => :planner,
     "reviewer" => :reviewer,
     "context" => :context,
+    "auditor" => :auditor,
     "shaper" => :shaper
   }
 
@@ -16,11 +18,15 @@ defmodule Kogen.Project.BuildSettings do
   def parse(nil), do: {:ok, nil}
 
   def parse(value) when is_map(value) do
-    unknown = unknown_keys(value, ~w(recipe roles), "build")
+    unknown = unknown_keys(value, ~w(recipe roles wall_minutes), "build")
     {recipe, recipe_errors} = recipe(value)
     {roles, role_errors} = roles(value)
-    errors = unknown ++ recipe_errors ++ role_errors
-    if errors == [], do: {:ok, %{recipe: recipe, roles: roles}}, else: {:error, errors}
+    {wall_minutes, wall_errors} = wall_minutes(value)
+    errors = unknown ++ recipe_errors ++ role_errors ++ wall_errors
+
+    if errors == [],
+      do: {:ok, %{recipe: recipe, roles: roles, wall_minutes: wall_minutes}},
+      else: {:error, errors}
   end
 
   def parse(_value), do: error("`build` must be a map")
@@ -36,7 +42,11 @@ defmodule Kogen.Project.BuildSettings do
     end
   end
 
-  @spec effective(map() | nil, map() | nil) :: %{recipe: String.t(), roles: map()}
+  @spec effective(map() | nil, map() | nil) :: %{
+          recipe: String.t(),
+          roles: map(),
+          wall_minutes: pos_integer() | nil
+        }
   def effective(machine, project) do
     machine = machine || %{}
     project = project || %{}
@@ -49,8 +59,9 @@ defmodule Kogen.Project.BuildSettings do
       end)
 
     %{
-      recipe: Map.get(project, :recipe) || Map.get(machine, :recipe) || "plan-shell",
-      roles: roles
+      recipe: Map.get(project, :recipe) || Map.get(machine, :recipe) || "ladder",
+      roles: roles,
+      wall_minutes: Map.get(project, :wall_minutes) || Map.get(machine, :wall_minutes)
     }
   end
 
@@ -85,6 +96,19 @@ defmodule Kogen.Project.BuildSettings do
              "build.recipe must be one of #{Enum.join(@recipes, ", ")}; got #{inspect(recipe)}"
            )
          ]}
+
+      :error ->
+        {nil, []}
+    end
+  end
+
+  defp wall_minutes(value) do
+    case Map.fetch(value, "wall_minutes") do
+      {:ok, minutes} when is_integer(minutes) and minutes > 0 ->
+        {minutes, []}
+
+      {:ok, minutes} ->
+        {nil, [issue("build.wall_minutes must be a positive integer; got #{inspect(minutes)}")]}
 
       :error ->
         {nil, []}

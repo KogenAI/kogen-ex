@@ -34,7 +34,8 @@ Build settings belong in `.kogen/project.yaml`:
 ```yaml
 base: main
 build:
-  recipe: plan-shell
+  recipe: ladder        # the default; also ladder-luna, ladder-sol-medium, plan-shell, ...
+  wall_minutes: 60      # a ladder's whole-Build budget
   roles:
     builder:
       model: gpt-6-luna
@@ -43,6 +44,8 @@ build:
       model: gpt-6.1-sol
       effort: high
 ```
+
+The `ladder` recipe plans once, then builds on fresh Candidates rung by rung (configured builder, Sol medium, Sol high, then a raw-request attempt) until one is green, repairing while failures fall. A hard plan runs the first two rungs in parallel. A test auditor can demote an acceptance test that is over-strict or contradicts the Request. When no rung is green, the best Candidate is pushed to `kogen/<slug>` and status shows `needs attention: kogen/<slug>`.
 
 When `base` is omitted, Kogen uses the origin HEAD branch recorded locally, then the checkout's current branch. Optional machine defaults live in `~/.kogen/config.yaml`; project settings override them.
 
@@ -71,6 +74,8 @@ When `base` is omitted, Kogen uses the origin HEAD branch recorded locally, then
 | Checks | Deterministic verification and check results | Contracts, Proc, Workspace, Project |
 | Tooling | Builder tool schemas, confined file access, edits, search, writes, and shell commands | Contracts, Proc |
 | Harness | Provider-backed Developer orchestration and stage coordination | Checks, Contracts, Proc, Provider, Project, Tooling |
+| Engine | Single-Candidate Build stages, checks, commit, landing and cleanup | Build, Checks, Contracts, Harness, Intent, Proc, Project, Provider, State, Workspace |
+| Runner | Drives the Build Cycle across Candidates: ladder rungs, parallel members, test auditor | Build, Checks, Contracts, Engine, Harness, State |
 | Queue | Intent states, the serial drain and its lock, automatic crash recovery, Build reports | Proc, State, Workspace |
 | CLI | Command parsing and static help (pure) | — |
 | Kernel | Command execution and cross-domain coordination | Every domain above |
