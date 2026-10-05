@@ -138,6 +138,22 @@ defmodule Kogen.Proc.SandboxTest do
                )
 
       assert File.read!(Path.join(run_dir, "run-output.log")) == "allowed"
+
+      shared_tmp_file =
+        Path.join("/tmp", "kogen-sandbox-#{System.unique_integer([:positive])}.txt")
+
+      try do
+        assert {:ok, %ProcResult{exit_status: 0, timed_out: false}} =
+                 Proc.run(["/bin/sh", "-c", "printf allowed > \"$SHARED_TMP_FILE\""],
+                   cd: workspace,
+                   env: Map.put(env, "SHARED_TMP_FILE", shared_tmp_file),
+                   sandbox: sandbox
+                 )
+
+        assert File.read!(shared_tmp_file) == "allowed"
+      after
+        File.rm(shared_tmp_file)
+      end
     else
       assert Sandbox.command(["/bin/true"], sandbox) == {:ok, ["/bin/true"]}
     end

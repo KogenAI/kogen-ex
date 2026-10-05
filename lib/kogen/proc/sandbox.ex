@@ -76,11 +76,15 @@ defmodule Kogen.Proc.Sandbox do
 
   defp writable_paths(sandbox, home) do
     paths =
-      [sandbox.workspace, sandbox.run_dir, sandbox.tmp_dir] ++
+      [sandbox.workspace, sandbox.run_dir, sandbox.tmp_dir, shared_tmp()] ++
         cache_paths(home)
 
     canonical_paths(paths)
   end
+
+  # Test suites write fixed paths under /tmp (screenshots, sockets); the project and
+  # origin stay denied because their deny rules follow the allows.
+  defp shared_tmp, do: "/tmp"
 
   defp canonical_paths(paths) do
     paths
