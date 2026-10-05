@@ -9,7 +9,11 @@ defmodule Kogen.Quality.Process do
     remaining = request.deadline - System.monotonic_time(:millisecond)
 
     log =
-      Path.join([request.run_dir, "logs", "quality-#{System.unique_integer([:positive])}.log"])
+      Path.join([
+        request.run_dir,
+        "logs",
+        "quality-#{System.pid()}-#{System.unique_integer([:positive])}.log"
+      ])
 
     if remaining > 0 do
       execute(request, argv, directory, remaining, log)

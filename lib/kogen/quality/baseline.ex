@@ -4,7 +4,12 @@ defmodule Kogen.Quality.Baseline do
 
   @spec extract(struct()) :: {:ok, struct()} | {:error, term()}
   def extract(request) do
-    directory = Path.join(request.run_dir, "quality-base-#{System.unique_integer([:positive])}")
+    directory =
+      Path.join(
+        request.run_dir,
+        "quality-base-#{System.pid()}-#{System.unique_integer([:positive])}"
+      )
+
     archive = directory <> ".tar"
 
     with :ok <- File.mkdir_p(directory),

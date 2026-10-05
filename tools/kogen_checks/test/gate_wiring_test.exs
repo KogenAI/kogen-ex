@@ -3,6 +3,8 @@ defmodule KogenChecks.GateWiringTest do
 
   @credo_path Path.expand("../../../.credo.exs", __DIR__)
   @required_checks %{
+    KogenChecks.Check.MissingExternalResource => [blocking: true],
+    KogenChecks.Check.RepeatedMapShape => [],
     KogenChecks.Check.BroadRescue => [],
     KogenChecks.Check.CtxBag => [
       banned_names: [:ctx, :context],

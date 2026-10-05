@@ -7,7 +7,8 @@ defmodule KogenChecks.MixProject do
       version: "0.1.0",
       elixir: "~> 1.20",
       deps: deps(),
-      elixirc_paths: ["lib"]
+      elixirc_paths: ["lib"],
+      test_ignore_filters: [~r"/support/"]
     ]
   end
 

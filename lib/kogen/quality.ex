@@ -1,16 +1,20 @@
 defmodule Kogen.Quality do
-  @moduledoc "Optional Elixir quality advice scoped to a Build's base."
-  use Boundary, deps: [Kogen.Contracts, Kogen.Proc, Kogen.Workspace], exports: [Request]
+  @moduledoc "Deterministic Elixir gate checks and optional advice scoped to a Build's base."
+  use Boundary,
+    deps: [Kogen.Contracts, Kogen.Proc, Kogen.Workspace],
+    exports: [Request, Source.ExternalResource, Source.MapShapes]
 
   alias Kogen.Quality.Analysis
   alias Kogen.Quality.Request
+  alias Kogen.Quality.Source
 
   @spec commands(Request.t()) :: [map()]
-  def commands(%Request{base: nil}), do: []
-  def commands(%Request{} = request), do: Analysis.run(request)
+  def commands(%Request{base: nil} = request), do: Source.run(request)
+  def commands(%Request{} = request), do: Source.run(request) ++ Analysis.run(request)
 
   @spec augment(tuple(), Path.t(), Path.t(), map(), map() | struct() | nil) :: tuple()
-  def augment({:ok, result}, workdir, run_dir, env, options) when is_map(options) do
+  def augment({:ok, result}, workdir, run_dir, env, options) do
+    options = if is_map(options), do: options, else: %{}
     commands = commands(Request.new(workdir, run_dir, env, options))
     checks = result.checks ++ commands
     errors = Enum.filter(commands, &(&1.exit_level > 0))

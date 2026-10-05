@@ -1,0 +1,1033 @@
+[
+  {
+    "project": "kogen",
+    "cases": [
+      {
+        "name": "attribute_bang",
+        "file": "lib/t79_precision/positive_attribute_bang.ex",
+        "kind": "positive",
+        "findings": [
+          {
+            "line": 2,
+            "message": "Declare @external_resource for input.txt so file edits recompile this module.",
+            "path": "lib/t79_precision/positive_attribute_bang.ex",
+            "symbol": null,
+            "severity": "error",
+            "tool": "kogen_checks",
+            "col": 1,
+            "rule": "MissingExternalResource"
+          }
+        ]
+      },
+      {
+        "name": "attribute_read",
+        "file": "lib/t79_precision/positive_attribute_read.ex",
+        "kind": "positive",
+        "findings": [
+          {
+            "line": 2,
+            "message": "Declare @external_resource for input.txt so file edits recompile this module.",
+            "path": "lib/t79_precision/positive_attribute_read.ex",
+            "symbol": null,
+            "severity": "error",
+            "tool": "kogen_checks",
+            "col": 1,
+            "rule": "MissingExternalResource"
+          }
+        ]
+      },
+      {
+        "name": "attribute_stream",
+        "file": "lib/t79_precision/positive_attribute_stream.ex",
+        "kind": "positive",
+        "findings": [
+          {
+            "line": 2,
+            "message": "Declare @external_resource for input.txt so file edits recompile this module.",
+            "path": "lib/t79_precision/positive_attribute_stream.ex",
+            "symbol": null,
+            "severity": "error",
+            "tool": "kogen_checks",
+            "col": 1,
+            "rule": "MissingExternalResource"
+          }
+        ]
+      },
+      {
+        "name": "body_bang",
+        "file": "lib/t79_precision/positive_body_bang.ex",
+        "kind": "positive",
+        "findings": [
+          {
+            "line": 2,
+            "message": "Declare @external_resource for input.txt so file edits recompile this module.",
+            "path": "lib/t79_precision/positive_body_bang.ex",
+            "symbol": null,
+            "severity": "error",
+            "tool": "kogen_checks",
+            "col": 1,
+            "rule": "MissingExternalResource"
+          }
+        ]
+      },
+      {
+        "name": "body_read",
+        "file": "lib/t79_precision/positive_body_read.ex",
+        "kind": "positive",
+        "findings": [
+          {
+            "line": 2,
+            "message": "Declare @external_resource for input.txt so file edits recompile this module.",
+            "path": "lib/t79_precision/positive_body_read.ex",
+            "symbol": null,
+            "severity": "error",
+            "tool": "kogen_checks",
+            "col": 1,
+            "rule": "MissingExternalResource"
+          }
+        ]
+      },
+      {
+        "name": "body_stream",
+        "file": "lib/t79_precision/positive_body_stream.ex",
+        "kind": "positive",
+        "findings": [
+          {
+            "line": 2,
+            "message": "Declare @external_resource for input.txt so file edits recompile this module.",
+            "path": "lib/t79_precision/positive_body_stream.ex",
+            "symbol": null,
+            "severity": "error",
+            "tool": "kogen_checks",
+            "col": 1,
+            "rule": "MissingExternalResource"
+          }
+        ]
+      },
+      {
+        "name": "pipeline",
+        "file": "lib/t79_precision/positive_pipeline.ex",
+        "kind": "positive",
+        "findings": [
+          {
+            "line": 2,
+            "message": "Declare @external_resource for input.txt so file edits recompile this module.",
+            "path": "lib/t79_precision/positive_pipeline.ex",
+            "symbol": null,
+            "severity": "error",
+            "tool": "kogen_checks",
+            "col": 1,
+            "rule": "MissingExternalResource"
+          }
+        ]
+      },
+      {
+        "name": "joined",
+        "file": "lib/t79_precision/positive_joined.ex",
+        "kind": "positive",
+        "findings": [
+          {
+            "line": 2,
+            "message": "Declare @external_resource for lib/t79_precision/input.txt so file edits recompile this module.",
+            "path": "lib/t79_precision/positive_joined.ex",
+            "symbol": null,
+            "severity": "error",
+            "tool": "kogen_checks",
+            "col": 1,
+            "rule": "MissingExternalResource"
+          }
+        ]
+      },
+      {
+        "name": "expanded",
+        "file": "lib/t79_precision/positive_expanded.ex",
+        "kind": "positive",
+        "findings": [
+          {
+            "line": 2,
+            "message": "Declare @external_resource for lib/t79_precision/input.txt so file edits recompile this module.",
+            "path": "lib/t79_precision/positive_expanded.ex",
+            "symbol": null,
+            "severity": "error",
+            "tool": "kogen_checks",
+            "col": 1,
+            "rule": "MissingExternalResource"
+          }
+        ]
+      },
+      {
+        "name": "attribute_path",
+        "file": "lib/t79_precision/positive_attribute_path.ex",
+        "kind": "positive",
+        "findings": [
+          {
+            "line": 3,
+            "message": "Declare @external_resource for input.txt so file edits recompile this module.",
+            "path": "lib/t79_precision/positive_attribute_path.ex",
+            "symbol": null,
+            "severity": "error",
+            "tool": "kogen_checks",
+            "col": 1,
+            "rule": "MissingExternalResource"
+          }
+        ]
+      },
+      {
+        "name": "variable_path",
+        "file": "lib/t79_precision/positive_variable_path.ex",
+        "kind": "positive",
+        "findings": [
+          {
+            "line": 3,
+            "message": "Declare @external_resource for input.txt so file edits recompile this module.",
+            "path": "lib/t79_precision/positive_variable_path.ex",
+            "symbol": null,
+            "severity": "error",
+            "tool": "kogen_checks",
+            "col": 1,
+            "rule": "MissingExternalResource"
+          }
+        ]
+      },
+      {
+        "name": "alias",
+        "file": "lib/t79_precision/positive_alias.ex",
+        "kind": "positive",
+        "findings": [
+          {
+            "line": 3,
+            "message": "Declare @external_resource for input.txt so file edits recompile this module.",
+            "path": "lib/t79_precision/positive_alias.ex",
+            "symbol": null,
+            "severity": "error",
+            "tool": "kogen_checks",
+            "col": 1,
+            "rule": "MissingExternalResource"
+          }
+        ]
+      },
+      {
+        "name": "import",
+        "file": "lib/t79_precision/positive_import.ex",
+        "kind": "positive",
+        "findings": [
+          {
+            "line": 3,
+            "message": "Declare @external_resource for input.txt so file edits recompile this module.",
+            "path": "lib/t79_precision/positive_import.ex",
+            "symbol": null,
+            "severity": "error",
+            "tool": "kogen_checks",
+            "col": 1,
+            "rule": "MissingExternalResource"
+          }
+        ]
+      },
+      {
+        "name": "unrelated_resource",
+        "file": "lib/t79_precision/positive_unrelated_resource.ex",
+        "kind": "positive",
+        "findings": [
+          {
+            "line": 3,
+            "message": "Declare @external_resource for input.txt so file edits recompile this module.",
+            "path": "lib/t79_precision/positive_unrelated_resource.ex",
+            "symbol": null,
+            "severity": "error",
+            "tool": "kogen_checks",
+            "col": 1,
+            "rule": "MissingExternalResource"
+          }
+        ]
+      },
+      {
+        "name": "sibling_module",
+        "file": "lib/t79_precision/positive_sibling_module.ex",
+        "kind": "positive",
+        "findings": [
+          {
+            "line": 6,
+            "message": "Declare @external_resource for input.txt so file edits recompile this module.",
+            "path": "lib/t79_precision/positive_sibling_module.ex",
+            "symbol": null,
+            "severity": "error",
+            "tool": "kogen_checks",
+            "col": 1,
+            "rule": "MissingExternalResource"
+          }
+        ]
+      },
+      {
+        "name": "joined_attributes",
+        "file": "lib/t79_precision/positive_joined_attributes.ex",
+        "kind": "positive",
+        "findings": [
+          {
+            "line": 4,
+            "message": "Declare @external_resource for lib/t79_precision/priv/input.txt so file edits recompile this module.",
+            "path": "lib/t79_precision/positive_joined_attributes.ex",
+            "symbol": null,
+            "severity": "error",
+            "tool": "kogen_checks",
+            "col": 1,
+            "rule": "MissingExternalResource"
+          }
+        ]
+      },
+      {
+        "name": "path_alias",
+        "file": "lib/t79_precision/positive_path_alias.ex",
+        "kind": "positive",
+        "findings": [
+          {
+            "line": 3,
+            "message": "Declare @external_resource for lib/t79_precision/input.txt so file edits recompile this module.",
+            "path": "lib/t79_precision/positive_path_alias.ex",
+            "symbol": null,
+            "severity": "error",
+            "tool": "kogen_checks",
+            "col": 1,
+            "rule": "MissingExternalResource"
+          }
+        ]
+      },
+      {
+        "name": "template",
+        "file": "lib/t79_precision/positive_template.ex",
+        "kind": "positive",
+        "findings": [
+          {
+            "line": 2,
+            "message": "Declare @external_resource for template.eex so file edits recompile this module.",
+            "path": "lib/t79_precision/positive_template.ex",
+            "symbol": null,
+            "severity": "error",
+            "tool": "kogen_checks",
+            "col": 1,
+            "rule": "MissingExternalResource"
+          }
+        ]
+      },
+      {
+        "name": "open_read",
+        "file": "lib/t79_precision/positive_open_read.ex",
+        "kind": "positive",
+        "findings": [
+          {
+            "line": 2,
+            "message": "Declare @external_resource for input.txt so file edits recompile this module.",
+            "path": "lib/t79_precision/positive_open_read.ex",
+            "symbol": null,
+            "severity": "error",
+            "tool": "kogen_checks",
+            "col": 1,
+            "rule": "MissingExternalResource"
+          }
+        ]
+      },
+      {
+        "name": "executed_callback",
+        "file": "lib/t79_precision/positive_executed_callback.ex",
+        "kind": "positive",
+        "findings": [
+          {
+            "line": 2,
+            "message": "Declare @external_resource for input.txt so file edits recompile this module.",
+            "path": "lib/t79_precision/positive_executed_callback.ex",
+            "symbol": null,
+            "severity": "error",
+            "tool": "kogen_checks",
+            "col": 1,
+            "rule": "MissingExternalResource"
+          }
+        ]
+      },
+      {
+        "name": "compile_branch",
+        "file": "lib/t79_precision/positive_compile_branch.ex",
+        "kind": "positive",
+        "findings": [
+          {
+            "line": 3,
+            "message": "Declare @external_resource for input.txt so file edits recompile this module.",
+            "path": "lib/t79_precision/positive_compile_branch.ex",
+            "symbol": null,
+            "severity": "error",
+            "tool": "kogen_checks",
+            "col": 1,
+            "rule": "MissingExternalResource"
+          }
+        ]
+      },
+      {
+        "name": "runtime_def",
+        "file": "lib/t79_precision/negative_runtime_def.ex",
+        "kind": "negative",
+        "findings": []
+      },
+      {
+        "name": "runtime_private",
+        "file": "lib/t79_precision/negative_runtime_private.ex",
+        "kind": "negative",
+        "findings": []
+      },
+      {
+        "name": "unused_macro",
+        "file": "lib/t79_precision/negative_unused_macro.ex",
+        "kind": "negative",
+        "findings": []
+      },
+      {
+        "name": "closure",
+        "file": "lib/t79_precision/negative_closure.ex",
+        "kind": "negative",
+        "findings": []
+      },
+      {
+        "name": "quoted",
+        "file": "lib/t79_precision/negative_quoted.ex",
+        "kind": "negative",
+        "findings": []
+      },
+      {
+        "name": "capture",
+        "file": "lib/t79_precision/negative_capture.ex",
+        "kind": "negative",
+        "findings": []
+      },
+      {
+        "name": "string",
+        "file": "lib/t79_precision/negative_string.ex",
+        "kind": "negative",
+        "findings": []
+      },
+      {
+        "name": "declared_before",
+        "file": "lib/t79_precision/negative_declared_before.ex",
+        "kind": "negative",
+        "findings": []
+      },
+      {
+        "name": "declared_after",
+        "file": "lib/t79_precision/negative_declared_after.ex",
+        "kind": "negative",
+        "findings": []
+      },
+      {
+        "name": "declared_attribute",
+        "file": "lib/t79_precision/negative_declared_attribute.ex",
+        "kind": "negative",
+        "findings": []
+      },
+      {
+        "name": "declared_variable",
+        "file": "lib/t79_precision/negative_declared_variable.ex",
+        "kind": "negative",
+        "findings": []
+      },
+      {
+        "name": "shadow_alias",
+        "file": "lib/t79_precision/negative_shadow_alias.ex",
+        "kind": "negative",
+        "findings": []
+      },
+      {
+        "name": "runtime_test",
+        "file": "lib/t79_precision/negative_runtime_test.ex",
+        "kind": "negative",
+        "findings": []
+      },
+      {
+        "name": "runtime_setup",
+        "file": "lib/t79_precision/negative_runtime_setup.ex",
+        "kind": "negative",
+        "findings": []
+      },
+      {
+        "name": "declared_normalized",
+        "file": "lib/t79_precision/negative_declared_normalized.ex",
+        "kind": "negative",
+        "findings": []
+      },
+      {
+        "name": "declared_stream",
+        "file": "lib/t79_precision/negative_declared_stream.ex",
+        "kind": "negative",
+        "findings": []
+      },
+      {
+        "name": "declared_import",
+        "file": "lib/t79_precision/negative_declared_import.ex",
+        "kind": "negative",
+        "findings": []
+      },
+      {
+        "name": "declared_alias",
+        "file": "lib/t79_precision/negative_declared_alias.ex",
+        "kind": "negative",
+        "findings": []
+      },
+      {
+        "name": "symbolic_resource",
+        "file": "lib/t79_precision/negative_symbolic_resource.ex",
+        "kind": "negative",
+        "findings": []
+      },
+      {
+        "name": "inactive_branch",
+        "file": "lib/t79_precision/negative_inactive_branch.ex",
+        "kind": "negative",
+        "findings": []
+      },
+      {
+        "name": "nil_branch",
+        "file": "lib/t79_precision/negative_nil_branch.ex",
+        "kind": "negative",
+        "findings": []
+      },
+      {
+        "name": "excluded_import",
+        "file": "lib/t79_precision/negative_excluded_import.ex",
+        "kind": "negative",
+        "findings": []
+      },
+      {
+        "name": "write_only",
+        "file": "lib/t79_precision/negative_write_only.ex",
+        "kind": "negative",
+        "findings": []
+      }
+    ],
+    "natural_source_files": 408,
+    "natural_findings": [],
+    "natural_true_positives": 0,
+    "natural_false_positives": 0,
+    "natural_fix_clears_finding": null,
+    "controlled_true_positives": 21,
+    "controlled_false_positives": 0,
+    "controlled_negatives": 23,
+    "controlled_precision": 1.0,
+    "combined_precision": 1.0
+  },
+  {
+    "project": "campfire",
+    "cases": [
+      {
+        "name": "attribute_bang",
+        "file": "lib/t79_precision/positive_attribute_bang.ex",
+        "kind": "positive",
+        "findings": [
+          {
+            "line": 2,
+            "message": "Declare @external_resource for input.txt so file edits recompile this module.",
+            "path": "lib/t79_precision/positive_attribute_bang.ex",
+            "symbol": null,
+            "severity": "error",
+            "tool": "kogen_checks",
+            "col": 1,
+            "rule": "MissingExternalResource"
+          }
+        ]
+      },
+      {
+        "name": "attribute_read",
+        "file": "lib/t79_precision/positive_attribute_read.ex",
+        "kind": "positive",
+        "findings": [
+          {
+            "line": 2,
+            "message": "Declare @external_resource for input.txt so file edits recompile this module.",
+            "path": "lib/t79_precision/positive_attribute_read.ex",
+            "symbol": null,
+            "severity": "error",
+            "tool": "kogen_checks",
+            "col": 1,
+            "rule": "MissingExternalResource"
+          }
+        ]
+      },
+      {
+        "name": "attribute_stream",
+        "file": "lib/t79_precision/positive_attribute_stream.ex",
+        "kind": "positive",
+        "findings": [
+          {
+            "line": 2,
+            "message": "Declare @external_resource for input.txt so file edits recompile this module.",
+            "path": "lib/t79_precision/positive_attribute_stream.ex",
+            "symbol": null,
+            "severity": "error",
+            "tool": "kogen_checks",
+            "col": 1,
+            "rule": "MissingExternalResource"
+          }
+        ]
+      },
+      {
+        "name": "body_bang",
+        "file": "lib/t79_precision/positive_body_bang.ex",
+        "kind": "positive",
+        "findings": [
+          {
+            "line": 2,
+            "message": "Declare @external_resource for input.txt so file edits recompile this module.",
+            "path": "lib/t79_precision/positive_body_bang.ex",
+            "symbol": null,
+            "severity": "error",
+            "tool": "kogen_checks",
+            "col": 1,
+            "rule": "MissingExternalResource"
+          }
+        ]
+      },
+      {
+        "name": "body_read",
+        "file": "lib/t79_precision/positive_body_read.ex",
+        "kind": "positive",
+        "findings": [
+          {
+            "line": 2,
+            "message": "Declare @external_resource for input.txt so file edits recompile this module.",
+            "path": "lib/t79_precision/positive_body_read.ex",
+            "symbol": null,
+            "severity": "error",
+            "tool": "kogen_checks",
+            "col": 1,
+            "rule": "MissingExternalResource"
+          }
+        ]
+      },
+      {
+        "name": "body_stream",
+        "file": "lib/t79_precision/positive_body_stream.ex",
+        "kind": "positive",
+        "findings": [
+          {
+            "line": 2,
+            "message": "Declare @external_resource for input.txt so file edits recompile this module.",
+            "path": "lib/t79_precision/positive_body_stream.ex",
+            "symbol": null,
+            "severity": "error",
+            "tool": "kogen_checks",
+            "col": 1,
+            "rule": "MissingExternalResource"
+          }
+        ]
+      },
+      {
+        "name": "pipeline",
+        "file": "lib/t79_precision/positive_pipeline.ex",
+        "kind": "positive",
+        "findings": [
+          {
+            "line": 2,
+            "message": "Declare @external_resource for input.txt so file edits recompile this module.",
+            "path": "lib/t79_precision/positive_pipeline.ex",
+            "symbol": null,
+            "severity": "error",
+            "tool": "kogen_checks",
+            "col": 1,
+            "rule": "MissingExternalResource"
+          }
+        ]
+      },
+      {
+        "name": "joined",
+        "file": "lib/t79_precision/positive_joined.ex",
+        "kind": "positive",
+        "findings": [
+          {
+            "line": 2,
+            "message": "Declare @external_resource for lib/t79_precision/input.txt so file edits recompile this module.",
+            "path": "lib/t79_precision/positive_joined.ex",
+            "symbol": null,
+            "severity": "error",
+            "tool": "kogen_checks",
+            "col": 1,
+            "rule": "MissingExternalResource"
+          }
+        ]
+      },
+      {
+        "name": "expanded",
+        "file": "lib/t79_precision/positive_expanded.ex",
+        "kind": "positive",
+        "findings": [
+          {
+            "line": 2,
+            "message": "Declare @external_resource for lib/t79_precision/input.txt so file edits recompile this module.",
+            "path": "lib/t79_precision/positive_expanded.ex",
+            "symbol": null,
+            "severity": "error",
+            "tool": "kogen_checks",
+            "col": 1,
+            "rule": "MissingExternalResource"
+          }
+        ]
+      },
+      {
+        "name": "attribute_path",
+        "file": "lib/t79_precision/positive_attribute_path.ex",
+        "kind": "positive",
+        "findings": [
+          {
+            "line": 3,
+            "message": "Declare @external_resource for input.txt so file edits recompile this module.",
+            "path": "lib/t79_precision/positive_attribute_path.ex",
+            "symbol": null,
+            "severity": "error",
+            "tool": "kogen_checks",
+            "col": 1,
+            "rule": "MissingExternalResource"
+          }
+        ]
+      },
+      {
+        "name": "variable_path",
+        "file": "lib/t79_precision/positive_variable_path.ex",
+        "kind": "positive",
+        "findings": [
+          {
+            "line": 3,
+            "message": "Declare @external_resource for input.txt so file edits recompile this module.",
+            "path": "lib/t79_precision/positive_variable_path.ex",
+            "symbol": null,
+            "severity": "error",
+            "tool": "kogen_checks",
+            "col": 1,
+            "rule": "MissingExternalResource"
+          }
+        ]
+      },
+      {
+        "name": "alias",
+        "file": "lib/t79_precision/positive_alias.ex",
+        "kind": "positive",
+        "findings": [
+          {
+            "line": 3,
+            "message": "Declare @external_resource for input.txt so file edits recompile this module.",
+            "path": "lib/t79_precision/positive_alias.ex",
+            "symbol": null,
+            "severity": "error",
+            "tool": "kogen_checks",
+            "col": 1,
+            "rule": "MissingExternalResource"
+          }
+        ]
+      },
+      {
+        "name": "import",
+        "file": "lib/t79_precision/positive_import.ex",
+        "kind": "positive",
+        "findings": [
+          {
+            "line": 3,
+            "message": "Declare @external_resource for input.txt so file edits recompile this module.",
+            "path": "lib/t79_precision/positive_import.ex",
+            "symbol": null,
+            "severity": "error",
+            "tool": "kogen_checks",
+            "col": 1,
+            "rule": "MissingExternalResource"
+          }
+        ]
+      },
+      {
+        "name": "unrelated_resource",
+        "file": "lib/t79_precision/positive_unrelated_resource.ex",
+        "kind": "positive",
+        "findings": [
+          {
+            "line": 3,
+            "message": "Declare @external_resource for input.txt so file edits recompile this module.",
+            "path": "lib/t79_precision/positive_unrelated_resource.ex",
+            "symbol": null,
+            "severity": "error",
+            "tool": "kogen_checks",
+            "col": 1,
+            "rule": "MissingExternalResource"
+          }
+        ]
+      },
+      {
+        "name": "sibling_module",
+        "file": "lib/t79_precision/positive_sibling_module.ex",
+        "kind": "positive",
+        "findings": [
+          {
+            "line": 6,
+            "message": "Declare @external_resource for input.txt so file edits recompile this module.",
+            "path": "lib/t79_precision/positive_sibling_module.ex",
+            "symbol": null,
+            "severity": "error",
+            "tool": "kogen_checks",
+            "col": 1,
+            "rule": "MissingExternalResource"
+          }
+        ]
+      },
+      {
+        "name": "joined_attributes",
+        "file": "lib/t79_precision/positive_joined_attributes.ex",
+        "kind": "positive",
+        "findings": [
+          {
+            "line": 4,
+            "message": "Declare @external_resource for lib/t79_precision/priv/input.txt so file edits recompile this module.",
+            "path": "lib/t79_precision/positive_joined_attributes.ex",
+            "symbol": null,
+            "severity": "error",
+            "tool": "kogen_checks",
+            "col": 1,
+            "rule": "MissingExternalResource"
+          }
+        ]
+      },
+      {
+        "name": "path_alias",
+        "file": "lib/t79_precision/positive_path_alias.ex",
+        "kind": "positive",
+        "findings": [
+          {
+            "line": 3,
+            "message": "Declare @external_resource for lib/t79_precision/input.txt so file edits recompile this module.",
+            "path": "lib/t79_precision/positive_path_alias.ex",
+            "symbol": null,
+            "severity": "error",
+            "tool": "kogen_checks",
+            "col": 1,
+            "rule": "MissingExternalResource"
+          }
+        ]
+      },
+      {
+        "name": "template",
+        "file": "lib/t79_precision/positive_template.ex",
+        "kind": "positive",
+        "findings": [
+          {
+            "line": 2,
+            "message": "Declare @external_resource for template.eex so file edits recompile this module.",
+            "path": "lib/t79_precision/positive_template.ex",
+            "symbol": null,
+            "severity": "error",
+            "tool": "kogen_checks",
+            "col": 1,
+            "rule": "MissingExternalResource"
+          }
+        ]
+      },
+      {
+        "name": "open_read",
+        "file": "lib/t79_precision/positive_open_read.ex",
+        "kind": "positive",
+        "findings": [
+          {
+            "line": 2,
+            "message": "Declare @external_resource for input.txt so file edits recompile this module.",
+            "path": "lib/t79_precision/positive_open_read.ex",
+            "symbol": null,
+            "severity": "error",
+            "tool": "kogen_checks",
+            "col": 1,
+            "rule": "MissingExternalResource"
+          }
+        ]
+      },
+      {
+        "name": "executed_callback",
+        "file": "lib/t79_precision/positive_executed_callback.ex",
+        "kind": "positive",
+        "findings": [
+          {
+            "line": 2,
+            "message": "Declare @external_resource for input.txt so file edits recompile this module.",
+            "path": "lib/t79_precision/positive_executed_callback.ex",
+            "symbol": null,
+            "severity": "error",
+            "tool": "kogen_checks",
+            "col": 1,
+            "rule": "MissingExternalResource"
+          }
+        ]
+      },
+      {
+        "name": "compile_branch",
+        "file": "lib/t79_precision/positive_compile_branch.ex",
+        "kind": "positive",
+        "findings": [
+          {
+            "line": 3,
+            "message": "Declare @external_resource for input.txt so file edits recompile this module.",
+            "path": "lib/t79_precision/positive_compile_branch.ex",
+            "symbol": null,
+            "severity": "error",
+            "tool": "kogen_checks",
+            "col": 1,
+            "rule": "MissingExternalResource"
+          }
+        ]
+      },
+      {
+        "name": "runtime_def",
+        "file": "lib/t79_precision/negative_runtime_def.ex",
+        "kind": "negative",
+        "findings": []
+      },
+      {
+        "name": "runtime_private",
+        "file": "lib/t79_precision/negative_runtime_private.ex",
+        "kind": "negative",
+        "findings": []
+      },
+      {
+        "name": "unused_macro",
+        "file": "lib/t79_precision/negative_unused_macro.ex",
+        "kind": "negative",
+        "findings": []
+      },
+      {
+        "name": "closure",
+        "file": "lib/t79_precision/negative_closure.ex",
+        "kind": "negative",
+        "findings": []
+      },
+      {
+        "name": "quoted",
+        "file": "lib/t79_precision/negative_quoted.ex",
+        "kind": "negative",
+        "findings": []
+      },
+      {
+        "name": "capture",
+        "file": "lib/t79_precision/negative_capture.ex",
+        "kind": "negative",
+        "findings": []
+      },
+      {
+        "name": "string",
+        "file": "lib/t79_precision/negative_string.ex",
+        "kind": "negative",
+        "findings": []
+      },
+      {
+        "name": "declared_before",
+        "file": "lib/t79_precision/negative_declared_before.ex",
+        "kind": "negative",
+        "findings": []
+      },
+      {
+        "name": "declared_after",
+        "file": "lib/t79_precision/negative_declared_after.ex",
+        "kind": "negative",
+        "findings": []
+      },
+      {
+        "name": "declared_attribute",
+        "file": "lib/t79_precision/negative_declared_attribute.ex",
+        "kind": "negative",
+        "findings": []
+      },
+      {
+        "name": "declared_variable",
+        "file": "lib/t79_precision/negative_declared_variable.ex",
+        "kind": "negative",
+        "findings": []
+      },
+      {
+        "name": "shadow_alias",
+        "file": "lib/t79_precision/negative_shadow_alias.ex",
+        "kind": "negative",
+        "findings": []
+      },
+      {
+        "name": "runtime_test",
+        "file": "lib/t79_precision/negative_runtime_test.ex",
+        "kind": "negative",
+        "findings": []
+      },
+      {
+        "name": "runtime_setup",
+        "file": "lib/t79_precision/negative_runtime_setup.ex",
+        "kind": "negative",
+        "findings": []
+      },
+      {
+        "name": "declared_normalized",
+        "file": "lib/t79_precision/negative_declared_normalized.ex",
+        "kind": "negative",
+        "findings": []
+      },
+      {
+        "name": "declared_stream",
+        "file": "lib/t79_precision/negative_declared_stream.ex",
+        "kind": "negative",
+        "findings": []
+      },
+      {
+        "name": "declared_import",
+        "file": "lib/t79_precision/negative_declared_import.ex",
+        "kind": "negative",
+        "findings": []
+      },
+      {
+        "name": "declared_alias",
+        "file": "lib/t79_precision/negative_declared_alias.ex",
+        "kind": "negative",
+        "findings": []
+      },
+      {
+        "name": "symbolic_resource",
+        "file": "lib/t79_precision/negative_symbolic_resource.ex",
+        "kind": "negative",
+        "findings": []
+      },
+      {
+        "name": "inactive_branch",
+        "file": "lib/t79_precision/negative_inactive_branch.ex",
+        "kind": "negative",
+        "findings": []
+      },
+      {
+        "name": "nil_branch",
+        "file": "lib/t79_precision/negative_nil_branch.ex",
+        "kind": "negative",
+        "findings": []
+      },
+      {
+        "name": "excluded_import",
+        "file": "lib/t79_precision/negative_excluded_import.ex",
+        "kind": "negative",
+        "findings": []
+      },
+      {
+        "name": "write_only",
+        "file": "lib/t79_precision/negative_write_only.ex",
+        "kind": "negative",
+        "findings": []
+      }
+    ],
+    "natural_source_files": 62,
+    "natural_findings": [
+      {
+        "line": 4,
+        "message": "Declare @external_resource for test/fixtures/web_push.json so file edits recompile this module.",
+        "path": "test/hearth/web_push_test.exs",
+        "symbol": null,
+        "severity": "error",
+        "tool": "kogen_checks",
+        "col": 1,
+        "rule": "MissingExternalResource"
+      }
+    ],
+    "natural_true_positives": 1,
+    "natural_false_positives": 0,
+    "natural_fix_clears_finding": true,
+    "controlled_true_positives": 21,
+    "controlled_false_positives": 0,
+    "controlled_negatives": 23,
+    "controlled_precision": 1.0,
+    "combined_precision": 1.0
+  }
+]

@@ -244,6 +244,8 @@
              also_allowed: [Kogen.Testkit]
            ]},
           {KogenChecks.Check.DomainSize, [max_lines: 3000]},
+          {KogenChecks.Check.MissingExternalResource, [blocking: true]},
+          {KogenChecks.Check.RepeatedMapShape, []},
           {KogenChecks.Check.BroadRescue, []}
         ],
         disabled: []

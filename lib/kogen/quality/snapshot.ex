@@ -4,7 +4,8 @@ defmodule Kogen.Quality.Snapshot do
 
   @spec create(struct(), [Path.t()]) :: {:ok, Path.t()} | {:error, term()}
   def create(request, paths) do
-    directory = Path.join(request.run_dir, "quality-#{System.unique_integer([:positive])}")
+    directory =
+      Path.join(request.run_dir, "quality-#{System.pid()}-#{System.unique_integer([:positive])}")
 
     with {:ok, _} <-
            Command.run(
