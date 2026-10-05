@@ -3,7 +3,7 @@ defmodule Kogen.Runner.Ladder do
 
   # Runs ladder rungs on fresh Candidates: records each rung's time and cost, keeps every red
   # Candidate for the selector, enforces the whole-Build wall budget, and runs parallel
-  # members side by side.
+  # members side by side, cross-checking green members against each other's tests.
 
   alias Kogen.Build.Cycle
   alias Kogen.Build.Demotion
@@ -12,6 +12,7 @@ defmodule Kogen.Runner.Ladder do
   alias Kogen.Engine.Build.CandidateSnapshot
   alias Kogen.Engine.Build.Escalation
   alias Kogen.Engine.Build.Session
+  alias Kogen.Runner.CrossCheck
   alias Kogen.State
 
   @spec escalate(Session.t(), map()) ::
@@ -107,8 +108,12 @@ defmodule Kogen.Runner.Ladder do
       |> Enum.map(fn {_spec, member} -> Task.async(fn -> run_member.(member) end) end)
       |> Task.await_many(:infinity)
 
-    outcomes = Enum.zip_with(members, results, &outcome/2)
     finished = Enum.map(results, &elem(&1, 2))
+
+    {outcomes, cross_check} =
+      CrossCheck.run(session, Enum.zip(Enum.zip_with(members, results, &outcome/2), finished))
+
+    _recorded = if cross_check, do: State.record(session.run, cross_check)
 
     lines =
       Enum.flat_map(finished, fn member -> Enum.map(member.lines, &"[#{label(member)}] #{&1}") end)

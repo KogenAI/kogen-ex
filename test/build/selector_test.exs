@@ -26,6 +26,21 @@ defmodule Kogen.Build.SelectorTest do
     assert Selector.best([red(:x, %{}), red(:y, %{})]).id == :x
   end
 
+  test "cross-checked green candidates rank by others' tests passed, then warnings, then diff" do
+    candidates = [
+      green(:small, %{cross_passed: 1, gate_warnings: 0, diff_lines: 5}),
+      green(:warned, %{cross_passed: 3, gate_warnings: 2, diff_lines: 5}),
+      green(:large, %{cross_passed: 3, gate_warnings: 0, diff_lines: 90}),
+      green(:larger, %{cross_passed: 3, gate_warnings: 0, diff_lines: 95}),
+      red(:red, %{checks_green: true, failing_acceptance: 0, failing_tests: 0, diff_lines: 1})
+    ]
+
+    assert Enum.map(Selector.rank(candidates), & &1.id) ==
+             [:large, :larger, :warned, :small, :red]
+
+    assert Selector.best([green(:a, %{diff_lines: 9}), green(:b, %{diff_lines: 2})]).id == :b
+  end
+
   test "gate metrics separate acceptance-only failures from other red checks" do
     acceptance_only = gate([test_check([finding(@acceptance, "A1"), finding(@acceptance, "A2")])])
 
@@ -97,6 +112,7 @@ defmodule Kogen.Build.SelectorTest do
   end
 
   defp red(id, metrics), do: %{id: id, status: :failed, metrics: metrics}
+  defp green(id, metrics), do: %{id: id, status: :green, metrics: metrics}
 
   defp gate(checks), do: %{fixes: [], checks: checks, failed_test_count: nil}
 

@@ -112,7 +112,23 @@ defmodule Kogen.Queue.Report do
         json_object([
           {"selected", event.attempt},
           {"result", event.result},
-          {"outcomes", event.outcomes || []}
+          {"outcomes", event.outcomes || []},
+          {"cross_check", cross_check(events)}
+        ])
+
+      nil ->
+        :null
+    end
+  end
+
+  defp cross_check(events) do
+    case Enum.find(events, &(&1.event == "cross_check")) do
+      %Event{} = event ->
+        json_object([
+          {"status", event.status},
+          {"reason", nullable(reason_text(event.reason))},
+          {"wall_ms", event.wall_ms},
+          {"matrix", event.matrix || []}
         ])
 
       nil ->

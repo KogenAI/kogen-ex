@@ -33,7 +33,8 @@ defmodule Kogen.Build.Recipe do
   attempts cycle through the rungs from index `repeat_from` (named `<rung>-2`, `<rung>-3`, ...)
   until the budget is spent; `repeat_from: nil` ends the ladder after its last rung. A usage
   limit or lost login pauses the Build for `pause_ms` at a time, outside the budget, for at
-  most `pause_cap_ms`. Rungs marked `experimental` are reported as such.
+  most `pause_cap_ms`. Rungs marked `experimental` are reported as such. When two or more
+  parallel rungs are green, each runs the others' tests; `cross_check_ms` bounds that in total.
   """
   @type ladder :: %{
           required(:rungs) => [rung()],
@@ -43,7 +44,8 @@ defmodule Kogen.Build.Recipe do
           required(:repeat_from) => non_neg_integer() | nil,
           required(:on_hard) => :parallel | :skip_first,
           required(:pause_ms) => pos_integer(),
-          required(:pause_cap_ms) => pos_integer()
+          required(:pause_cap_ms) => pos_integer(),
+          optional(:cross_check_ms) => pos_integer()
         }
 
   @type escalation :: %{
@@ -71,7 +73,8 @@ defmodule Kogen.Build.Recipe do
     wall_ms: 3_600_000,
     repeat_from: 2,
     pause_ms: 300_000,
-    pause_cap_ms: 86_400_000
+    pause_cap_ms: 86_400_000,
+    cross_check_ms: 300_000
   }
 
   @luna_rungs [

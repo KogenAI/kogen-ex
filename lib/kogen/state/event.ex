@@ -54,7 +54,8 @@ defmodule Kogen.State.Event do
     :attempts,
     :failing,
     :experimental,
-    :partial
+    :partial,
+    :matrix
   ]
 
   @type t :: %__MODULE__{
@@ -109,6 +110,7 @@ defmodule Kogen.State.Event do
           attempts: [String.t()] | nil,
           failing: map() | nil,
           experimental: boolean() | nil,
-          partial: boolean() | nil
+          partial: boolean() | nil,
+          matrix: [map()] | nil
         }
 end

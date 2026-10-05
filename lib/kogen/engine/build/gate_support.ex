@@ -159,13 +159,32 @@ defmodule Kogen.Engine.Build.GateSupport do
            seed_from: session.request.project_root
          ) do
       {:ok, %{path: path}} ->
-        result = run_base_command(session, path, argv, timeout_ms)
+        result = run_base_command(session, path, argv, timeout_ms, "flake-base")
         cleanup = Workspace.destroy(path)
         base_test_result(result, cleanup)
 
       {:error, reason} ->
         {:error, {:base_checkout_failed, reason}}
     end
+  end
+
+  @doc """
+  Runs `argv` with the gate's sandbox and environment in a scratch copy of the Candidate's
+  checkout with `files` added. The copy is removed afterwards.
+  """
+  @spec scratch_test(Session.t(), %{String.t() => binary()}, [String.t()], pos_integer()) ::
+          {:ok, ProcResult.t()} | {:error, term()}
+  def scratch_test(%Session{} = session, files, argv, timeout_ms) do
+    id = "#{session.run.id}-#{System.unique_integer([:positive, :monotonic])}"
+    path = Path.join([session.request.home, ".kogen", "workspaces", "cross-check", id])
+
+    result =
+      with :ok <- Workspace.copy_on_write(session.workdir, path),
+           :ok <- Workspace.insert_files(path, files) do
+        run_base_command(session, path, argv, timeout_ms, "cross-check")
+      end
+
+    base_test_result(result, Workspace.destroy(path))
   end
 
   @spec scope_warnings(Session.t()) :: {:ok, [map()]} | {:error, Failure.t()}
@@ -311,12 +330,12 @@ defmodule Kogen.Engine.Build.GateSupport do
     end
   end
 
-  defp run_base_command(session, path, argv, timeout_ms) do
+  defp run_base_command(session, path, argv, timeout_ms, log_name) do
     log_path =
       Path.join([
         session.run_dir,
         "logs",
-        "flake-base-#{System.unique_integer([:positive, :monotonic])}.log"
+        "#{log_name}-#{System.unique_integer([:positive, :monotonic])}.log"
       ])
 
     with :ok <- File.mkdir_p(Path.dirname(log_path)) do

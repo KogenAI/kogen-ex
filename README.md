@@ -45,7 +45,7 @@ build:
       effort: high
 ```
 
-The `ladder` recipe plans once, then builds on fresh Candidates rung by rung (configured builder, Sol medium, Sol high, then a raw-request attempt) until one is green, repairing while failures fall. A hard plan runs the first two rungs in parallel. A test auditor can demote an acceptance test that is over-strict or contradicts the Request. When no rung is green, the best Candidate is pushed to `kogen/<slug>` and status shows `needs attention: kogen/<slug>`.
+The `ladder` recipe plans once, then builds on fresh Candidates rung by rung (configured builder, Sol medium, Sol high, then a raw-request attempt) until one is green, repairing while failures fall. A hard plan runs the first two rungs in parallel; when both are green, each runs the other's new tests and the one passing more of them lands (then fewer gate warnings, then the smaller diff). A test auditor can demote an acceptance test that is over-strict or contradicts the Request. When no rung is green, the best Candidate is pushed to `kogen/<slug>` and status shows `needs attention: kogen/<slug>`.
 
 Intent shaping defaults to **gpt-6.1-sol at high effort**, independently of the builder model. An explicit `build.roles.shaper` in `.kogen/project.yaml` or `~/.kogen/config.yaml` overrides this default; project fields take precedence over machine settings.
 
