@@ -42,27 +42,26 @@ defmodule Kogen.Build.Recipe do
           required(:on) => [atom()]
         }
 
+  @ladder_names ["ladder", "ladder-luna", "ladder-sol-medium"]
   @names [
-    "staged",
-    "plan-shell",
-    "direct",
-    "direct-shell",
-    "direct-escalate",
-    "escalate-shell",
-    "ladder"
-  ]
+           "staged",
+           "plan-shell",
+           "direct",
+           "direct-shell",
+           "direct-escalate",
+           "escalate-shell"
+         ] ++ @ladder_names
   @sol_high {"gpt-6.1-sol", "high"}
-  @ladder %{
-    rungs: [
-      %{name: "builder", builder: :builder, input: :plan},
-      %{name: "sol-medium", builder: {"gpt-6.1-sol", "medium"}, input: :plan},
-      %{name: "sol-high", builder: @sol_high, input: :plan},
-      %{name: "raw-request", builder: @sol_high, input: :raw_request}
-    ],
-    parallel_on_hard: 2,
-    repair_cap: 6,
-    wall_ms: 3_600_000
-  }
+  @sol_medium {"gpt-6.1-sol", "medium"}
+  @luna_max {"gpt-6-luna", "max"}
+  @ladder_policy %{parallel_on_hard: 2, repair_cap: 6, wall_ms: 3_600_000}
+
+  @luna_rungs [
+    %{name: "builder", builder: @luna_max, input: :plan},
+    %{name: "fresh-2", builder: @luna_max, input: :plan},
+    %{name: "fresh-3", builder: @luna_max, input: :plan},
+    %{name: "raw-request", builder: @luna_max, input: :raw_request}
+  ]
 
   @staged_stages [:context, :plan, :develop, :done_gate, :fix, :check, :review, :commit, :land]
   @plan_shell_stages [:plan, :develop, :done_gate, :fix, :check, :commit, :land]
@@ -88,8 +87,8 @@ defmodule Kogen.Build.Recipe do
           on: [:repair_cap, :unchanged, :gate_red, :turn_cap, :wall_cap]
         })
 
-      name == "ladder" ->
-        Map.put(recipe, :ladder, @ladder)
+      name in @ladder_names ->
+        Map.put(recipe, :ladder, Map.put(@ladder_policy, :rungs, ladder_rungs(name)))
 
       true ->
         recipe
@@ -97,7 +96,7 @@ defmodule Kogen.Build.Recipe do
   end
 
   defp stages_for("staged"), do: @staged_stages
-  defp stages_for(name) when name in ["plan-shell", "ladder"], do: @plan_shell_stages
+  defp stages_for(name) when name == "plan-shell" or name in @ladder_names, do: @plan_shell_stages
   defp stages_for(_direct_recipe), do: @direct_stages
 
   defp roles_for("staged", builder) do
@@ -114,11 +113,31 @@ defmodule Kogen.Build.Recipe do
   defp roles_for("ladder", builder),
     do: %{planner: @sol_high, builder: builder, auditor: @sol_high}
 
+  defp roles_for("ladder-luna", _builder), do: single_model_roles(@luna_max)
+  defp roles_for("ladder-sol-medium", _builder), do: single_model_roles(@sol_medium)
+
   defp roles_for(_direct_recipe, builder), do: %{builder: builder}
+
+  defp single_model_roles(model), do: %{planner: model, builder: model, auditor: model}
+
+  # Each ladder is data. `ladder` mixes models; the single-model variants compare Kogen with a
+  # direct agent on the same model: fresh attempts, the auditor and raw-request, one model.
+  defp ladder_rungs("ladder") do
+    [
+      %{name: "builder", builder: :builder, input: :plan},
+      %{name: "sol-medium", builder: @sol_medium, input: :plan},
+      %{name: "sol-high", builder: @sol_high, input: :plan},
+      %{name: "raw-request", builder: @sol_high, input: :raw_request}
+    ]
+  end
+
+  defp ladder_rungs("ladder-luna"), do: @luna_rungs
+
+  defp ladder_rungs("ladder-sol-medium"), do: Enum.map(@luna_rungs, &%{&1 | builder: @sol_medium})
 
   defp builder_tools(name),
     do:
-      if(name in ["direct-shell", "plan-shell", "escalate-shell", "ladder"],
+      if(name in ["direct-shell", "plan-shell", "escalate-shell"] or name in @ladder_names,
         do: :shell,
         else: :full
       )

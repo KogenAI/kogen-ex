@@ -57,7 +57,14 @@ defmodule Kogen.Build.GateSummary do
         &(red?(&1) and not Map.get(&1, :base_red?, false))
       )
 
-    findings = red |> Enum.flat_map(&Map.get(&1, :findings, [])) |> Enum.uniq_by(&identity/1)
+    findings =
+      red
+      |> Enum.flat_map(fn command ->
+        Enum.map(Map.get(command, :findings, []), &{command, &1})
+      end)
+      |> Enum.uniq_by(fn {command, finding} -> {Map.get(command, :name), identity(finding)} end)
+      |> Enum.map(&elem(&1, 1))
+
     acceptance = Enum.filter(findings, &(Map.get(&1, :path) == acceptance_path))
     silent = Enum.count(red, &(Map.get(&1, :findings, []) == []))
 
@@ -78,8 +85,10 @@ defmodule Kogen.Build.GateSummary do
 
   defp red?(command), do: is_integer(Map.get(command, :exit_level)) and command.exit_level > 0
 
-  defp identity(finding),
-    do: Map.get(finding, :symbol) || {Map.get(finding, :path), Map.get(finding, :line)}
+  defp identity(finding) do
+    Map.get(finding, :symbol) ||
+      {Map.get(finding, :path), Map.get(finding, :line), Map.get(finding, :message)}
+  end
 
   defp command(command, kind) do
     summary = %{

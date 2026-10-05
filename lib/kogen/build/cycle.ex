@@ -7,6 +7,7 @@ defmodule Kogen.Build.Cycle do
   alias Kogen.Build.Cycle.ProviderFailure
   alias Kogen.Build.Cycle.Repair
   alias Kogen.Build.Cycle.State
+  alias Kogen.Build.Cycle.Steer
   alias Kogen.Build.Cycle.Stop
   alias Kogen.Build.Recipe
   alias Kogen.Contracts.Failure
@@ -297,8 +298,13 @@ defmodule Kogen.Build.Cycle do
     repair(state, reason, %{failed_stage: stage})
   end
 
-  defp handle_failure(state, _stage, %Failure{class: :environment, reason: reason}) do
-    finish(state, :failed, {:environment, reason})
+  defp handle_failure(state, stage, %Failure{class: class} = failure)
+       when class in [:environment, :controller] do
+    case Steer.decide(state, stage, failure) do
+      {:repair, reason, detail} -> repair(state, reason, detail)
+      {:next_rung, reason, trigger} -> fail_candidate(state, reason, trigger)
+      :stop -> finish(state, :failed, {class, failure.reason})
+    end
   end
 
   defp handle_failure(state, stage, %Failure{class: :provider, reason: reason}) do
@@ -306,10 +312,6 @@ defmodule Kogen.Build.Cycle do
       {:retry, next, effects} -> {next, effects}
       {:stop, result} -> fail_candidate(state, result, :provider_failed)
     end
-  end
-
-  defp handle_failure(state, _stage, %Failure{class: :controller, reason: reason}) do
-    finish(state, :failed, {:controller, reason})
   end
 
   defp handle_failure(state, _stage, %Failure{}),

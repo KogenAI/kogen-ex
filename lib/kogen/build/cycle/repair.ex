@@ -70,21 +70,32 @@ defmodule Kogen.Build.Cycle.Repair do
 
   defp update_test_progress(state, _data), do: {%{state | last_failed_test_count: nil}, nil}
 
+  # Without a failure count progress is unknown, so such repairs get two tries per rung.
   defp progress(state, detail) do
     count = Map.get(detail, :failure_count)
     previous = state.last_failure_count
+    used = state.repair_cap - state.repairs_left
 
-    if is_integer(count) and is_integer(previous) and count >= previous do
-      {:stop, :no_progress, :no_progress}
-    else
-      next = %{
-        state
-        | repairs_left: state.repairs_left - 1,
-          last_failure_count: if(is_integer(count), do: count, else: previous)
-      }
+    cond do
+      is_integer(count) and is_integer(previous) and count >= previous ->
+        {:stop, :no_progress, :no_progress}
 
-      {:repair, next,
-       Map.put(detail, :progress, %{previous_failure_count: previous, failure_count: count})}
+      not is_integer(count) and used >= 2 ->
+        {:stop, :no_progress, :no_progress}
+
+      true ->
+        grant(state, detail, count, previous)
     end
+  end
+
+  defp grant(state, detail, count, previous) do
+    next = %{
+      state
+      | repairs_left: state.repairs_left - 1,
+        last_failure_count: if(is_integer(count), do: count, else: previous)
+    }
+
+    {:repair, next,
+     Map.put(detail, :progress, %{previous_failure_count: previous, failure_count: count})}
   end
 end

@@ -91,6 +91,7 @@ defmodule Kogen.Build.Cycle.Escalation do
            findings: state.last_gate_findings,
            model: model,
            effort: effort,
+           index: index,
            rung: rung.name,
            input: rung.input
          }}

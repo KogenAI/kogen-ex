@@ -28,6 +28,55 @@ defmodule Kogen.Build.LadderCycleTest do
              "plan-shell"
   end
 
+  test "single-model ladder variants keep every model call on one model" do
+    for {name, model} <- [
+          {"ladder-luna", {"gpt-6-luna", "max"}},
+          {"ladder-sol-medium", {"gpt-6.1-sol", "medium"}}
+        ] do
+      recipe = Recipe.for_build(name, "configured-builder", "low")
+      %{rungs: rungs, parallel_on_hard: 2, repair_cap: 6} = Recipe.ladder(recipe)
+
+      assert Enum.map(rungs, &{&1.name, Recipe.rung_builder(recipe, &1), &1.input}) == [
+               {"builder", model, :plan},
+               {"fresh-2", model, :plan},
+               {"fresh-3", model, :plan},
+               {"raw-request", model, :raw_request}
+             ]
+
+      assert Recipe.role(recipe, :planner) == model
+      assert Recipe.auditor(recipe) == model
+      assert Recipe.stages(recipe) == Recipe.stages(@recipe)
+      assert recipe.builder_tools == :shell
+    end
+  end
+
+  test "ladder Builds steer environment and controller signals instead of stopping" do
+    {state, _effects} = Cycle.step(start(new()), {:stage_ok, :plan, %{}})
+    unusable = %Failure{class: :environment, reason: :check_unavailable, detail: "no output"}
+
+    {repaired, effects} = Cycle.step(state, {:stage_failed, :develop, unusable})
+
+    assert [{:record, %{event: :repair, reason: :check_unavailable}}, {:run, :develop, _}] =
+             effects
+
+    restores = %Failure{class: :controller, reason: :protected_restore_limit, detail: "tests"}
+    {next, effects} = Cycle.step(repaired, {:stage_failed, :develop, restores})
+    assert next.attempt == "sol-medium"
+    assert [_record, {:escalate, %{trigger: :controller}}, _run] = effects
+
+    login = %Failure{class: :environment, reason: :login, detail: "signed out"}
+    {stopped, _effects} = Cycle.step(next, {:stage_failed, :develop, login})
+    assert stopped.result == {:failed, {:environment, :login}}
+
+    plan_shell =
+      Cycle.new(%{approval: :a, repairs: 2, recipe: Recipe.for_build("plan-shell", "m", "e")})
+
+    {legacy, _effects} =
+      Cycle.step(%{plan_shell | stage: :develop}, {:stage_failed, :develop, unusable})
+
+    assert legacy.result == {:failed, {:environment, :check_unavailable}}
+  end
+
   test "each stopped rung moves to a fresh next rung with earlier rungs' findings" do
     state = developing(new())
 
@@ -93,7 +142,10 @@ defmodule Kogen.Build.LadderCycleTest do
     assert [_record, {:escalate, %{trigger: :unchanged}}, _run] = effects
 
     {state, effects} =
-      Cycle.step(state, {:stage_failed, :develop, %Failure{class: :provider, reason: :timeout, detail: "hung"}})
+      Cycle.step(
+        state,
+        {:stage_failed, :develop, %Failure{class: :provider, reason: :timeout, detail: "hung"}}
+      )
 
     assert state.attempt == "sol-high"
     assert [_record, {:escalate, %{trigger: :provider_failed}}, _run] = effects
@@ -148,10 +200,16 @@ defmodule Kogen.Build.LadderCycleTest do
     assert summary =~ "The sol-medium attempt stopped"
   end
 
-  test "normal plans and recipes without a ladder stay sequential" do
-    {state, effects} = Cycle.step(start(new()), {:stage_ok, :plan, %{difficulty: :normal}})
-    assert state.stage == :develop
-    assert [_stage_ok, {:run, :develop, _args}] = effects
+  test "the planner's difficulty line decides; normal plans and plain recipes stay sequential" do
+    hard = "**Difficulty:** Hard\n## Acceptance criteria\n1. Ready."
+    {state, _effects} = Cycle.step(start(new()), {:stage_ok, :plan, %{plan_text: hard}})
+    assert state.stage == :parallel
+
+    for text <- ["Difficulty: easy\n## Steps", "## Steps without a rating"] do
+      {state, effects} = Cycle.step(start(new()), {:stage_ok, :plan, %{plan_text: text}})
+      assert state.stage == :develop
+      assert [_stage_ok, {:run, :develop, _args}] = effects
+    end
 
     plan_shell =
       Cycle.new(%{approval: :a, repairs: 2, recipe: Recipe.for_build("plan-shell", "m", "e")})

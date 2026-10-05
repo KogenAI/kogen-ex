@@ -19,19 +19,40 @@ defmodule Kogen.Build.Cycle.Parallel do
           required(:metrics) => map()
         }
 
-  @spec start(State.t(), map()) :: {:ok, State.t(), [term()]} | :sequential
-  def start(%State{sub?: false, rung: 0} = state, %{difficulty: :hard}) do
-    with %{parallel_on_hard: count} when count >= 2 <- Recipe.ladder(state.recipe),
-         members when length(members) >= 2 <- members(state.recipe, count) do
-      attempts = Enum.map(members, & &1.attempt)
+  @doc "The planner's one-line rating: `Difficulty: hard` is hard; any other rating is normal."
+  @spec difficulty(String.t() | nil) :: :hard | :normal | nil
+  def difficulty(plan) when is_binary(plan) do
+    case Regex.run(~r/^[\s#>*_]*difficulty[*_]*\s*:[\s*_]*([a-z]+)/im, plan) do
+      [_line, rating] -> if String.downcase(rating) == "hard", do: :hard, else: :normal
+      nil -> nil
+    end
+  end
 
-      {:ok, %{state | stage: :parallel},
-       [
-         {:record, %{event: :parallel_started, attempts: attempts}},
-         {:parallel, %{members: members}}
-       ]}
-    else
-      _sequential -> :sequential
+  def difficulty(_plan), do: nil
+
+  @spec start(State.t(), map()) :: {:ok, State.t(), [term()]} | :sequential
+  def start(%State{} = state, %{plan_text: text} = data),
+    do: start(state, data |> Map.delete(:plan_text) |> Map.put(:difficulty, difficulty(text)))
+
+  def start(%State{sub?: false, rung: 0} = state, %{difficulty: :hard}) do
+    count =
+      case Recipe.ladder(state.recipe) do
+        %{parallel_on_hard: count} -> count
+        nil -> 0
+      end
+
+    case members(state.recipe, count) do
+      [_first, _second | _rest] = members ->
+        attempts = Enum.map(members, & &1.attempt)
+
+        {:ok, %{state | stage: :parallel},
+         [
+           {:record, %{event: :parallel_started, attempts: attempts}},
+           {:parallel, %{members: members}}
+         ]}
+
+      _sequential ->
+        :sequential
     end
   end
 
@@ -66,6 +87,8 @@ defmodule Kogen.Build.Cycle.Parallel do
 
     {next, winner, [record, {:adopt, winner.attempt}]}
   end
+
+  defp members(_recipe, count) when count < 2, do: []
 
   defp members(recipe, count) do
     Enum.flat_map(0..(count - 1), fn index ->
