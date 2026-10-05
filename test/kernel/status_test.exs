@@ -2,10 +2,25 @@ defmodule Kogen.Kernel.StatusTest do
   use Kogen.Testkit.Case
 
   alias Kogen.Kernel.Origin
+  alias Kogen.Kernel.StateView
   alias Kogen.Kernel.Status
+  alias Kogen.State.Event
   alias Kogen.State.Json
   alias Kogen.State.Run
   alias Kogen.Testkit.Git
+
+  test "a live owner keeps an interrupted run building", %{tmp_dir: tmp_dir} do
+    run = run_with_owner!(tmp_dir, String.to_integer(System.pid()))
+
+    assert {:ok, false} = StateView.interrupted?(run, [%Event{event: "interrupted"}])
+  end
+
+  test "an interrupted event must be the last run event", %{tmp_dir: tmp_dir} do
+    run = run_with_owner!(tmp_dir, 999_999)
+    events = [%Event{event: "interrupted"}, %Event{event: "stage"}]
+
+    assert {:ok, false} = StateView.interrupted?(run, events)
+  end
 
   test "a base commit trailer reports landed without a run record", %{tmp_dir: tmp_dir} do
     slug = "landed-elsewhere"
@@ -108,6 +123,23 @@ defmodule Kogen.Kernel.StatusTest do
     assert {:ok, ^repo} = Origin.resolve(repo, nil, Git.env())
 
     assert {:ok, "main"} = Kogen.Kernel.effective_base(nil, nil, repo, repo, Git.env())
+  end
+
+  defp run_with_owner!(tmp_dir, owner_pid) do
+    dir = Path.join(tmp_dir, "interrupted-run")
+    File.mkdir_p!(dir)
+
+    %Run{
+      id: "interrupted-run",
+      dir: dir,
+      slug: "interrupted-probe",
+      intent_sha256: String.duplicate("a", 64),
+      target_branch: "main",
+      approval_commit: nil,
+      status: :running,
+      landing: nil,
+      owner_os_pid: owner_pid
+    }
   end
 
   defp landed_project!(tmp_dir, slug) do

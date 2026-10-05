@@ -11,7 +11,7 @@ defmodule Kogen.State do
   alias Kogen.State.Operations
   alias Kogen.State.Run
 
-  @type status :: :draft | :approved | :building | :landed | :failed | :parked
+  @type status :: :draft | :approved | :building | :interrupted | :landed | :failed | :parked
 
   @spec approve(Path.t(), Approval.t(), %{String.t() => String.t()}) ::
           {:ok, String.t()} | {:error, term()}

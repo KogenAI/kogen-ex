@@ -13,7 +13,13 @@ defmodule Kogen.Kernel.Report do
     with {:ok, runs} <- StateView.runs(state_root, slug),
          {:ok, %Run{} = run} <- StateView.latest(runs),
          {:ok, events} <- StateView.events(run),
-         status = State.status(origin, state_root, slug, base, git_env),
+         {:ok, interrupted?} <- StateView.interrupted?(run, events),
+         status =
+           (if interrupted? do
+              :interrupted
+            else
+              State.status(origin, state_root, slug, base, git_env)
+            end),
          {:ok, landed_sha} <- landed_sha(status, origin, base, slug, git_env) do
       encode(run, events, status, landed_sha)
     else

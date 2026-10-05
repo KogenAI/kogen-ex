@@ -67,6 +67,33 @@ defmodule Kogen.Kernel.StateView do
     end
   end
 
+  @spec interrupted?(Run.t() | nil) :: {:ok, boolean()} | {:error, term()}
+  def interrupted?(%Run{status: :running} = run) do
+    case events(run) do
+      {:ok, run_events} -> interrupted?(run, run_events)
+      {:error, :enoent} -> {:ok, false}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  def interrupted?(other) when is_nil(other) or is_struct(other, Run), do: {:ok, false}
+
+  @spec interrupted?(Run.t(), [Event.t()]) :: {:ok, boolean()} | {:error, term()}
+  def interrupted?(%Run{status: :running} = run, run_events) when is_list(run_events) do
+    case List.last(run_events) do
+      %Event{event: "interrupted"} ->
+        case Kogen.Kernel.Reconcile.owner_alive?(run.owner_os_pid, run.dir) do
+          {:ok, alive?} -> {:ok, not alive?}
+          {:error, reason} -> {:error, reason}
+        end
+
+      _event ->
+        {:ok, false}
+    end
+  end
+
+  def interrupted?(%Run{}, _run_events), do: {:ok, false}
+
   defp run_timestamp(%Run{} = run) do
     case File.stat(Path.join(run.dir, "run.json")) do
       {:ok, stat} -> {:ok, :calendar.datetime_to_gregorian_seconds(stat.mtime)}
@@ -151,21 +178,36 @@ defmodule Kogen.Kernel.Status do
   end
 
   defp render_statuses(slugs, {:ok, latest_runs}, snapshot) do
-    statuses =
-      Enum.map(slugs, fn slug ->
-        latest = Map.get(latest_runs, slug)
-        approval = Map.get(snapshot.approvals, slug)
-        landed_sha = Map.get(snapshot.landed, slug)
+    slugs
+    |> Enum.reduce_while({:ok, []}, fn slug, {:ok, statuses} ->
+      latest = Map.get(latest_runs, slug)
+      approval = Map.get(snapshot.approvals, slug)
+      landed_sha = Map.get(snapshot.landed, slug)
 
-        %IntentStatus{
-          slug: slug,
-          status: lifecycle_status(slug, approval, landed_sha, latest, snapshot.claim_run_id),
-          run_id: if(match?(%Run{}, latest), do: latest.id),
-          landed_sha: landed_sha
-        }
-      end)
+      case StateView.interrupted?(latest) do
+        {:ok, interrupted?} ->
+          status =
+            if interrupted?,
+              do: :interrupted,
+              else: lifecycle_status(slug, approval, landed_sha, latest, snapshot.claim_run_id)
 
-    {:ok, statuses}
+          row = %IntentStatus{
+            slug: slug,
+            status: status,
+            run_id: if(match?(%Run{}, latest), do: latest.id),
+            landed_sha: landed_sha
+          }
+
+          {:cont, {:ok, [row | statuses]}}
+
+        {:error, reason} ->
+          {:halt, {:error, reason}}
+      end
+    end)
+    |> case do
+      {:ok, statuses} -> {:ok, Enum.reverse(statuses)}
+      error -> error
+    end
   end
 
   defp render_statuses(_slugs, error, _snapshot), do: error
@@ -288,7 +330,9 @@ defmodule Kogen.Kernel.Reconcile do
     if File.dir?(current), do: current, else: legacy
   end
 
-  defp owner_alive?(pid, directory) when is_integer(pid) and pid > 0 do
+  @doc false
+  @spec owner_alive?(pos_integer() | nil, Path.t()) :: {:ok, boolean()} | {:error, term()}
+  def owner_alive?(pid, directory) when is_integer(pid) and pid > 0 do
     case Proc.run(
            ["/usr/bin/perl", "-e", @pid_liveness_script, Integer.to_string(pid)],
            cd: directory
@@ -307,5 +351,5 @@ defmodule Kogen.Kernel.Reconcile do
     end
   end
 
-  defp owner_alive?(_pid, _directory), do: {:ok, false}
+  def owner_alive?(_pid, _directory), do: {:ok, false}
 end
