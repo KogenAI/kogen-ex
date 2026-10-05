@@ -28,6 +28,9 @@ builder_model=${KOGEN_BENCH_MODEL:-gpt-6-luna}
 builder_effort=${KOGEN_BENCH_EFFORT:-max}
 shape_model=${KOGEN_BENCH_SHAPE_MODEL:-gpt-6-luna}
 shape_effort=${KOGEN_BENCH_SHAPE_EFFORT:-max}
+provided_intent_dir=${KOGEN_BENCH_INTENT_DIR:-}
+intent_source=shaped
+[ -z "$provided_intent_dir" ] || intent_source=provided
 task_dir=$(cd "$1" && pwd -P)
 work_dir=$(cd "$2" && pwd -P)
 mkdir -p "$3"
@@ -48,6 +51,11 @@ KOGEN_BIN=${KOGEN_BIN:-$(command -v kogen || true)}
   echo "kogen executable not found; set KOGEN_BIN or add kogen to PATH" >&2
   exit 3
 }
+if "$KOGEN_BIN" version >/dev/null 2>&1; then
+  kogen_cli_mode=modern
+else
+  kogen_cli_mode=semantic
+fi
 
 # A benchmark work_dir is a throwaway clone. Refuse shared task bases and result trees.
 case "$work_dir/" in
@@ -135,14 +143,15 @@ with open(event_path, "a", encoding="utf-8") as target:
 raise SystemExit(status)
 PY
 python3 - "$out_dir/usage.json" "$recipe" "$builder_model" "$builder_effort" \
-  "$shape_model" "$shape_effort" <<'PY'
+  "$shape_model" "$shape_effort" "$intent_source" <<'PY'
 import json
 import sys
 
-path, recipe, model, effort, shape_model, shape_effort = sys.argv[1:]
+path, recipe, model, effort, shape_model, shape_effort, intent_source = sys.argv[1:]
 with open(path, "w", encoding="utf-8") as output:
     json.dump({
         "recipe": recipe,
+        "intent_source": intent_source,
         "builder": {"model": model, "effort": effort},
         "shape": {"model": shape_model, "effort": shape_effort, "wall_ms": None},
         "status": "not_started",
@@ -406,6 +415,24 @@ PY
   fi
 }
 
+run_status_report() {
+  if [ "$kogen_cli_mode" = semantic ]; then
+    if run_capture report "$out_dir/report.json" "$KOGEN_BIN" build show "$slug" --json \
+      --project "$project_dir" --origin "$origin" --base main; then
+      return 0
+    else
+      report_status=$?
+    fi
+    case "$report_status" in
+      2|90) ;;
+      *) return "$report_status" ;;
+    esac
+  fi
+
+  run_capture report "$out_dir/report.json" "$KOGEN_BIN" status "$slug" --json \
+    --project "$project_dir" --origin "$origin" --base main
+}
+
 copy_shaper_setup_logs() {
   for setup_log in "$shaper_root"/*/logs/shape-setup-*.log; do
     [ -f "$setup_log" ] || continue
@@ -454,7 +481,7 @@ write_failed_usage() {
     "$failed_stage" "$failed_model" "$failed_effort" "$failed_status" "$failed_wall_ms" \
     "$shaper_root" "$recipe" "$timings_file" "$events_file" \
     "$bench_started_ns" "$failed_finished_ns" "$builder_model" "$builder_effort" \
-    "$shape_model" "$shape_effort" "$shape_wall_ms" <<'PY'
+    "$shape_model" "$shape_effort" "$shape_wall_ms" "$intent_source" <<'PY'
 import json
 import os
 import sys
@@ -463,7 +490,7 @@ from pathlib import Path
 (
     shape_path, report_path, output_path, failed_stage, failed_model, failed_effort,
     status, wall_ms, transcript_root, recipe, timing_input, events_output, started_ns, finished_ns,
-    builder_model, builder_effort, shape_model, shape_effort, shape_wall_ms,
+    builder_model, builder_effort, shape_model, shape_effort, shape_wall_ms, intent_source,
 ) = sys.argv[1:]
 started_ns = int(started_ns)
 finished_ns = int(finished_ns)
@@ -623,6 +650,7 @@ phases = [
 totals = {name: sum(stage["tokens"][name] for stage in stages) for name in token_names}
 result = {
     "recipe": recipe,
+    "intent_source": intent_source,
     "builder": {"model": builder_model, "effort": builder_effort},
     "run_status": "failed",
     "status": "failed",
@@ -667,50 +695,105 @@ runtime_tmpdir=$(cat "$scratch/project_tmpdir")
 setup_log_path="${runtime_tmpdir%/}/$(basename "$scratch")-$slug-setup.log"
 shaper_root="${runtime_tmpdir%/}/kogen-shaper/$slug"
 shape_wall_ms=0
-if run_capture shape "$out_dir/shape.json" "$KOGEN_BIN" intent shape "$slug" "$prompt_file" \
-  --project "$project_dir" --origin "$origin" --base main --json; then
-  shape_wall_ms=$CAPTURE_WALL_MS
+if [ "$intent_source" = provided ]; then
+  mkdir -p "$project_dir/.kogen/intents/$slug" "$project_dir/.kogen/acceptance"
+  cp "$provided_intent_dir/intent.md" "$project_dir/.kogen/intents/$slug/intent.md"
+  cp "$provided_intent_dir/acceptance_test.exs" \
+    "$project_dir/.kogen/acceptance/${slug}_test.exs"
 else
-  stage_status=$?
-  shape_wall_ms=$CAPTURE_WALL_MS
-  copy_bench_setup_log
-  copy_shaper_setup_logs
-  write_failed_usage shape "$shape_model" "$shape_effort" "$stage_status" "$CAPTURE_WALL_MS"
-  exit "$stage_status"
+  if run_capture shape "$out_dir/shape.json" "$KOGEN_BIN" intent shape "$slug" "$prompt_file" \
+    --project "$project_dir" --origin "$origin" --base main --json; then
+    shape_wall_ms=$CAPTURE_WALL_MS
+  else
+    stage_status=$?
+    shape_wall_ms=$CAPTURE_WALL_MS
+    copy_bench_setup_log
+    copy_shaper_setup_logs
+    write_failed_usage shape "$shape_model" "$shape_effort" "$stage_status" "$CAPTURE_WALL_MS"
+    exit "$stage_status"
+  fi
 fi
 copy_bench_setup_log
 
-# The benchmark approves exactly the bytes it shaped: the hash is the Intent's SHA-256 prefix.
-intent_hash=$(python3 -c 'import hashlib, sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest()[:12])' \
-  "$project_dir/.kogen/intents/$slug/intent.md")
-if run_capture approve "$scratch/approve.txt" "$KOGEN_BIN" intent approve "$slug" "$intent_hash" \
-  --project "$project_dir" --origin "$origin" --base main --by kogen-bench; then
-  :
+# Approve the exact Intent bytes supplied or shaped. If shaping returned without writing one,
+# let approval report the missing artifact instead of exiting before recording that failure.
+intent_hash=$(python3 - "$project_dir/.kogen/intents/$slug/intent.md" <<'PY'
+import hashlib
+import sys
+
+try:
+    with open(sys.argv[1], "rb") as source:
+        intent_bytes = source.read()
+except FileNotFoundError:
+    intent_bytes = b""
+print(hashlib.sha256(intent_bytes).hexdigest()[:12])
+PY
+)
+approve_ok=0
+if [ "$kogen_cli_mode" = semantic ]; then
+  if run_capture approve "$scratch/approve.txt" "$KOGEN_BIN" approve "$slug" "$intent_hash" \
+    --project "$project_dir" --origin "$origin" --base main --by kogen-bench; then
+    approve_ok=1
+  else
+    stage_status=$?
+    if [ "$stage_status" -eq 2 ] || [ "$stage_status" -eq 90 ]; then
+      if run_capture approve "$scratch/approve.txt" "$KOGEN_BIN" intent approve "$slug" "$intent_hash" \
+        --project "$project_dir" --origin "$origin" --base main --by kogen-bench; then
+        approve_ok=1
+      else
+        stage_status=$?
+      fi
+    fi
+  fi
 else
-  stage_status=$?
+  if run_capture approve "$scratch/approve.txt" "$KOGEN_BIN" intent approve "$slug" "$intent_hash" \
+    --project "$project_dir" --origin "$origin" --base main --by kogen-bench; then
+    approve_ok=1
+  else
+    stage_status=$?
+  fi
+fi
+if [ "$approve_ok" -eq 0 ]; then
   write_failed_usage approve "" "" "$stage_status" "$CAPTURE_WALL_MS"
   exit "$stage_status"
 fi
 
 # Approval queues the Intent; queue start builds it in the foreground and exits with its result.
-if run_capture build "$scratch/build.txt" "$KOGEN_BIN" queue start \
-  --project "$project_dir" --origin "$origin" --base main; then
-  :
+build_ok=0
+if [ "$kogen_cli_mode" = semantic ]; then
+  if run_capture build "$scratch/build.txt" "$KOGEN_BIN" build \
+    --project "$project_dir" --origin "$origin" --base main; then
+    build_ok=1
+  else
+    stage_status=$?
+    if [ "$stage_status" -eq 2 ] || [ "$stage_status" -eq 90 ]; then
+      if run_capture build "$scratch/build.txt" "$KOGEN_BIN" queue start \
+        --project "$project_dir" --origin "$origin" --base main; then
+        build_ok=1
+      else
+        stage_status=$?
+      fi
+    fi
+  fi
 else
-  stage_status=$?
+  if run_capture build "$scratch/build.txt" "$KOGEN_BIN" queue start \
+    --project "$project_dir" --origin "$origin" --base main; then
+    build_ok=1
+  else
+    stage_status=$?
+  fi
+fi
+
+if [ "$build_ok" -eq 0 ]; then
   build_wall_ms=$CAPTURE_WALL_MS
   # status recovers an interrupted (143) or crashed Build first, so the report is terminal.
-  if run_capture report "$out_dir/report.json" "$KOGEN_BIN" status "$slug" --json \
-    --project "$project_dir" --origin "$origin" --base main; then
-    :
-  fi
+  run_status_report || :
   copy_candidate_diffs
   write_failed_usage build "$builder_model" "$builder_effort" "$stage_status" "$build_wall_ms"
   exit "$stage_status"
 fi
 
-if run_capture report "$out_dir/report.json" "$KOGEN_BIN" status "$slug" --json \
-  --project "$project_dir" --origin "$origin" --base main; then
+if run_status_report; then
   :
 else
   stage_status=$?
@@ -735,17 +818,21 @@ bench_finished_ns=$(python3 -c 'import time; print(time.monotonic_ns())')
 
 python3 - "$out_dir/shape.json" "$out_dir/report.json" "$out_dir/usage.json" \
   "$recipe" "$timings_file" "$events_file" "$bench_started_ns" "$bench_finished_ns" \
-  "$builder_model" "$builder_effort" "$shape_model" "$shape_effort" "$shape_wall_ms" <<'PY'
+  "$builder_model" "$builder_effort" "$shape_model" "$shape_effort" "$shape_wall_ms" \
+  "$slug" "$intent_source" <<'PY'
 import json
 import os
 import sys
 
-shape_path, report_path, output_path, recipe, timing_input, events_output, started_ns, finished_ns, builder_model, builder_effort, shape_model, shape_effort, shape_wall_ms = sys.argv[1:]
+shape_path, report_path, output_path, recipe, timing_input, events_output, started_ns, finished_ns, builder_model, builder_effort, shape_model, shape_effort, shape_wall_ms, slug, intent_source = sys.argv[1:]
 started_ns = int(started_ns)
 finished_ns = int(finished_ns)
 shape_wall_ms = int(shape_wall_ms)
-with open(shape_path, encoding="utf-8") as source:
-    shape = json.load(source)
+try:
+    with open(shape_path, encoding="utf-8") as source:
+        shape = json.load(source)
+except FileNotFoundError:
+    shape = {}
 with open(report_path, encoding="utf-8") as source:
     report = json.load(source)
 
@@ -846,7 +933,8 @@ phases = [
 totals = {name: sum(stage["tokens"][name] for stage in stages) for name in token_names}
 result = {
     "recipe": recipe,
-    "slug": shape.get("slug"),
+    "intent_source": intent_source,
+    "slug": shape.get("slug") or slug,
     "run_status": "complete",
     "status": report.get("status"),
     "roles": report.get("roles", {}),
