@@ -42,6 +42,7 @@ domains:
   tooling: [lib/kogen/tooling.ex, lib/kogen/tooling, test/tooling]
   build: [lib/kogen/build.ex, lib/kogen/build, test/build]
   engine: [lib/kogen/engine.ex, lib/kogen/engine, test/engine, test/acceptance, test/e2e]
+  runner: [lib/kogen/runner.ex, lib/kogen/runner, test/runner]
   kernel: [lib/kogen/kernel.ex, lib/kogen/kernel, test/kernel]
   queue: [lib/kogen/queue.ex, lib/kogen/queue, test/queue]
   shaper: [lib/kogen/shaper.ex, lib/kogen/shaper, test/shaper]

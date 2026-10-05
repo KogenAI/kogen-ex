@@ -14,6 +14,7 @@ defmodule Kogen.Kernel do
       Kogen.Harness,
       Kogen.Shaper,
       Kogen.Queue,
+      Kogen.Runner,
       Kogen.Cli
     ],
     exports: [
@@ -45,6 +46,7 @@ defmodule Kogen.Kernel do
   alias Kogen.Provider.ChatGPT
   alias Kogen.Provider.ChatGPT.CredentialStore
   alias Kogen.Provider.ChatGPT.SIWC
+  alias Kogen.Runner
   alias Kogen.Shaper.Result, as: ShapeResult
   alias Kogen.Workspace
 
@@ -140,13 +142,13 @@ defmodule Kogen.Kernel do
           provider: {provider_config, source, label}
         })
 
-      Engine.run(request)
+      Runner.run(request)
     end
   end
 
   @doc false
   @spec build(Request.t()) :: {:ok, Result.t()} | {:error, term()}
-  def build(%Request{} = request), do: Engine.run(request)
+  def build(%Request{} = request), do: Runner.run(request)
 
   @spec shape(String.t(), Path.t(), String.t()) :: {:ok, ShapeResult.t()} | {:error, term()}
   def shape(slug, project_root, task), do: ShapeExecution.run(slug, project_root, task)
@@ -305,7 +307,8 @@ defmodule Kogen.Kernel do
       base: base,
       model: model,
       effort: effort,
-      recipe: Engine.build_recipe(build_config.recipe, model, effort, roles),
+      recipe:
+        Engine.build_recipe(build_config.recipe, model, effort, roles, wall_ms(build_config)),
       runtime: runtime,
       provider_mod: ChatGPT,
       provider_config: provider_config,
@@ -313,6 +316,9 @@ defmodule Kogen.Kernel do
       credential_label: label
     }
   end
+
+  defp wall_ms(%{wall_minutes: minutes}) when is_integer(minutes), do: minutes * 60_000
+  defp wall_ms(_build_config), do: nil
 
   @doc false
   @spec effective_base(String.t() | nil, String.t() | nil, Path.t(), Path.t(), map()) ::

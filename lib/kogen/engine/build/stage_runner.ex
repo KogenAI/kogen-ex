@@ -5,6 +5,7 @@ defmodule Kogen.Engine.Build.StageRunner do
   alias Kogen.Build.Recipe
   alias Kogen.Contracts.Failure
   alias Kogen.Contracts.ProviderError
+  alias Kogen.Engine.Build.CheckStage
   alias Kogen.Engine.Build.Commit
   alias Kogen.Engine.Build.GateSupport
   alias Kogen.Engine.Build.Guard
@@ -88,7 +89,7 @@ defmodule Kogen.Engine.Build.StageRunner do
              ) do
           :ok ->
             {:ok, %{session | plan: plan, failure: nil, failure_text: nil},
-             [{:stage_ok, :plan, %{}}]}
+             [{:stage_ok, :plan, %{plan_text: plan.text}}]}
 
           {:error, reason} ->
             fail(session, :plan, controller_failure(:state_write_failed, inspect(reason)))
@@ -117,7 +118,9 @@ defmodule Kogen.Engine.Build.StageRunner do
     resume = GateSupport.resume_data(session, args)
     started_at = System.monotonic_time(:millisecond)
 
-    case Harness.develop(harness_options(session), session.intent_text, session.plan, resume, 0) do
+    text = GateSupport.builder_text(session)
+
+    case Harness.develop(harness_options(session), text, session.plan, resume, 0) do
       {:ok, %HarnessResult{} = result} ->
         finish_develop(session, result, started_at)
 
@@ -137,11 +140,24 @@ defmodule Kogen.Engine.Build.StageRunner do
       :ok ->
         case GateSupport.red_on_base(session) do
           :ok -> :ok
-          {:error, %Failure{} = failure} -> {:error, base_check_failure(failure)}
+          {:error, %Failure{} = failure} -> base_check(session, failure)
         end
 
       {:error, %Failure{} = failure} ->
         {:error, failure}
+    end
+  end
+
+  # A ladder treats acceptance tests that are not red on the base as a warning and builds on.
+  defp base_check(%Session{request: %{recipe: recipe}} = session, failure) do
+    if Recipe.ladder(recipe) do
+      record(session, %{
+        event: :acceptance_warning,
+        reason: failure.reason,
+        detail: failure.detail
+      })
+    else
+      {:error, base_check_failure(failure)}
     end
   end
 
@@ -178,8 +194,11 @@ defmodule Kogen.Engine.Build.StageRunner do
       | last_harness: result,
         flake_excused: session.flake_excused ++ gate_flakes,
         failure: failure,
-        failure_text: detail
+        failure_text: detail,
+        acceptance_failures: []
     }
+
+    metrics = GateSummary.metrics(result.gate, "test/acceptance/#{session.intent.slug}_test.exs")
 
     if result.outcome == :gate_environment do
       fail(session, :develop, failure || environment_failure())
@@ -188,7 +207,9 @@ defmodule Kogen.Engine.Build.StageRunner do
        [
          {:stage_ok, :develop, %{tree: tree}},
          {:stage_ok, :done_gate,
-          GateSummary.done_gate(result.gate, result.outcome, failed_test_count)}
+          result.gate
+          |> GateSummary.done_gate(result.outcome, failed_test_count)
+          |> Map.merge(Map.take(metrics, [:acceptance_only, :failure_count]))}
        ]}
     end
   end
@@ -228,43 +249,9 @@ defmodule Kogen.Engine.Build.StageRunner do
   end
 
   defp checks(session) do
-    with :ok <-
-           Guard.check(
-             session.workdir,
-             session.base_sha,
-             session.intent,
-             session.project,
-             manifest(session),
-             session.git_env
-           ),
-         {:ok, check_result} <-
-           Kogen.Checks.run_all(
-             session.workdir,
-             session.project,
-             session.run_dir,
-             session.process_env,
-             session.git_env,
-             %{sandbox: session.sandbox, check_baseline: session.approval.check_baseline}
-           ) do
-      finish_checks(session, check_result)
-    else
-      {:error, %Failure{} = failure} ->
-        fail(session, :check, failure)
-    end
-  end
-
-  defp finish_checks(session, check_result) do
-    with {:ok, acceptance} <-
-           Kogen.Checks.acceptance(
-             session.workdir,
-             session.intent,
-             session.run_dir,
-             session.process_env,
-             session.git_env,
-             session.sandbox
-           ),
-         :ok <- record_check_results(session, check_result, acceptance),
-         :ok <- check_passed(check_result, acceptance),
+    with :ok <- guard(session),
+         {:ok, check_result, acceptance} <- CheckStage.verify(session),
+         :ok <- passed(session, check_result, acceptance),
          {:ok, scope_warnings} <- GateSupport.scope_warnings(session),
          :ok <- GateSupport.record_scope_warnings(session, scope_warnings) do
       {:ok,
@@ -277,6 +264,9 @@ defmodule Kogen.Engine.Build.StageRunner do
            failure_text: nil
        }, [{:stage_ok, :check, %{status: :pass}}]}
     else
+      {:error, %Session{} = session, %Failure{} = failure} ->
+        fail(session, :check, failure)
+
       {:error, %Failure{} = failure} ->
         fail(session, :check, failure)
 
@@ -285,38 +275,19 @@ defmodule Kogen.Engine.Build.StageRunner do
     end
   end
 
-  defp check_passed(%{status: :pass}, %{status: :pass}), do: :ok
+  defp passed(session, check_result, acceptance) do
+    case CheckStage.passed(session, check_result, acceptance) do
+      :ok ->
+        :ok
 
-  defp check_passed(check_result, acceptance_result) do
-    check_feedback = Map.get(check_result, :feedback, "")
+      {:error, %Failure{reason: :acceptance_red} = failure} ->
+        remaining = CheckStage.remaining(session, acceptance)
+        {:error, %{session | acceptance_failures: remaining}, failure}
 
-    detail =
-      if check_feedback == "" do
-        "checks=#{inspect(check_result.status)} acceptance=#{inspect(acceptance_result.status)}"
-      else
-        check_feedback <> "\nacceptance=#{inspect(acceptance_result.status)}"
-      end
-
-    {:error, candidate_failure(:verification_failed, detail)}
-  end
-
-  defp record_check_results(session, check_result, acceptance_result) do
-    with :ok <-
-           record(session, %{
-             event: :check_result,
-             result: check_result.status,
-             receipts: check_result.receipts
-           }) do
-      record(session, %{
-        event: :acceptance_result,
-        result: acceptance_status(acceptance_result.status),
-        ledger: acceptance_result.ledger
-      })
+      {:error, failure} ->
+        {:error, failure}
     end
   end
-
-  defp acceptance_status(:pass), do: :pass
-  defp acceptance_status({:fail, ids}), do: %{status: :fail, failed_ids: ids}
 
   defp manifest(session), do: session.approval.protected_manifest
 
@@ -387,9 +358,6 @@ defmodule Kogen.Engine.Build.StageRunner do
   end
 
   defp harness_failure(reason), do: controller_failure(:harness_failed, inspect(reason))
-
-  defp candidate_failure(reason, detail),
-    do: %Failure{class: :candidate, reason: reason, detail: detail}
 
   defp controller_failure(reason, detail),
     do: %Failure{class: :controller, reason: reason, detail: detail}

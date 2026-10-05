@@ -2,9 +2,9 @@ defmodule Kogen.Engine.Build.Finish do
   @moduledoc false
 
   alias Kogen.Build.GateSummary
+  alias Kogen.Build.Selector
   alias Kogen.Contracts.Failure
   alias Kogen.Engine.Build.CandidateSnapshot
-  alias Kogen.Engine.Build.Guard
   alias Kogen.Engine.Build.Request
   alias Kogen.Engine.Build.Result
   alias Kogen.Engine.Build.Session
@@ -14,8 +14,8 @@ defmodule Kogen.Engine.Build.Finish do
 
   @spec run(Session.t(), :landed | :failed | :parked, term()) :: {:ok, Result.t()}
   def run(%Session{} = session, status, reason) do
-    case CandidateSnapshot.before_finish(session, status, reason) do
-      :ok ->
+    case prepare(session, status, reason) do
+      {:ok, session} ->
         finish(session, status, reason)
 
       {:error, detail} ->
@@ -30,8 +30,31 @@ defmodule Kogen.Engine.Build.Finish do
     end
   end
 
+  defp prepare(%Session{rung: nil} = session, status, reason) do
+    case CandidateSnapshot.before_finish(session, status, reason) do
+      :ok -> {:ok, session}
+      {:error, detail} -> {:error, detail}
+    end
+  end
+
+  # A failed ladder Build keeps its last Candidate for the selector. Snapshot trouble must
+  # not hide the Build's own outcome.
+  defp prepare(%Session{} = session, :failed, reason) do
+    case CandidateSnapshot.record(session, reason, :keep) do
+      {:ok, recorded} ->
+        {:ok, recorded}
+
+      {:error, detail} ->
+        _recorded = State.record(session.run, %{event: :cleanup_failure, detail: inspect(detail)})
+        {:ok, session}
+    end
+  end
+
+  defp prepare(%Session{} = session, _status, _reason), do: {:ok, session}
+
   defp finish(%Session{} = session, status, reason) do
     preserve = preserve_candidate(session, status)
+    session = if preserve == :ok, do: publish_best(session, status), else: session
     release = release_claim(session)
     lifecycle = cleanup_result(preserve, release)
     write_result = write_cleanup_failure(session, lifecycle)
@@ -136,24 +159,34 @@ defmodule Kogen.Engine.Build.Finish do
     end
   end
 
-  defp commit_uncommitted(session) do
-    with {:ok, working_tree} <- Guard.tree_hash(session.workdir, session.git_env),
-         {:ok, head_tree} <- Workspace.rev_parse(session.workdir, "HEAD^{tree}", session.git_env) do
-      if working_tree == head_tree do
-        :ok
-      else
-        case Workspace.commit(
-               session.workdir,
-               "Preserve failed Kogen candidate",
-               [],
-               session.git_env
-             ) do
-          {:ok, _sha} -> :ok
-          {:error, reason} -> {:error, reason}
-        end
-      end
+  defp commit_uncommitted(session), do: CandidateSnapshot.commit_tree(session)
+
+  # With no green rung, the best Candidate is pushed to `kogen/<slug>` for a human to finish.
+  defp publish_best(%Session{rung: %{}, candidates: [_ | _] = candidates} = session, :failed) do
+    best = Selector.best(candidates)
+    branch = "kogen/" <> session.approval.slug
+
+    case Workspace.publish_branch(session.request.origin, branch, best.commit, session.git_env) do
+      :ok ->
+        _recorded =
+          State.record(
+            session.run,
+            Map.merge(Map.take(best, [:attempt, :commit, :metrics, :failing, :findings]), %{
+              event: :best_candidate,
+              branch: branch,
+              reason: best.reason
+            })
+          )
+
+        %{session | lines: session.lines ++ ["build: needs attention: #{branch}"]}
+
+      {:error, reason} ->
+        _recorded = State.record(session.run, %{event: :cleanup_failure, detail: inspect(reason)})
+        session
     end
   end
+
+  defp publish_best(session, _status), do: session
 
   defp release_claim(session) do
     State.release(session.request.origin, session.run.id, session.git_env)

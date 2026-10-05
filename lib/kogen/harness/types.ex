@@ -19,6 +19,7 @@ defmodule Kogen.Harness.Opts do
     :protected_restorer,
     builder_tools: :full,
     planner_mode: :read_only_tools,
+    planner_difficulty: false,
     changed?: nil,
     env: %{},
     before_gate: nil,
@@ -52,12 +53,14 @@ defmodule Kogen.Harness.Opts do
           flake_excused_test_ids: [String.t()],
           builder_tools: :full | :shell,
           planner_mode: :read_only_tools | :ls_files,
+          planner_difficulty: boolean(),
           models: %{
             required(:builder) => model(),
             required(:strong) => model(),
             optional(:context) => model(),
             optional(:planner) => model(),
-            optional(:reviewer) => model()
+            optional(:reviewer) => model(),
+            optional(:auditor) => model()
           },
           limits: %{max_turns: pos_integer(), wall_ms: pos_integer() | :infinity},
           resilience: Policy.t(),

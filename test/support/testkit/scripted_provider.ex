@@ -11,13 +11,15 @@ defmodule Kogen.E2e.ScriptedProvider.Step do
   @moduledoc false
 
   @enforce_keys [:stage, :text, :calls]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [model: nil, effort: nil]
 
-  @type stage :: :context | :plan | :develop | :review | :shape
+  @type stage :: :context | :plan | :develop | :review | :audit | :shape
   @type t :: %__MODULE__{
           stage: stage(),
           text: String.t(),
-          calls: [Kogen.E2e.ScriptedProvider.Call.t()]
+          calls: [Kogen.E2e.ScriptedProvider.Call.t()],
+          model: String.t() | nil,
+          effort: String.t() | nil
         }
 end
 
@@ -53,7 +55,7 @@ defmodule Kogen.E2e.ScriptedProvider do
   alias Kogen.E2e.ScriptedProvider.Step
 
   @zero_usage %{input: 0, cached_input: 0, cache_write: 0, output: 0, reasoning: 0}
-  @known_stages [:context, :plan, :develop, :review, :shape]
+  @known_stages [:context, :plan, :develop, :review, :audit, :shape]
   @call_timeout_ms 5_000
 
   @spec answer(Step.stage(), String.t()) :: Step.t()
@@ -83,6 +85,19 @@ defmodule Kogen.E2e.ScriptedProvider do
   @spec call(Step.stage(), String.t(), map()) :: Step.t()
   def call(stage, name, arguments) when stage in @known_stages and is_map(arguments),
     do: tool_step(stage, name, arguments)
+
+  @doc """
+  Answers only requests for `model` (and `effort`, when given). Parallel ladder members
+  request concurrently, so a tagged step is matched by model rather than by script position.
+  """
+  @spec for_model(Step.t() | [Step.t()], String.t(), String.t() | nil) :: Step.t() | [Step.t()]
+  def for_model(steps, model, effort \\ nil)
+
+  def for_model(steps, model, effort) when is_list(steps),
+    do: Enum.map(steps, &for_model(&1, model, effort))
+
+  def for_model(%Step{} = step, model, effort) when is_binary(model),
+    do: %{step | model: model, effort: effort}
 
   @spec start_link([Step.t()], (Step.stage() -> :skip | :ok | {:error, term()}) | nil) ::
           GenServer.on_start()
@@ -124,11 +139,11 @@ defmodule Kogen.E2e.ScriptedProvider do
 
   def handle_call({:respond, %ModelRequest{} = request}, _from, %State{} = state) do
     with {:ok, stage} <- request_stage(request),
-         {:ok, step} <- next_step(state.steps, stage),
+         {:ok, step} <- next_step(state.steps, stage, request),
          {:ok, hooked?} <- run_hook(state, stage) do
       next_state = %{
         state
-        | steps: tl(state.steps),
+        | steps: List.delete(state.steps, step),
           hook_done?: hooked?,
           sequence: state.sequence + 1,
           requests: [request | state.requests]
@@ -146,6 +161,9 @@ defmodule Kogen.E2e.ScriptedProvider do
     cond do
       String.contains?(instructions, "Kogen Intent shaper") ->
         {:ok, :shape}
+
+      String.contains?(instructions, "acceptance test auditor") ->
+        {:ok, :audit}
 
       String.contains?(instructions, "read-only Context Pack stage") ->
         {:ok, :context}
@@ -171,6 +189,13 @@ defmodule Kogen.E2e.ScriptedProvider do
           "Scripted provider cannot identify the Build stage from this request."
         )
     end
+  end
+
+  # Steps tagged for another model are skipped; otherwise the script is strictly ordered.
+  defp next_step(steps, stage, %ModelRequest{model: model, effort: effort}) do
+    steps
+    |> Enum.filter(&(is_nil(&1.model) or (&1.model == model and &1.effort in [nil, effort])))
+    |> next_step(stage)
   end
 
   defp next_step([], stage),

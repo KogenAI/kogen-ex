@@ -28,6 +28,11 @@ defmodule Kogen.Harness.PlanShellPrompts do
   Return exactly three sections: `## Acceptance criteria`, `## Technical approach`, and `## Implementation steps`. The criteria must describe observable behaviours, literal expectations, conventional input forms, stated edge cases, and existing behaviour that must keep working. The technical approach must identify the relevant files, APIs, and design choices where applicable. Under Implementation steps, give a numbered, ordered sequence; include a concrete verification check and expected result in every step.
   """
 
+  @difficulty_line """
+
+  Before the three sections, write exactly one line `Difficulty: easy`, `Difficulty: normal` or `Difficulty: hard`. Rate hard when a capable builder could plausibly miss a requirement: several interacting behaviours, subtle edge cases, stale data or caching, framework APIs that are easy to misuse, or changes across many files.
+  """
+
   @build_plan_intro "## Implementation plan\n\nA senior engineer prepared the plan below by investigating a scratch copy of this repository (reading code, running tests and scripts there). The copy was discarded: none of its changes are in your tree. Follow the plan, but confirm its API claims against the installed code before relying on them, and adapt where the repository disagrees. Run the verification steps it lists, including the targeted check of the changed code path, before you finish.\n\n<plan>\n"
 
   @type file_list :: String.t()
@@ -35,6 +40,11 @@ defmodule Kogen.Harness.PlanShellPrompts do
   @spec planner_system() :: String.t()
   def planner_system,
     do: @plan_system <> @ls_files_suffix <> String.trim_trailing(@steps_override, "\n")
+
+  @doc "The planner prompt, optionally asking for a one-line difficulty rating."
+  @spec planner_system(boolean()) :: String.t()
+  def planner_system(false), do: planner_system()
+  def planner_system(true), do: planner_system() <> String.trim_trailing(@difficulty_line, "\n")
 
   @spec planner_input(String.t(), file_list()) :: String.t()
   def planner_input(task, files) when is_binary(task) and is_binary(files) do

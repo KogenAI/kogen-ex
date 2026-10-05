@@ -13,7 +13,19 @@ defmodule Kogen.Engine do
       Kogen.Checks,
       Kogen.Harness
     ],
-    exports: [Build.Request, Build.Result, Build.Setup, Runtime]
+    exports: [
+      Build.CandidateSnapshot,
+      Build.CheckStage,
+      Build.Escalation,
+      Build.Finish,
+      Build.GateSupport,
+      Build.Request,
+      Build.Result,
+      Build.Session,
+      Build.Setup,
+      Build.StageRunner,
+      Runtime
+    ]
 
   alias Kogen.Build.Recipe
   alias Kogen.Contracts.Project
@@ -42,8 +54,24 @@ defmodule Kogen.Engine do
     %{recipe | roles: roles}
   end
 
-  @spec run(Request.t()) :: {:ok, Result.t()} | {:error, term()}
-  def run(%Request{} = request), do: Kogen.Engine.Build.Engine.run(request)
+  @doc "A recipe with role settings and, for a ladder, the whole-Build wall budget."
+  @spec build_recipe(String.t(), String.t(), String.t(), map(), pos_integer() | nil) ::
+          Recipe.t()
+  def build_recipe(name, model, effort, role_settings, wall_ms) do
+    name
+    |> build_recipe(model, effort, role_settings)
+    |> Recipe.with_wall_ms(wall_ms)
+  end
+
+  @doc """
+  Prepares an approved Build up to its first Cycle effects: approval and base checks, the run
+  journal, the claim, and the first Candidate. A Build that cannot start is already finished.
+  """
+  @spec start(Request.t()) ::
+          {:started, Kogen.Engine.Build.Session.t(), [term()]}
+          | {:ok, Result.t()}
+          | {:error, term()}
+  def start(%Request{} = request), do: Kogen.Engine.Build.Engine.start(request)
 
   @spec project_environment(Path.t(), Runtime.t()) ::
           {:ok, %{String.t() => String.t()}}

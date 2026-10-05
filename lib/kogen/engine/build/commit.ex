@@ -2,6 +2,7 @@ defmodule Kogen.Engine.Build.Commit do
   @moduledoc false
 
   alias Kogen.Contracts.Failure
+  alias Kogen.Engine.Build.CheckStage
   alias Kogen.Engine.Build.Guard
   alias Kogen.Engine.Build.PhaseTiming
   alias Kogen.Engine.Build.Session
@@ -182,33 +183,18 @@ defmodule Kogen.Engine.Build.Commit do
 
   defp verify_rebased(session, tree) do
     case recheck(session, tree) do
-      {:error, %Failure{reason: :verification_failed}} -> {:error, :base_moved}
-      result -> tag(:recheck, result)
+      {:error, %Failure{reason: reason}} when reason in [:verification_failed, :acceptance_red] ->
+        {:error, :base_moved}
+
+      result ->
+        tag(:recheck, result)
     end
   end
 
   defp recheck(session, expected_tree) do
     with :ok <- guard(session),
-         {:ok, checks} <-
-           Kogen.Checks.run_all(
-             session.workdir,
-             session.project,
-             session.run_dir,
-             session.process_env,
-             session.git_env,
-             %{sandbox: session.sandbox, check_baseline: session.approval.check_baseline}
-           ),
-         {:ok, acceptance} <-
-           Kogen.Checks.acceptance(
-             session.workdir,
-             session.intent,
-             session.run_dir,
-             session.process_env,
-             session.git_env,
-             session.sandbox
-           ),
-         :ok <- record_check_results(session, checks, acceptance),
-         :ok <- check_passed(checks, acceptance),
+         {:ok, checks, acceptance} <- CheckStage.verify(session),
+         :ok <- CheckStage.passed(session, checks, acceptance),
          {:ok, tree} <- Guard.tree_hash(session.workdir, session.git_env),
          :ok <- same_tree(expected_tree, tree) do
       {:ok, checks.receipts, acceptance.ledger}
@@ -225,39 +211,6 @@ defmodule Kogen.Engine.Build.Commit do
       session.git_env
     )
   end
-
-  defp check_passed(%{status: :pass}, %{status: :pass}), do: :ok
-
-  defp check_passed(checks, acceptance) do
-    feedback = Map.get(checks, :feedback, "")
-
-    detail =
-      if feedback == "" do
-        "checks=#{inspect(checks.status)} acceptance=#{inspect(acceptance.status)}"
-      else
-        feedback <> "\nacceptance=#{inspect(acceptance.status)}"
-      end
-
-    {:error, candidate_failure(:verification_failed, detail)}
-  end
-
-  defp record_check_results(session, checks, acceptance) do
-    with :ok <-
-           State.record(session.run, %{
-             event: :check_result,
-             result: checks.status,
-             receipts: checks.receipts
-           }) do
-      State.record(session.run, %{
-        event: :acceptance_result,
-        result: acceptance_status(acceptance.status),
-        ledger: acceptance.ledger
-      })
-    end
-  end
-
-  defp acceptance_status(:pass), do: :pass
-  defp acceptance_status({:fail, ids}), do: %{status: :fail, failed_ids: ids}
 
   defp same_tree(tree, tree), do: :ok
   defp same_tree(_expected, _actual), do: {:error, :tree_mutated}

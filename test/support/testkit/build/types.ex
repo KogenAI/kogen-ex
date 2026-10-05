@@ -20,6 +20,7 @@ defmodule Kogen.E2e do
       Build.Options,
       Build.Result,
       Build.Signal,
+      Ladder,
       ScriptedProvider
     ]
 end

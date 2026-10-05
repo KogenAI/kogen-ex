@@ -16,50 +16,16 @@ defmodule Kogen.State.Json do
     {"Kogen-Run", :run}
   ]
 
-  @event_fields [
-    event: "event",
-    recipe: "recipe",
-    roles: "roles",
-    escalation: "escalation",
-    attempt: "attempt",
-    trigger: "trigger",
-    summary: "summary",
-    findings: "findings",
-    gate_summary: "gate_summary",
-    stop: "stop",
-    phase: "phase",
-    name: "name",
-    stage: "stage",
-    class: "class",
-    reason: "reason",
-    detail: "detail",
-    path: "path",
-    declared_domains: "declared_domains",
-    test_ids: "test_ids",
-    seed: "seed",
-    status: "status",
-    result: "result",
-    approval_commit: "approval_commit",
-    approved_by: "approved_by",
-    base_sha: "base_sha",
-    ledger: "ledger",
-    receipts: "receipts",
-    candidate_diff: "candidate_diff",
-    excluded_paths: "excluded_paths",
-    red_checks: "red_checks",
-    acceptance_items: "acceptance_items",
-    model: "model",
-    effort: "effort",
-    started_at: "started_at",
-    finished_at: "finished_at",
-    tokens: "tokens",
-    wall_ms: "wall_ms",
-    setup_key: "setup_key",
-    saved_wall_ms: "saved_wall_ms",
-    credential_source: "credential_source",
-    credential_label: "credential_label",
-    tokens: "tokens"
-  ]
+  # Journal keys match the Event struct fields.
+  @event_field_names ~w(
+    event recipe roles escalation attempt trigger summary findings gate_summary stop phase
+    name stage class reason detail path declared_domains test_ids seed status result
+    approval_commit approved_by base_sha ledger receipts candidate_diff excluded_paths
+    red_checks acceptance_items model effort started_at finished_at tokens wall_ms setup_key
+    saved_wall_ms credential_source credential_label commit metrics branch item verdict rung
+    outcomes attempts failing
+  )a
+  @event_fields Enum.map(@event_field_names, &{&1, Atom.to_string(&1)})
 
   @spec encode_approval(Approval.t()) :: {:ok, binary()} | {:error, :invalid_json_value}
   def encode_approval(%Approval{} = approval) do

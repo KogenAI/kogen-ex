@@ -12,6 +12,7 @@ defmodule Kogen.Harness do
     ],
     exports: [Opts, Pack, Plan, Review, Result, ShapePass, ShapeCall, PhaseTiming]
 
+  alias Kogen.Harness.AuditStage
   alias Kogen.Harness.Developer
   alias Kogen.Harness.Opts
   alias Kogen.Harness.Pack
@@ -51,6 +52,10 @@ defmodule Kogen.Harness do
           {:ok, Review.t()} | {:error, term()}
   def review(%Opts{} = opts, intent_text, diff, check_summary),
     do: Stages.review(opts, intent_text, diff, check_summary)
+
+  @doc "Judges each failing acceptance test against the verbatim Request."
+  @spec audit(Opts.t(), map()) :: {:ok, %{verdicts: [map()], usage: map()}} | {:error, term()}
+  def audit(%Opts{} = opts, input), do: AuditStage.run(opts, input)
 
   @spec shape(Opts.t(), String.t(), String.t(), [map()], String.t() | nil, non_neg_integer()) ::
           {:ok, ShapePass.t()} | {:error, term()}

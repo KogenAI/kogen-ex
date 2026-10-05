@@ -48,6 +48,9 @@ defmodule Kogen.Engine.Build.GateSupport do
   end
 
   @spec builder_settings(Session.t()) :: {String.t(), String.t()}
+  def builder_settings(%Session{rung: %{} = rung, request: %{recipe: recipe}}),
+    do: Recipe.rung_builder(recipe, rung)
+
   def builder_settings(%Session{attempt: :escalation, request: %{recipe: recipe}}) do
     case Recipe.escalation(recipe) do
       %{model: model, effort: effort} -> {model, effort}
@@ -58,6 +61,9 @@ defmodule Kogen.Engine.Build.GateSupport do
   def builder_settings(%Session{request: %{recipe: recipe}}), do: Recipe.role(recipe, :builder)
 
   @spec resume_data(Session.t(), map()) :: map() | nil
+  def resume_data(%Session{rung: %{}}, %{escalation_summary: summary}) when is_binary(summary),
+    do: %{previous_items: [], failure_text: summary, fresh: true}
+
   def resume_data(%Session{attempt: :escalation}, args) do
     %{
       previous_items: [],
@@ -70,6 +76,30 @@ defmodule Kogen.Engine.Build.GateSupport do
       when is_binary(text), do: %{previous_items: items, failure_text: text}
 
   def resume_data(_session, _args), do: nil
+
+  @doc """
+  The Developer's task text: the approved Intent, or for a raw-request rung only the verbatim
+  Request and the acceptance tests it must pass.
+  """
+  @spec builder_text(Session.t()) :: String.t()
+  def builder_text(%Session{rung: %{input: :raw_request}} = session) do
+    slug = session.approval.slug
+    source = Map.get(session.approval.acceptance_files, ".kogen/acceptance/#{slug}_test.exs", "")
+
+    String.trim("""
+    ## Request
+    #{session.intent.request || session.intent_text}
+
+    ## Acceptance tests
+    These read-only tests are installed at test/acceptance/#{slug}_test.exs and must pass.
+
+    ```elixir
+    #{String.trim_trailing(source)}
+    ```
+    """)
+  end
+
+  def builder_text(%Session{} = session), do: session.intent_text
 
   defp phase_recorder(session) do
     fn phase, name, wall_ms, started_at, finished_at ->
@@ -230,6 +260,7 @@ defmodule Kogen.Engine.Build.GateSupport do
     builder = builder_settings(session)
     planner = Map.get(session.request.recipe.roles, :planner, builder)
     reviewer = Map.get(session.request.recipe.roles, :reviewer, builder)
+    recipe = session.request.recipe
 
     %Opts{
       workdir: session.workdir,
@@ -246,18 +277,26 @@ defmodule Kogen.Engine.Build.GateSupport do
         strong: planner,
         context: context || {"gpt-6-luna", "low"},
         planner: planner,
-        reviewer: reviewer
+        reviewer: reviewer,
+        auditor: Recipe.auditor(recipe) || planner
       },
-      limits: %{max_turns: 60, wall_ms: 1_800_000},
+      limits: %{max_turns: 60, wall_ms: wall_ms(session)},
       repairs_left: 0,
-      builder_tools: session.request.recipe.builder_tools,
+      builder_tools: recipe.builder_tools,
       planner_mode:
-        if(Recipe.name(session.request.recipe) == "plan-shell",
+        if(Recipe.name(recipe) == "plan-shell" or Recipe.ladder(recipe) != nil,
           do: :ls_files,
           else: :read_only_tools
-        )
+        ),
+      planner_difficulty: Recipe.ladder(recipe) != nil
     }
   end
+
+  # A ladder's whole-Build budget also bounds each stage.
+  defp wall_ms(%Session{budget_deadline: nil}), do: 1_800_000
+
+  defp wall_ms(%Session{budget_deadline: deadline}),
+    do: deadline |> Kernel.-(System.monotonic_time(:millisecond)) |> max(1) |> min(1_800_000)
 
   defp changed_detector(session) do
     fn ->

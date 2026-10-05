@@ -51,9 +51,16 @@ defmodule Kogen.Queue.BuildSummary do
     reversed = Enum.reverse(events)
 
     Enum.find_value(reversed, fn
-      %Event{event: "finished", reason: reason} when is_binary(reason) -> reason
-      _event -> nil
+      %Event{event: "best_candidate", branch: branch} when is_binary(branch) ->
+        "needs attention: #{branch}"
+
+      _event ->
+        nil
     end) ||
+      Enum.find_value(reversed, fn
+        %Event{event: "finished", reason: reason} when is_binary(reason) -> reason
+        _event -> nil
+      end) ||
       Enum.find_value(reversed, fn
         %Event{event: "stage_failure", class: class, reason: reason}
         when is_binary(class) and is_binary(reason) ->

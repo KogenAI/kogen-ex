@@ -63,7 +63,7 @@ defmodule Kogen.Harness.Stages do
         turn: 1,
         model: model,
         effort: effort,
-        instructions: PlanShellPrompts.planner_system(),
+        instructions: PlanShellPrompts.planner_system(opts.planner_difficulty),
         items: [Codec.user_item(PlanShellPrompts.planner_input(intent_text, files))],
         tool_names: [],
         remaining_ms: min(opts.limits.wall_ms, @plan_shell_request_timeout_ms)

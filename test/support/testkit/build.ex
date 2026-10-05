@@ -23,7 +23,7 @@ defmodule Kogen.E2e.Build do
     seed = Path.join(parent, "compiled-tiny-project")
     origin = Path.join(parent, "approved-origin.git")
     write_seed!(seed, options)
-    write_intent!(seed)
+    write_intent!(seed, options)
     compile_seed!(seed)
     prepare_approved_seed!(seed, origin)
     seed
@@ -207,8 +207,21 @@ defmodule Kogen.E2e.Build do
     :ok
   end
 
-  defp write_intent!(project) do
-    intent = """
+  defp write_intent!(project, options) do
+    intent = Keyword.get(options, :intent, default_intent())
+    acceptance = Keyword.get(options, :acceptance, default_acceptance())
+
+    intent_path = Path.join([project, ".kogen", "intents", @slug, "intent.md"])
+    acceptance_path = Path.join([project, ".kogen", "acceptance", "#{@slug}_test.exs"])
+
+    File.mkdir_p!(Path.dirname(intent_path))
+    File.mkdir_p!(Path.dirname(acceptance_path))
+    File.write!(intent_path, intent)
+    File.write!(acceptance_path, acceptance)
+  end
+
+  defp default_intent do
+    """
     ---
     title: "Expose a ready value"
     domains: [kernel]
@@ -226,8 +239,10 @@ defmodule Kogen.E2e.Build do
     Keep the implementation inside lib/tiny_app.ex.
     #{request_section()}
     """
+  end
 
-    acceptance = """
+  defp default_acceptance do
+    """
     defmodule TinyApp.AcceptanceTest do
       use ExUnit.Case, async: true
 
@@ -237,14 +252,6 @@ defmodule Kogen.E2e.Build do
       end
     end
     """
-
-    intent_path = Path.join([project, ".kogen", "intents", @slug, "intent.md"])
-    acceptance_path = Path.join([project, ".kogen", "acceptance", "#{@slug}_test.exs"])
-
-    File.mkdir_p!(Path.dirname(intent_path))
-    File.mkdir_p!(Path.dirname(acceptance_path))
-    File.write!(intent_path, intent)
-    File.write!(acceptance_path, acceptance)
   end
 
   defp request_section,

@@ -43,7 +43,16 @@ defmodule Kogen.State.Event do
     :tokens,
     :wall_ms,
     :setup_key,
-    :saved_wall_ms
+    :saved_wall_ms,
+    :commit,
+    :metrics,
+    :branch,
+    :item,
+    :verdict,
+    :rung,
+    :outcomes,
+    :attempts,
+    :failing
   ]
 
   @type t :: %__MODULE__{
@@ -87,6 +96,15 @@ defmodule Kogen.State.Event do
           tokens: term(),
           wall_ms: non_neg_integer() | nil,
           setup_key: String.t() | nil,
-          saved_wall_ms: non_neg_integer() | nil
+          saved_wall_ms: non_neg_integer() | nil,
+          commit: String.t() | nil,
+          metrics: map() | nil,
+          branch: String.t() | nil,
+          item: String.t() | nil,
+          verdict: String.t() | nil,
+          rung: String.t() | nil,
+          outcomes: [map()] | nil,
+          attempts: [String.t()] | nil,
+          failing: map() | nil
         }
 end

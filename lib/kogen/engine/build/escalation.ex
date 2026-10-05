@@ -1,6 +1,7 @@
 defmodule Kogen.Engine.Build.Escalation do
   @moduledoc false
 
+  alias Kogen.Build.Demotion
   alias Kogen.Contracts.Failure
   alias Kogen.Engine.Build.CandidateSnapshot
   alias Kogen.Engine.Build.Session
@@ -16,19 +17,20 @@ defmodule Kogen.Engine.Build.Escalation do
   @spec reset_candidate(Session.t(), term()) ::
           {:ok, Session.t()} | {:error, Session.t(), Failure.t()}
   def reset_candidate(%Session{} = session, reason) do
-    case CandidateSnapshot.before_escalation(session, reason) do
-      :ok ->
-        reset_candidate_from_base(session)
-
-      {:error, detail} ->
-        {:error, session,
-         %Failure{class: :controller, reason: :candidate_snapshot_failed, detail: inspect(detail)}}
+    with :ok <- snapshot(session, reason),
+         {:ok, fresh} <- fresh_candidate(session, session.run.id <> "-escalation"),
+         :ok <- destroy_previous(fresh, session.workdir) do
+      {:ok, %{fresh | attempt: :escalation}}
     end
   end
 
-  defp reset_candidate_from_base(%Session{} = session) do
-    build_id = session.run.id <> "-escalation"
-
+  @doc """
+  A new Candidate checkout of the approved base with the approved Intent files, setup run, and
+  any demoted acceptance items excluded. The previous checkout is left alone.
+  """
+  @spec fresh_candidate(Session.t(), String.t()) ::
+          {:ok, Session.t()} | {:error, Session.t(), Failure.t()}
+  def fresh_candidate(%Session{} = session, build_id) do
     case Workspace.create(
            session.request.origin,
            session.base_sha,
@@ -46,43 +48,76 @@ defmodule Kogen.Engine.Build.Escalation do
   end
 
   defp prepare_new_candidate(session, path) do
-    with :ok <- Workspace.insert_files(path, approved_files(session.approval)),
+    approval = session.approval
+
+    with :ok <-
+           Workspace.install_intent_files(
+             path,
+             approval.slug,
+             approval.intent_bytes,
+             approval.acceptance_files
+           ),
          {:ok, project} <- Project.load(path),
          {:ok, process_env} <- candidate_environment(path, session, project),
-         sandbox = %{
-           session.sandbox
-           | workspace: path,
-             tmp_dir: Runtime.temporary_directory(process_env)
-         },
-         :ok <- Setup.run(project.setup, path, session.run_dir, process_env, Kogen.Proc, sandbox),
-         :ok <- Workspace.destroy(session.workdir) do
-      {:ok,
-       %{
-         session
-         | workdir: path,
-           project: project,
-           process_env: process_env,
-           git_env: Runtime.git_environment(process_env),
-           sandbox: sandbox,
-           harness_opts: nil,
-           pack: nil,
-           plan: nil,
-           last_harness: nil,
-           failure: nil,
-           failure_text: nil,
-           attempt: :escalation,
-           direct_preflight_complete?: false,
-           flake_excused: [],
-           scope_warnings: [],
-           receipts: [],
-           acceptance: []
-       }}
+         fresh = fresh_session(session, path, project, process_env),
+         :ok <- Setup.run_cached(fresh) do
+      {:ok, fresh}
     else
       {:error, %Failure{} = reason} ->
         cleanup_candidate(path, session, reason)
 
       {:error, reason} ->
         cleanup_candidate(path, session, failure(:escalation_setup_failed, reason))
+    end
+  end
+
+  defp fresh_session(session, path, project, process_env) do
+    demoted = Enum.map(session.demoted, & &1.id)
+
+    %{
+      session
+      | workdir: path,
+        project: Demotion.exclude(project, session.approval.slug, demoted),
+        process_env: process_env,
+        git_env: Runtime.git_environment(process_env),
+        sandbox: %{
+          session.sandbox
+          | workspace: path,
+            tmp_dir: Runtime.temporary_directory(process_env)
+        },
+        harness_opts: nil,
+        pack: nil,
+        plan: nil,
+        last_harness: nil,
+        failure: nil,
+        failure_text: nil,
+        direct_preflight_complete?: false,
+        flake_excused: [],
+        scope_warnings: [],
+        receipts: [],
+        acceptance: [],
+        acceptance_failures: []
+    }
+  end
+
+  defp snapshot(session, reason) do
+    case CandidateSnapshot.before_escalation(session, reason) do
+      :ok ->
+        :ok
+
+      {:error, detail} ->
+        {:error, session,
+         %Failure{class: :controller, reason: :candidate_snapshot_failed, detail: inspect(detail)}}
+    end
+  end
+
+  defp destroy_previous(fresh, previous) do
+    case Workspace.destroy(previous) do
+      :ok ->
+        :ok
+
+      {:error, reason} ->
+        cleanup_candidate(fresh.workdir, fresh, failure(:cleanup_failed, reason))
     end
   end
 
@@ -127,17 +162,6 @@ defmodule Kogen.Engine.Build.Escalation do
       {:error, reason} ->
         %Failure{class: :controller, reason: :state_write_failed, detail: inspect(reason)}
     end
-  end
-
-  defp approved_files(approval) do
-    acceptance_path = ".kogen/acceptance/#{approval.slug}_test.exs"
-    acceptance = Map.fetch!(approval.acceptance_files, acceptance_path)
-
-    %{
-      ".kogen/intents/#{approval.slug}/intent.md" => approval.intent_bytes,
-      acceptance_path => acceptance,
-      "test/acceptance/#{approval.slug}_test.exs" => acceptance
-    }
   end
 
   defp failure(reason, detail),

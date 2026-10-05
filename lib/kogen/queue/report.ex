@@ -79,8 +79,72 @@ defmodule Kogen.Queue.Report do
       {"findings", findings(events)},
       {"failures", failures(events)},
       {"last_gate", last_gate(events)},
-      {"stop", stop(events)}
+      {"stop", stop(events)},
+      {"rungs", rungs(events)},
+      {"parallel", parallel(events)},
+      {"acceptance_demoted", demotions(events)},
+      {"best_candidate", best_candidate(events)}
     ]
+  end
+
+  # Ladder Builds: each rung's time and cost, the parallel pick, demoted acceptance items,
+  # and the best Candidate pushed for a human when no rung was green.
+  defp rungs(events) do
+    for %Event{event: "rung_finished"} = event <- events do
+      json_object([
+        {"attempt", event.attempt},
+        {"rung", event.rung},
+        {"model", event.model},
+        {"effort", event.effort},
+        {"result", event.result},
+        {"reason", nullable(reason_text(event.reason))},
+        {"wall_ms", event.wall_ms},
+        {"tokens", event.tokens || %{}}
+      ])
+    end
+  end
+
+  defp parallel(events) do
+    case Enum.find(events, &(&1.event == "parallel_selected")) do
+      %Event{} = event ->
+        json_object([
+          {"selected", event.attempt},
+          {"result", event.result},
+          {"outcomes", event.outcomes || []}
+        ])
+
+      nil ->
+        :null
+    end
+  end
+
+  defp demotions(events) do
+    for %Event{event: "acceptance_demoted"} = event <- events do
+      json_object([
+        {"item", event.item},
+        {"verdict", event.verdict},
+        {"reason", nullable(event.reason)},
+        {"attempt", nullable(event.attempt)}
+      ])
+    end
+  end
+
+  defp best_candidate(events) do
+    case Enum.find(Enum.reverse(events), &(&1.event == "best_candidate")) do
+      %Event{} = event ->
+        json_object([
+          {"attempt", event.attempt},
+          {"branch", event.branch},
+          {"commit", event.commit},
+          {"reason", nullable(reason_text(event.reason))},
+          {"metrics", event.metrics || %{}},
+          {"failing", event.failing || %{}},
+          {"findings", event.findings || []}
+        ])
+
+      nil ->
+        :null
+    end
   end
 
   defp model_stages(events) do
@@ -222,7 +286,9 @@ defmodule Kogen.Queue.Report do
         {"source_path", candidate_source(run, event.candidate_diff)},
         {"protected_paths_changed", event.excluded_paths || []},
         {"red_checks", event.red_checks || []},
-        {"acceptance_items", event.acceptance_items || []}
+        {"acceptance_items", event.acceptance_items || []},
+        {"commit", nullable(event.commit)},
+        {"metrics", nullable(event.metrics)}
       ])
     end
   end

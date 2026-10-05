@@ -116,11 +116,19 @@ defmodule Kogen.Engine.Build.Session do
     :landed_sha,
     :acceptance,
     :receipts,
+    :rung,
+    :budget_deadline,
+    :rung_started_at,
     direct_preflight_complete?: false,
     flake_excused: [],
     scope_warnings: [],
     lines: [],
-    attempt: :builder
+    attempt: :builder,
+    demoted: [],
+    audited: %{},
+    acceptance_failures: [],
+    candidates: [],
+    parallel_members: []
   ]
 
   @type t :: %__MODULE__{
@@ -145,13 +153,21 @@ defmodule Kogen.Engine.Build.Session do
           last_harness: Kogen.Harness.Result.t() | nil,
           failure: Kogen.Contracts.Failure.t() | nil,
           failure_text: String.t() | nil,
-          attempt: :builder | :escalation,
+          attempt: :builder | :escalation | String.t(),
           landed_sha: String.t() | nil,
           acceptance: [Kogen.Checks.LedgerRow.t()] | nil,
           receipts: [Kogen.Contracts.Receipt.t()] | nil,
           direct_preflight_complete?: boolean(),
           flake_excused: [%{test_ids: [String.t()], seed: non_neg_integer()}],
           scope_warnings: [map()],
-          lines: [String.t()]
+          lines: [String.t()],
+          rung: Kogen.Build.Recipe.rung() | nil,
+          budget_deadline: integer() | nil,
+          rung_started_at: integer() | nil,
+          demoted: [%{id: String.t(), reason: String.t()}],
+          audited: %{String.t() => atom()},
+          acceptance_failures: [String.t()],
+          candidates: [map()],
+          parallel_members: [t()]
         }
 end

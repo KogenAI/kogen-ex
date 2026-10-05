@@ -10,6 +10,7 @@ defmodule Kogen.State do
   alias Kogen.State.Json
   alias Kogen.State.Operations
   alias Kogen.State.Run
+  alias Kogen.State.Usage
 
   @type status :: :draft | :approved | :building | :interrupted | :landed | :failed | :parked
 
@@ -43,6 +44,10 @@ defmodule Kogen.State do
 
   @spec decode_event(binary()) :: {:ok, Event.t()} | {:error, :invalid_event}
   defdelegate decode_event(binary), to: Json
+
+  @spec attempt_usage(Run.t(), term()) ::
+          {:ok, %{tokens: map(), model_wall_ms: non_neg_integer()}} | {:error, term()}
+  defdelegate attempt_usage(run, attempt), to: Usage, as: :attempt
 
   @spec put_landing(Run.t(), map()) :: :ok | {:error, term()}
   defdelegate put_landing(run, identity), to: Operations
