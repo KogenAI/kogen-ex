@@ -203,7 +203,11 @@ defmodule Kogen.Engine.Build.GateSupport do
     )
   end
 
+  # A raw Intent without Acceptance items has no acceptance tests; its gate is the project's
+  # checks.
   @spec red_on_base(Session.t()) :: :ok | {:error, Failure.t()}
+  def red_on_base(%Session{intent: %{source: :raw, acceptance: []}}), do: :ok
+
   def red_on_base(%Session{} = session) do
     PhaseTiming.measure(session, "build", "red-on-base", fn ->
       Kogen.Checks.red_on_base(

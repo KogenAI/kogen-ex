@@ -24,18 +24,25 @@ defmodule Kogen.Engine.Build.CheckStage do
              session.git_env,
              %{sandbox: session.sandbox, check_baseline: session.approval.check_baseline}
            ),
-         {:ok, acceptance} <-
-           Kogen.Checks.acceptance(
-             session.workdir,
-             session.intent,
-             session.run_dir,
-             session.process_env,
-             session.git_env,
-             session.sandbox
-           ),
+         {:ok, acceptance} <- acceptance(session),
          :ok <- record(session, checks, acceptance) do
       {:ok, checks, acceptance}
     end
+  end
+
+  # A raw Intent without Acceptance items has no ledger; its gate is the project's checks.
+  defp acceptance(%Session{intent: %{source: :raw, acceptance: []}}),
+    do: {:ok, %{status: :pass, ledger: []}}
+
+  defp acceptance(%Session{} = session) do
+    Kogen.Checks.acceptance(
+      session.workdir,
+      session.intent,
+      session.run_dir,
+      session.process_env,
+      session.git_env,
+      session.sandbox
+    )
   end
 
   @spec passed(Session.t(), map(), map()) :: :ok | {:error, Failure.t()}

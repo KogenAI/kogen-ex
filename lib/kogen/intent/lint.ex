@@ -50,6 +50,7 @@ defmodule Kogen.Intent.Lint do
   def lint(%Intent{} = intent) do
     Enum.flat_map(
       [
+        &required_issues/1,
         &brief_issues/1,
         &size_issues/1,
         &identity_issues/1,
@@ -63,13 +64,25 @@ defmodule Kogen.Intent.Lint do
     )
   end
 
+  # A raw Intent is only its verbatim Request; every other Intent needs a Brief.
+  defp required_issues(%Intent{source: :raw, request: request}) do
+    if String.trim(request || "") == "",
+      do: [issue(:missing_request, "a raw Intent needs a non-empty Request section")],
+      else: []
+  end
+
+  defp required_issues(%Intent{brief: brief}) do
+    if String.trim(brief || "") == "",
+      do: [issue(:missing_brief, "write the Brief as prose")],
+      else: []
+  end
+
   defp brief_issues(intent) do
     brief = intent.brief || ""
     sized? = Map.has_key?(@sizes, intent.size)
 
     Enum.reject(
       [
-        if(String.trim(brief) == "", do: issue(:missing_brief, "write the Brief as prose")),
         if(Regex.match?(~r/^\s*(?:[-*+]|\d+[.)])\s/m, brief),
           do: issue(:list_in_brief, "the Brief cannot contain lists")
         ),
@@ -108,7 +121,7 @@ defmodule Kogen.Intent.Lint do
 
     Enum.reject(
       [
-        if(intent.acceptance == [],
+        if(intent.acceptance == [] and intent.source != :raw,
           do: issue(:acceptance_count, "Acceptance needs at least one item")
         ),
         if(length(intent.acceptance) > max_items,

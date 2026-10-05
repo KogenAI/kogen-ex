@@ -8,7 +8,10 @@ defmodule Kogen.Intent.Parser do
   alias Kogen.Intent.Parser.SectionLines
   alias Kogen.Intent.Parser.VerifyLine
 
-  @frontmatter_keys ~w(title domains size limits blocks_on changes_gate)
+  @frontmatter_keys ~w(title domains size limits blocks_on changes_gate source)
+  @changes_gate {[{:absent, false}, {"true", true}, {"false", false}], "true or false"}
+  @source {[{:absent, nil}, {"raw", :raw}], "raw"}
+  @sizes [{"small", :small}, {"medium", :medium}, {"large", :large}]
 
   @type parse_error :: %{line: pos_integer(), message: String.t()}
 
@@ -72,8 +75,11 @@ defmodule Kogen.Intent.Parser do
          {:ok, domains} <- required_string_list(attrs, "domains", frontmatter),
          :ok <- optional_string_list(attrs, "limits", frontmatter),
          :ok <- optional_string_list(attrs, "blocks_on", frontmatter),
-         {:ok, gate} <- optional_boolean(attrs, "changes_gate", frontmatter) do
-      {:ok, %Metadata{title: title, size: size_atom(size), domains: domains, changes_gate: gate}}
+         {:ok, gate} <- optional_choice(attrs, "changes_gate", frontmatter, @changes_gate),
+         {:ok, source} <- optional_choice(attrs, "source", frontmatter, @source) do
+      size = @sizes |> List.keyfind(size, 0, {size, nil}) |> elem(1)
+      metadata = %Metadata{title: title, size: size, domains: domains}
+      {:ok, %{metadata | changes_gate: gate, source: source}}
     end
   end
 
@@ -139,13 +145,10 @@ defmodule Kogen.Intent.Parser do
     end
   end
 
-  defp optional_boolean(attrs, key, frontmatter) do
-    case Map.get(attrs, key, "false") do
-      value when value in ["true", "false"] ->
-        {:ok, value == "true"}
-
-      _value ->
-        error(attribute_line(frontmatter, key), "frontmatter `#{key}` must be true or false")
+  defp optional_choice(attrs, key, frontmatter, {choices, expected}) do
+    case List.keyfind(choices, Map.get(attrs, key, :absent), 0) do
+      {_value, choice} -> {:ok, choice}
+      nil -> error(attribute_line(frontmatter, key), "frontmatter `#{key}` must be #{expected}")
     end
   end
 
@@ -158,11 +161,6 @@ defmodule Kogen.Intent.Parser do
       index -> index + 2
     end
   end
-
-  defp size_atom("small"), do: :small
-  defp size_atom("medium"), do: :medium
-  defp size_atom("large"), do: :large
-  defp size_atom(_unknown), do: nil
 
   defp parse_sections(body, start_line) do
     body
@@ -358,6 +356,7 @@ defmodule Kogen.Intent.Parser do
       acceptance: acceptance,
       domains: metadata.domains,
       changes_gate: metadata.changes_gate,
+      source: metadata.source,
       notes: if(notes == "", do: nil, else: notes),
       path: path,
       sha256: :sha256 |> :crypto.hash(binary) |> Base.encode16(case: :lower)

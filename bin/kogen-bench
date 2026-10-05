@@ -36,6 +36,19 @@ esac
 provided_intent_dir=${KOGEN_BENCH_INTENT_DIR:-}
 intent_source=shaped
 [ -z "$provided_intent_dir" ] || intent_source=provided
+# raw skips shaping: the Intent is the verbatim prompt with no Kogen-written acceptance items,
+# so the gate is the project's own checks.
+case "${KOGEN_BENCH_INTENT_SOURCE:-shaped}" in
+  shaped) ;;
+  raw)
+    [ -z "$provided_intent_dir" ] || {
+      echo "KOGEN_BENCH_INTENT_SOURCE=raw cannot be combined with KOGEN_BENCH_INTENT_DIR" >&2
+      exit 2
+    }
+    intent_source=raw
+    ;;
+  *) echo "KOGEN_BENCH_INTENT_SOURCE must be shaped or raw" >&2; exit 2 ;;
+esac
 task_dir=$(cd "$1" && pwd -P)
 work_dir=$(cd "$2" && pwd -P)
 mkdir -p "$3"
@@ -792,6 +805,16 @@ with open(test_path, "w", encoding="utf-8") as target:
 PY
 }
 
+write_raw_intent() {
+  mkdir -p "$project_dir/.kogen/intents/$slug" "$project_dir/.kogen/acceptance"
+  {
+    printf '%s\n' '---' 'title: Raw request' 'domains: [app]' 'size: small' 'source: raw' '---' \
+      '## Request'
+    cat "$prompt_file"
+  } > "$project_dir/.kogen/intents/$slug/intent.md"
+  : > "$project_dir/.kogen/acceptance/${slug}_test.exs"
+}
+
 slug=$(basename "$task_dir")
 runtime_tmpdir=$(cat "$scratch/project_tmpdir")
 setup_log_path="${runtime_tmpdir%/}/$(basename "$scratch")-$slug-setup.log"
@@ -802,6 +825,9 @@ if [ "$intent_source" = provided ]; then
   cp "$provided_intent_dir/intent.md" "$project_dir/.kogen/intents/$slug/intent.md"
   cp "$provided_intent_dir/acceptance_test.exs" \
     "$project_dir/.kogen/acceptance/${slug}_test.exs"
+elif [ "$intent_source" = raw ]; then
+  log_line "intent source is raw: building from the verbatim prompt without shaping"
+  write_raw_intent
 else
   if run_capture shape "$out_dir/shape.json" "$KOGEN_BIN" intent shape "$slug" "$prompt_file" \
     --project "$project_dir" --origin "$origin" --base main --json; then

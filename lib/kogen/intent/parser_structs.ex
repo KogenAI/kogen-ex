@@ -5,7 +5,7 @@ end
 
 defmodule Kogen.Intent.Parser.Metadata do
   @moduledoc false
-  defstruct title: "", size: nil, domains: [], changes_gate: false
+  defstruct title: "", size: nil, domains: [], changes_gate: false, source: nil
 end
 
 defmodule Kogen.Intent.Parser.VerifyLine do

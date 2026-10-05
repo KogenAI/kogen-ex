@@ -134,4 +134,31 @@ defmodule Kogen.Intent.IntentTest do
     assert {:error, [%{line: 5, message: "frontmatter `changes_gate` must be true or false"}]} =
              Kogen.Intent.parse_binary(invalid, "x/intent.md")
   end
+
+  test "only a raw-source Intent may be its verbatim Request without Brief or Acceptance" do
+    request = "Add a Greeter.\n\n## Acceptance\nnot a real section\n"
+    front = "---\ntitle: Raw request\ndomains: [app]\nsize: small\n"
+    raw = front <> "source: raw\n---\n## Request\n" <> request
+
+    assert {:ok, %Intent{source: :raw, acceptance: [], request: ^request} = intent} =
+             Kogen.Intent.parse_binary(raw, "raw/intent.md")
+
+    assert Kogen.Intent.lint(intent) == []
+
+    assert {:ok, shaped} =
+             Kogen.Intent.parse_binary(front <> "---\n## Request\n" <> request, "s/intent.md")
+
+    assert shaped.source == nil
+    rules = Enum.map(Kogen.Intent.lint(shaped), & &1.rule)
+    assert :acceptance_count in rules
+    assert :missing_brief in rules
+
+    assert {:ok, empty} =
+             Kogen.Intent.parse_binary(front <> "source: raw\n---\n", "empty/intent.md")
+
+    assert Enum.map(Kogen.Intent.lint(empty), & &1.rule) == [:missing_request]
+
+    assert {:error, [%{message: "frontmatter `source` must be raw"}]} =
+             Kogen.Intent.parse_binary(front <> "source: shaped\n---\n", "x/intent.md")
+  end
 end
