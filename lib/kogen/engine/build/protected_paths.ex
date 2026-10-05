@@ -15,11 +15,8 @@ defmodule Kogen.Engine.Build.ProtectedPaths do
           {:cont, {:ok, changed}}
 
         {:ok, true} ->
-          with {:ok, bytes} <- approved_bytes(session, path),
-               :ok <- ensure_consistent(session, path, bytes, approved_sha),
-               :ok <- Workspace.write_file(session.workdir, path, bytes) do
-            {:cont, {:ok, [path | changed]}}
-          else
+          case restore_path(session, path, approved_sha) do
+            :ok -> {:cont, {:ok, [path | changed]}}
             {:error, reason} -> {:halt, {:error, {path, reason}}}
           end
 
@@ -30,6 +27,20 @@ defmodule Kogen.Engine.Build.ProtectedPaths do
     |> case do
       {:ok, paths} -> clean_acceptance_source(session, paths)
       error -> error
+    end
+  end
+
+  defp restore_path(session, path, approved_sha) do
+    if approved_sha == Workspace.absent_digest() do
+      with :ok <- validate_path(path),
+           {:ok, _removed} <- File.rm_rf(Path.join(session.workdir, path)) do
+        :ok
+      end
+    else
+      with {:ok, bytes} <- approved_bytes(session, path),
+           :ok <- ensure_consistent(session, path, bytes, approved_sha) do
+        Workspace.write_file(session.workdir, path, bytes)
+      end
     end
   end
 
@@ -50,7 +61,7 @@ defmodule Kogen.Engine.Build.ProtectedPaths do
     with :ok <- validate_path(path),
          {:ok, parents} <- parent_state(root, path) do
       case parents do
-        :missing -> {:ok, true}
+        :missing -> {:ok, approved_sha != Workspace.absent_digest()}
         :present -> target_changed?(Path.join(root, path), approved_sha)
       end
     end
@@ -68,7 +79,7 @@ defmodule Kogen.Engine.Build.ProtectedPaths do
         {:ok, true}
 
       {:error, :enoent} ->
-        {:ok, true}
+        {:ok, approved_sha != Workspace.absent_digest()}
 
       {:error, reason} ->
         {:error, reason}

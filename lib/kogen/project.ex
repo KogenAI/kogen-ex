@@ -4,6 +4,7 @@ defmodule Kogen.Project do
 
   alias Kogen.Contracts.Project
   alias Kogen.Project.BuildSettings
+  alias Kogen.Project.GatePaths
   alias Kogen.Project.SetupReuse
 
   @type load_error :: %{line: pos_integer() | nil, message: String.t()}
@@ -35,6 +36,14 @@ defmodule Kogen.Project do
       runner
     )
   end
+
+  @spec protected_patterns(Project.t(), boolean(), [String.t()]) :: [String.t()]
+  def protected_patterns(project, changes_gate?, tracked_paths),
+    do: GatePaths.protected_patterns(project, changes_gate?, tracked_paths)
+
+  @spec absent_candidates([String.t()], [String.t()]) :: [String.t()]
+  def absent_candidates(patterns, tracked_paths),
+    do: GatePaths.absent_candidates(patterns, tracked_paths)
 
   @spec record_setup_reuse(Path.t(), map()) :: :ok | {:error, term()}
   def record_setup_reuse(run_dir, setup_result),

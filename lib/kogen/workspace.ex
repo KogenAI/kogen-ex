@@ -4,6 +4,7 @@ defmodule Kogen.Workspace do
 
   alias Kogen.Workspace.ApprovalManifest
   alias Kogen.Workspace.ApprovedFile
+  alias Kogen.Workspace.BaseGlob
   alias Kogen.Workspace.Checkout
   alias Kogen.Workspace.Diff
   alias Kogen.Workspace.Guard
@@ -99,6 +100,16 @@ defmodule Kogen.Workspace do
 
   @spec destroy(Path.t()) :: :ok | {:error, term()}
   def destroy(path), do: Checkout.destroy(path)
+
+  @spec checkout_glob(Path.t(), [String.t()]) :: [String.t()]
+  def checkout_glob(root, patterns), do: BaseGlob.checkout(root, patterns)
+
+  @spec tree_glob([String.t()], [String.t()], Path.t()) :: {:ok, [String.t()]} | {:error, term()}
+  def tree_glob(base_paths, patterns, tmp_dir), do: BaseGlob.tree(base_paths, patterns, tmp_dir)
+
+  @doc "Manifest digest meaning the protected path must stay absent."
+  @spec absent_digest() :: String.t()
+  def absent_digest, do: Guard.absent_digest()
 
   @spec protected_violations(Path.t(), String.t(), %{String.t() => String.t()}, git_env()) ::
           {:ok, [String.t()]} | {:error, term()}

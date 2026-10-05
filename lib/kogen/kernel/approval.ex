@@ -77,7 +77,14 @@ defmodule Kogen.Kernel.Approval do
          {:ok, check_baseline} <-
            ApprovalChecks.run(request, project, base_sha, acceptance_files),
          {:ok, protected_manifest} <-
-           ApprovalManifest.build(request, base_sha, git_env, project, bytes, acceptance_files) do
+           ApprovalManifest.build(
+             request,
+             base_sha,
+             git_env,
+             project,
+             %{bytes: bytes, changes_gate: intent.changes_gate},
+             acceptance_files
+           ) do
       approval = %ApprovalRecord{
         slug: request.slug,
         intent_bytes: bytes,

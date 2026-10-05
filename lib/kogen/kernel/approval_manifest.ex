@@ -3,6 +3,7 @@ defmodule Kogen.Kernel.ApprovalManifest do
 
   alias Kogen.Contracts.Project, as: ProjectData
   alias Kogen.Kernel.Approval.Request
+  alias Kogen.Project
   alias Kogen.Workspace
 
   @doc """
@@ -12,8 +13,14 @@ defmodule Kogen.Kernel.ApprovalManifest do
   hashed from the base tree in the origin at the approved base commit; a checkout whose copy of
   such a path differs from that tree is behind the base and the approval is refused.
   """
-  @spec build(Request.t(), String.t(), map(), ProjectData.t(), binary(), %{String.t() => binary()}) ::
-          {:ok, %{String.t() => String.t()}} | {:error, term()}
+  @spec build(
+          Request.t(),
+          String.t(),
+          map(),
+          ProjectData.t(),
+          %{bytes: binary(), changes_gate: boolean()},
+          %{String.t() => binary()}
+        ) :: {:ok, %{String.t() => String.t()}} | {:error, term()}
   def build(%Request{} = request, base_sha, git_env, %ProjectData{} = project, intent, files) do
     source = %{
       project_root: request.project_root,
@@ -23,15 +30,19 @@ defmodule Kogen.Kernel.ApprovalManifest do
       git_env: git_env
     }
 
-    own = own_files(request.slug, intent, files)
+    own = own_files(request.slug, intent.bytes, files)
     acceptance_source = ".kogen/acceptance/#{request.slug}_test.exs"
 
     with {:ok, base_paths} <- Workspace.tree_paths(request.origin, base_sha, git_env),
-         {:ok, tree_matches} <- glob_skeleton(base_paths, project.protected_paths),
+         patterns = Project.protected_patterns(project, intent.changes_gate, base_paths),
+         {:ok, tree_matches} <- Workspace.tree_glob(base_paths, patterns, System.tmp_dir!()),
          paths =
-           candidate_paths(source, project.protected_paths, tree_matches, [
-             acceptance_source | Map.keys(own)
-           ]),
+           candidate_paths(
+             source,
+             patterns,
+             tree_matches ++ Project.absent_candidates(patterns, base_paths),
+             [acceptance_source | Map.keys(own)]
+           ),
          {:ok, base_bytes} <- base_bytes(source, paths),
          :ok <- ensure_current(source, base_bytes) do
       {:ok, manifest(base_bytes, own)}
@@ -47,50 +58,12 @@ defmodule Kogen.Kernel.ApprovalManifest do
   end
 
   defp candidate_paths(source, patterns, tree_matches, own_paths) do
-    checkout_matches = Enum.flat_map(patterns, &expand(source.project_root, &1))
+    checkout_matches = Workspace.checkout_glob(source.project_root, patterns)
 
     (tree_matches ++ checkout_matches)
     |> Enum.uniq()
     |> Enum.reject(&(&1 in own_paths))
     |> Enum.sort()
-  end
-
-  defp expand(root, pattern) do
-    root
-    |> Path.join(pattern)
-    |> Path.wildcard(match_dot: true)
-    |> Enum.filter(&File.regular?/1)
-    |> Enum.map(&Path.relative_to(&1, root))
-  end
-
-  # Evaluates the globs with the same semantics as the checkout by matching them against an
-  # empty-file skeleton of the base tree.
-  defp glob_skeleton(base_paths, patterns) do
-    root = Path.join(System.tmp_dir!(), "kogen-approval-#{System.unique_integer([:positive])}")
-
-    try do
-      with :ok <- File.mkdir_p(root),
-           :ok <- touch_all(root, base_paths) do
-        {:ok, Enum.flat_map(patterns, &expand(root, &1))}
-      else
-        {:error, reason} -> {:error, {:base_tree_unavailable, reason}}
-      end
-    after
-      File.rm_rf(root)
-    end
-  end
-
-  defp touch_all(root, paths) do
-    Enum.reduce_while(paths, :ok, fn path, :ok ->
-      target = Path.join(root, path)
-
-      with :ok <- File.mkdir_p(Path.dirname(target)),
-           :ok <- File.write(target, "") do
-        {:cont, :ok}
-      else
-        {:error, reason} -> {:halt, {:error, reason}}
-      end
-    end)
   end
 
   defp base_bytes(source, paths) do
@@ -130,10 +103,11 @@ defmodule Kogen.Kernel.ApprovalManifest do
 
   defp manifest(base_bytes, own) do
     base_bytes
-    |> Enum.reject(fn {_path, bytes} -> bytes == :missing end)
-    |> Map.new()
     |> Map.merge(own)
-    |> Map.new(fn {path, bytes} -> {path, sha256(bytes)} end)
+    |> Map.new(fn
+      {path, :missing} -> {path, Workspace.absent_digest()}
+      {path, bytes} -> {path, sha256(bytes)}
+    end)
   end
 
   defp sha256(bytes), do: :sha256 |> :crypto.hash(bytes) |> Base.encode16(case: :lower)

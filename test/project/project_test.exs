@@ -290,4 +290,29 @@ defmodule Kogen.Project.ProjectTest do
     File.mkdir_p!(Path.dirname(config))
     File.write!(config, source)
   end
+
+  test "gate_paths is an optional list of strings", %{tmp_dir: root} do
+    write_config(root, """
+    name: tiny-app
+    checks:
+      - name: test
+        argv: [mix, test]
+        timeout_ms: 60000
+    gate_paths: [Makefile, tools/**]
+    """)
+
+    assert {:ok, %Project{gate_paths: ["Makefile", "tools/**"]}} = ProjectLoader.load(root)
+
+    write_config(root, """
+    name: tiny-app
+    checks:
+      - name: test
+        argv: [mix, test]
+        timeout_ms: 60000
+    gate_paths: Makefile
+    """)
+
+    assert {:error, [%{message: "`gate_paths` must be a list of strings"}]} =
+             ProjectLoader.load(root)
+  end
 end

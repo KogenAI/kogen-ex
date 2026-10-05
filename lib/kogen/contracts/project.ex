@@ -1,5 +1,5 @@
 defmodule Kogen.Contracts.Project do
-  @moduledoc "A project's root, checks, acceptance checks, protected paths, and domain map."
+  @moduledoc "A project's root, checks, acceptance checks, protected paths, gate config paths, and domain map."
 
   alias Kogen.Contracts.CheckSpec
 
@@ -7,6 +7,7 @@ defmodule Kogen.Contracts.Project do
   defstruct @enforce_keys ++
               [
                 format: nil,
+                gate_paths: [],
                 acceptance_checks: [],
                 setup_outputs: [],
                 env: %{},
@@ -28,6 +29,7 @@ defmodule Kogen.Contracts.Project do
           fix: [CheckSpec.t()],
           diagnose: [diagnostic()],
           protected_paths: [String.t()],
+          gate_paths: [String.t()],
           domains: %{optional(String.t()) => [String.t()]},
           env: %{optional(String.t()) => String.t()},
           sandbox: boolean(),

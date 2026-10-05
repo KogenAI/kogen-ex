@@ -6,7 +6,7 @@ defmodule Kogen.Project.Loader do
   alias Kogen.Contracts.Yaml
   alias Kogen.Project.BuildSettings
 
-  @project_keys ~w(name checks format acceptance_checks setup setup_outputs fix diagnose protected_paths domains env sandbox base account build)
+  @project_keys ~w(name checks format acceptance_checks setup setup_outputs fix diagnose protected_paths gate_paths domains env sandbox base account build)
   @env_name ~r/\A[A-Za-z_][A-Za-z0-9_]*\z/
 
   @type error :: %{line: pos_integer() | nil, message: String.t()}
@@ -95,7 +95,7 @@ defmodule Kogen.Project.Loader do
     {setup_outputs, setup_output_errors} = setup_outputs(document)
     {fix, fix_errors} = check_specs(document, "fix", false)
     {diagnose, diagnose_errors} = diagnostics(document)
-    {protected_paths, protected_errors} = protected_paths(document)
+    {path_fields, path_errors} = path_lists(document)
     {domains, domain_errors} = domains(document)
 
     fields = [
@@ -106,7 +106,6 @@ defmodule Kogen.Project.Loader do
       setup_outputs: setup_outputs,
       fix: fix,
       diagnose: diagnose,
-      protected_paths: protected_paths,
       domains: domains
     ]
 
@@ -118,11 +117,11 @@ defmodule Kogen.Project.Loader do
       setup_output_errors,
       fix_errors,
       diagnose_errors,
-      protected_errors,
+      path_errors,
       domain_errors
     ]
 
-    {fields, List.flatten(errors)}
+    {fields ++ path_fields, List.flatten(errors)}
   end
 
   defp format(document) do
@@ -311,13 +310,19 @@ defmodule Kogen.Project.Loader do
 
   defp diagnostic(_value, index), do: {:error, [issue("diagnose[#{index}] must be a map")]}
 
-  defp protected_paths(document) do
-    case Map.fetch(document, "protected_paths") do
+  defp path_lists(document) do
+    {protected, protected_errors} = path_list(document, "protected_paths")
+    {gate, gate_errors} = path_list(document, "gate_paths")
+    {[protected_paths: protected, gate_paths: gate], protected_errors ++ gate_errors}
+  end
+
+  defp path_list(document, key) do
+    case Map.fetch(document, key) do
       {:ok, paths} when is_list(paths) ->
-        validate_string_list(paths, "protected_paths", "project", false)
+        validate_string_list(paths, key, "project", false)
 
       {:ok, _paths} ->
-        {[], [issue("`protected_paths` must be a list of strings")]}
+        {[], [issue("`#{key}` must be a list of strings")]}
 
       :error ->
         {[], []}

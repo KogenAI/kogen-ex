@@ -5,6 +5,7 @@ defmodule Kogen.Engine.ProtectedPathsTest do
   alias Kogen.Engine.Build.Session
   alias Kogen.State.Approval
   alias Kogen.Testkit.Git
+  alias Kogen.Workspace
 
   @path "checks.yml"
   @base_bytes "check: base\n"
@@ -38,7 +39,25 @@ defmodule Kogen.Engine.ProtectedPathsTest do
     assert File.read!(Path.join(context.workdir, @path)) == "check: edited\n"
   end
 
-  defp session(context, approved_sha) do
+  test "removes a file the approval requires to stay absent", context do
+    ignore = ".dialyzer_ignore.exs"
+    File.write!(Path.join(context.workdir, ignore), "[]\n")
+    session = session(context, %{ignore => Workspace.absent_digest()})
+
+    assert {:ok, [^ignore]} = ProtectedPaths.restore(session)
+    refute File.exists?(Path.join(context.workdir, ignore))
+  end
+
+  test "leaves an absent protected path alone when it is still absent", context do
+    session = session(context, %{"tools/missing.exs" => Workspace.absent_digest()})
+
+    assert {:ok, []} = ProtectedPaths.restore(session)
+  end
+
+  defp session(context, approved_sha) when is_binary(approved_sha),
+    do: session(context, %{@path => approved_sha})
+
+  defp session(context, manifest) do
     keys = Session.__struct__() |> Map.from_struct() |> Map.keys()
     blank = Map.new(keys, &{&1, nil})
 
@@ -54,7 +73,7 @@ defmodule Kogen.Engine.ProtectedPathsTest do
           base_sha: context.base_sha,
           domains: [],
           acceptance_files: %{},
-          protected_manifest: %{@path => approved_sha},
+          protected_manifest: manifest,
           by: "test",
           at: ~U[2026-10-05 00:00:00Z]
         },

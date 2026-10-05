@@ -122,4 +122,16 @@ defmodule Kogen.Intent.IntentTest do
     assert {:ok, intent} = Kogen.Intent.parse_binary(example, "slug/intent.md")
     assert Enum.any?(Kogen.Intent.lint(intent), &(&1.message == "example is not supported in P0"))
   end
+
+  test "changes_gate defaults to false and accepts only true or false" do
+    assert {:ok, %Intent{changes_gate: false}} = Kogen.Intent.parse_binary(@source, "x/intent.md")
+
+    declared = String.replace(@source, "size: small\n", "size: small\nchanges_gate: true\n")
+    assert {:ok, %Intent{changes_gate: true}} = Kogen.Intent.parse_binary(declared, "x/intent.md")
+
+    invalid = String.replace(@source, "size: small\n", "size: small\nchanges_gate: maybe\n")
+
+    assert {:error, [%{line: 5, message: "frontmatter `changes_gate` must be true or false"}]} =
+             Kogen.Intent.parse_binary(invalid, "x/intent.md")
+  end
 end

@@ -1,18 +1,3 @@
-defmodule Kogen.Intent.Parser.SectionLines do
-  @moduledoc false
-  defstruct [:current, seen: [], brief: [], acceptance: [], verify: [], notes: [], request: []]
-end
-
-defmodule Kogen.Intent.Parser.Metadata do
-  @moduledoc false
-  defstruct title: "", size: nil, domains: []
-end
-
-defmodule Kogen.Intent.Parser.VerifyLine do
-  @moduledoc false
-  defstruct id: "", kind: nil, domain: nil, invalid_word: nil, line: 1
-end
-
 defmodule Kogen.Intent.Parser do
   @moduledoc false
 
@@ -23,7 +8,7 @@ defmodule Kogen.Intent.Parser do
   alias Kogen.Intent.Parser.SectionLines
   alias Kogen.Intent.Parser.VerifyLine
 
-  @frontmatter_keys ~w(title domains size limits blocks_on)
+  @frontmatter_keys ~w(title domains size limits blocks_on changes_gate)
 
   @type parse_error :: %{line: pos_integer(), message: String.t()}
 
@@ -86,8 +71,9 @@ defmodule Kogen.Intent.Parser do
          {:ok, size} <- required_string(attrs, "size", frontmatter),
          {:ok, domains} <- required_string_list(attrs, "domains", frontmatter),
          :ok <- optional_string_list(attrs, "limits", frontmatter),
-         :ok <- optional_string_list(attrs, "blocks_on", frontmatter) do
-      {:ok, %Metadata{title: title, size: size_atom(size), domains: domains}}
+         :ok <- optional_string_list(attrs, "blocks_on", frontmatter),
+         {:ok, gate} <- optional_boolean(attrs, "changes_gate", frontmatter) do
+      {:ok, %Metadata{title: title, size: size_atom(size), domains: domains, changes_gate: gate}}
     end
   end
 
@@ -150,6 +136,16 @@ defmodule Kogen.Intent.Parser do
 
       {:ok, _value} ->
         error(attribute_line(frontmatter, key), "frontmatter `#{key}` must be a list")
+    end
+  end
+
+  defp optional_boolean(attrs, key, frontmatter) do
+    case Map.get(attrs, key, "false") do
+      value when value in ["true", "false"] ->
+        {:ok, value == "true"}
+
+      _value ->
+        error(attribute_line(frontmatter, key), "frontmatter `#{key}` must be true or false")
     end
   end
 
@@ -361,6 +357,7 @@ defmodule Kogen.Intent.Parser do
       request: if(:request in sections.seen, do: request),
       acceptance: acceptance,
       domains: metadata.domains,
+      changes_gate: metadata.changes_gate,
       notes: if(notes == "", do: nil, else: notes),
       path: path,
       sha256: :sha256 |> :crypto.hash(binary) |> Base.encode16(case: :lower)
