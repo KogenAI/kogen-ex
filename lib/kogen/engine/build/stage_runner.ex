@@ -30,7 +30,6 @@ defmodule Kogen.Engine.Build.StageRunner do
   def run(:check, _args, session), do: checks(session)
   def run(:review, _args, session), do: Reviewer.run(session)
   def run(:commit, _args, session), do: Commit.run(session)
-  def run(:land, args, session), do: Commit.land(args, session)
 
   @spec harness_options(Session.t()) :: Opts.t()
   def harness_options(session), do: GateSupport.harness_options(session)

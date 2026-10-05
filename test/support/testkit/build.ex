@@ -325,6 +325,9 @@ defmodule Kogen.E2e.Build do
   defp provider_hook(%Fixture{} = fixture, {:lock_base, stage}),
     do: Origin.lock_base_hook(fixture.origin, stage)
 
+  defp provider_hook(fixture, hook) when is_function(hook, 2),
+    do: fn stage -> hook.(fixture, stage) end
+
   defp provider_hook(%Fixture{} = fixture, stage) do
     fn
       ^stage -> move_origin_base(fixture)

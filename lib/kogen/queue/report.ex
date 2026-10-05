@@ -59,6 +59,8 @@ defmodule Kogen.Queue.Report do
       {"approved_by", nullable(event_value(events, :approved_by))},
       {"base", nullable(event_value(events, :base_sha) || landing_value(run, :expected_parent))},
       {"candidate", nullable(landing_value(run, :candidate_commit))},
+      {"candidate_verdict", nullable(event_value(events, :verdict))},
+      {"parked_ref", if(status == :parked, do: "refs/kogen/parked/#{run.id}", else: :null)},
       {"landed_sha", nullable(landed_sha)},
       {"credential",
        json_object([

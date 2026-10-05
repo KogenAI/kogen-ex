@@ -65,6 +65,10 @@ defmodule Kogen.Engine.Build.GateSupport do
   def resume_data(%Session{rung: %{}}, %{escalation_summary: summary}) when is_binary(summary),
     do: %{previous_items: [], failure_text: summary, fresh: true}
 
+  def resume_data(%Session{last_harness: %HarnessResult{items: items}, failure_text: text}, %{
+        landing: true
+      }), do: %{previous_items: items, failure_text: text}
+
   def resume_data(%Session{attempt: :escalation}, args) do
     %{
       previous_items: [],
@@ -326,10 +330,13 @@ defmodule Kogen.Engine.Build.GateSupport do
   end
 
   # A ladder's whole-Build budget also bounds each stage.
-  defp wall_ms(%Session{budget_deadline: nil}), do: 1_800_000
-
-  defp wall_ms(%Session{budget_deadline: deadline}),
-    do: deadline |> Kernel.-(System.monotonic_time(:millisecond)) |> max(1) |> min(1_800_000)
+  defp wall_ms(session) do
+    [session.budget_deadline, session.landing_deadline]
+    |> Enum.reject(&is_nil/1)
+    |> Enum.reduce(1_800_000, fn deadline, cap ->
+      min(cap, max(deadline - System.monotonic_time(:millisecond), 1))
+    end)
+  end
 
   defp changed_detector(session) do
     fn ->

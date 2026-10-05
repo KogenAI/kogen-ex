@@ -2,7 +2,7 @@ defmodule Kogen.Engine.Build.Result do
   @moduledoc false
 
   @enforce_keys [:status, :reason, :failure, :run_id, :run_dir, :landed_sha, :lines]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [verdict: :unknown]
 
   @type t :: %__MODULE__{
           status: :landed | :failed | :parked,
@@ -11,7 +11,8 @@ defmodule Kogen.Engine.Build.Result do
           run_id: String.t(),
           run_dir: Path.t(),
           landed_sha: String.t() | nil,
-          lines: [String.t()]
+          lines: [String.t()],
+          verdict: :green | :red | :unknown
         }
 end
 
@@ -121,6 +122,8 @@ defmodule Kogen.Engine.Build.Session do
     :receipts,
     :rung,
     :budget_deadline,
+    :landing_deadline,
+    :landing_verdict,
     :rung_started_at,
     :edge,
     direct_preflight_complete?: false,
@@ -168,6 +171,8 @@ defmodule Kogen.Engine.Build.Session do
           lines: [String.t()],
           rung: Kogen.Build.Recipe.rung() | nil,
           budget_deadline: integer() | nil,
+          landing_deadline: integer() | nil,
+          landing_verdict: :green | :red | nil,
           rung_started_at: integer() | nil,
           edge: map() | nil,
           demoted: [%{id: String.t(), reason: String.t()}],

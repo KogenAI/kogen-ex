@@ -17,22 +17,32 @@ defmodule Kogen.Engine.Build.Commit do
     PhaseTiming.measure(session, "build", "commit", fn -> do_run(session) end)
   end
 
-  defp do_run(%Session{} = session) do
-    with {:ok, tree} <- tag(:tree_hash, Guard.tree_hash(session.workdir, session.git_env)),
+  @spec land(map(), Session.t()) :: {:ok, [map()]} | {:error, term()}
+  def land(identity, session) do
+    PhaseTiming.measure(session, "build", "land", fn ->
+      Workspace.land(
+        session.workdir,
+        session.request.origin,
+        session.request.base,
+        identity.expected_parent,
+        session.run.id,
+        session.git_env
+      )
+    end)
+  end
+
+  @spec tree_hash(Session.t()) :: {:ok, String.t()} | {:error, term()}
+  def tree_hash(session), do: Guard.tree_hash(session.workdir, session.git_env)
+
+  defp do_run(session) do
+    with :ok <- guard(session),
          :ok <- tag(:squash, squash_to_base(session)),
-         {:ok, commit} <- tag(:candidate_commit, commit_tree(session, tree)),
-         {:ok, base_sha} <- tag(:base_tip, current_base(session)),
-         {:ok, session, commit, tree} <- prepare_candidate(session, base_sha, commit, tree),
-         {:ok, committed_tree} <-
-           tag(
-             :candidate_tree,
-             Workspace.rev_parse(session.workdir, "#{commit}^{tree}", session.git_env)
-           ),
-         :ok <- tag(:tree_match, same_tree(tree, committed_tree)),
-         :ok <- tag(:commit_receipt, record_commit(session, commit, tree)) do
-      identity = landing_identity(session, tree, commit)
-      session = %{session | failure: nil, failure_text: nil}
-      {:ok, session, [{:stage_ok, :commit, identity}]}
+         {:ok, _commit} <- tag(:candidate_commit, commit_tree(session, nil)),
+         {:ok, base} <- tag(:base_tip, current_base(session)) do
+      case prepare_candidate(session, base) do
+        {:ok, updated} -> finish_commit(updated)
+        {:error, updated, failure} -> fail(updated, :commit, failure)
+      end
     else
       {:error, :base_moved} ->
         {:base_moved, session}
@@ -45,87 +55,26 @@ defmodule Kogen.Engine.Build.Commit do
     end
   end
 
-  @spec land(map(), Session.t()) ::
-          {:ok, Session.t(), [term()]}
-          | {:error, Session.t(), Failure.t()}
-          | {:base_moved, Session.t()}
-  def land(args, %Session{} = session) do
-    PhaseTiming.measure(session, "build", "land", fn -> do_land(args, session) end)
-  end
+  defp finish_commit(session) do
+    with {:ok, tree} <- tag(:tree_hash, Guard.tree_hash(session.workdir, session.git_env)),
+         {:ok, commit} <-
+           tag(:candidate_commit, Workspace.rev_parse(session.workdir, "HEAD", session.git_env)),
+         {:ok, committed_tree} <-
+           tag(
+             :candidate_tree,
+             Workspace.rev_parse(session.workdir, "#{commit}^{tree}", session.git_env)
+           ),
+         :ok <- tag(:tree_match, same_tree(tree, committed_tree)),
+         :ok <- tag(:commit_receipt, record_commit(session, commit, tree)) do
+      {:ok, %{session | failure: nil, failure_text: nil},
+       [{:stage_ok, :commit, landing_identity(session, tree, commit)}]}
+    else
+      {:error, %Failure{} = failure} ->
+        fail(session, :commit, failure)
 
-  defp do_land(args, %Session{} = session) do
-    case workspace_land(args, session) do
-      {:ok, warnings} -> landed(session, Map.fetch!(args, :candidate_commit), warnings)
-      {:error, :base_moved} -> reland(session)
-      {:error, reason} -> landing_failure(session, reason)
+      {:error, reason} ->
+        fail(session, :commit, candidate_failure(:rebase_or_commit_failed, inspect(reason)))
     end
-  end
-
-  # The base moved between the commit stage and the compare-and-swap: rebase and re-verify
-  # through the commit stage, then retry the swap once. Never involves the model.
-  defp reland(session) do
-    case do_run(session) do
-      {:ok, session, [{:stage_ok, :commit, identity}]} ->
-        case State.put_landing(session.run, identity) do
-          :ok -> relanded(session, identity)
-          {:error, reason} -> landing_failure(session, {:landing_record, reason})
-        end
-
-      {:base_moved, session} ->
-        {:base_moved, session}
-
-      {:error, session, %Failure{class: :candidate}} ->
-        {:base_moved, session}
-
-      {:error, session, %Failure{} = failure} ->
-        {:error, session, failure}
-    end
-  end
-
-  defp relanded(session, identity) do
-    case workspace_land(identity, session) do
-      {:ok, warnings} -> landed(session, identity.candidate_commit, warnings)
-      {:error, :base_moved} -> {:base_moved, session}
-      {:error, reason} -> landing_failure(session, reason)
-    end
-  end
-
-  defp workspace_land(identity, session) do
-    Workspace.land(
-      session.workdir,
-      session.request.origin,
-      session.request.base,
-      Map.fetch!(identity, :expected_parent),
-      session.run.id,
-      session.git_env
-    )
-  end
-
-  defp landed(session, candidate, warnings) do
-    session = Enum.reduce(warnings, session, &record_landing_warning(&2, &1))
-    {:ok, %{session | landed_sha: candidate}, [{:landed, candidate}]}
-  end
-
-  defp record_landing_warning(session, %{path: path, detail: detail}) do
-    # The landing already happened, so a lost journal line must not turn it into a failure.
-    _recorded =
-      State.record(session.run, %{event: :landing_warning, path: path, detail: detail})
-
-    %{session | lines: session.lines ++ ["land: warning: #{detail}"]}
-  end
-
-  @controller_landing_reasons [:tree_mismatch, :not_fast_forward, :missing_head]
-
-  defp landing_failure(session, reason) do
-    class = if reason in @controller_landing_reasons, do: :controller, else: :environment
-
-    failure = %Failure{
-      class: class,
-      reason: :landing_failed,
-      detail: "landing failed (#{class}): #{inspect(reason)}"
-    }
-
-    fail(session, :land, failure)
   end
 
   defp squash_to_base(session) do
@@ -156,38 +105,66 @@ defmodule Kogen.Engine.Build.Commit do
   end
 
   # The :check stage already verified this unchanged base/tree pair.
-  defp prepare_candidate(session, base_sha, commit, tree) when base_sha == session.base_sha do
-    {:ok, session, commit, tree}
-  end
+  defp prepare_candidate(session, base) when base == session.base_sha, do: {:ok, session}
 
-  defp prepare_candidate(session, base_sha, _commit, _tree) do
-    case Workspace.rebase(session.workdir, session.request.origin, base_sha, session.git_env) do
-      :ok ->
-        session = %{session | base_sha: base_sha}
+  defp prepare_candidate(session, base) do
+    with {:ok, manifest, drift} <-
+           Workspace.refresh_manifest(
+             session.request.origin,
+             base,
+             session.approval,
+             session.git_env
+           ),
+         :ok <- Kogen.Engine.Build.RunEvents.base_drift(session.run, drift, base) do
+      updated = %{
+        session
+        | base_sha: base,
+          approval: %{session.approval | protected_manifest: manifest}
+      }
 
-        with {:ok, commit} <-
-               tag(
-                 :candidate_commit,
-                 Workspace.rev_parse(session.workdir, "HEAD", session.git_env)
-               ),
-             {:ok, tree} <- tag(:tree_hash, Guard.tree_hash(session.workdir, session.git_env)),
-             {:ok, receipts, ledger} <- verify_rebased(session, tree) do
-          session = %{session | receipts: receipts, acceptance: ledger}
-          {:ok, session, commit, tree}
-        end
+      rebase(updated, base)
+    else
+      {:error, {:approved_protected_file_changed, path}} ->
+        {:error, session,
+         candidate_failure(
+           :approved_acceptance_changed,
+           "Approved acceptance test #{path} changed on the base after approval."
+         )}
 
-      {:error, _reason} ->
-        {:error, :base_moved}
+      {:error, reason} ->
+        {:error, session,
+         %Failure{class: :controller, reason: :workspace_failed, detail: inspect(reason)}}
     end
   end
 
-  defp verify_rebased(session, tree) do
-    case recheck(session, tree) do
-      {:error, %Failure{reason: reason}} when reason in [:verification_failed, :acceptance_red] ->
-        {:error, :base_moved}
+  defp rebase(session, base) do
+    case Workspace.rebase(session.workdir, session.request.origin, base, session.git_env) do
+      :ok ->
+        verify_rebased(session)
 
-      result ->
-        tag(:recheck, result)
+      {:error, reason} ->
+        {:error, session,
+         candidate_failure(:rebase_conflict, "Rebase onto #{base} failed: #{inspect(reason)}")}
+    end
+  end
+
+  defp verify_rebased(session) do
+    with {:ok, project} <- Kogen.Project.load(session.workdir),
+         updated = %{session | project: project},
+         {:ok, tree} <- Guard.tree_hash(updated.workdir, updated.git_env) do
+      case recheck(updated, tree) do
+        {:ok, receipts, ledger} ->
+          {:ok, %{updated | receipts: receipts, acceptance: ledger}}
+
+        {:error, %Failure{} = failure} ->
+          {:error, updated, failure}
+
+        {:error, reason} ->
+          {:error, updated, candidate_failure(:verification_failed, inspect(reason))}
+      end
+    else
+      {:error, reason} ->
+        {:error, session, candidate_failure(:verification_failed, inspect(reason))}
     end
   end
 
@@ -228,19 +205,8 @@ defmodule Kogen.Engine.Build.Commit do
   defp record_commit(session, commit, tree),
     do: State.record(session.run, %{event: :commit_result, commit: commit, tree: tree})
 
-  @spec tag(
-          atom(),
-          {:ok, term()}
-          | {:ok, term(), term()}
-          | :ok
-          | {:error, :base_moved | Failure.t() | term()}
-        ) ::
-          {:ok, term()}
-          | {:ok, term(), term()}
-          | :ok
-          | {:error, :base_moved | Failure.t() | {atom(), term()}}
+  @spec tag(atom(), term()) :: term()
   defp tag(_operation, {:ok, _value} = result), do: result
-  defp tag(_operation, {:ok, _value, _extra} = result), do: result
   defp tag(_operation, :ok), do: :ok
   defp tag(_operation, {:error, :base_moved} = result), do: result
   defp tag(_operation, {:error, %Failure{}} = result), do: result

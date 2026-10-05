@@ -63,12 +63,13 @@ defmodule Kogen.Engine.Build.Finish do
     {:ok,
      %Result{
        status: status,
+       verdict: verdict(session),
        reason: reason,
        failure: failure,
        run_id: session.run.id,
        run_dir: session.run_dir,
        landed_sha: landed_sha(status, session, reason),
-       lines: session.lines ++ [finish_line(status, reason, lifecycle)]
+       lines: session.lines ++ [finish_line(session, status, reason, lifecycle)]
      }}
   end
 
@@ -269,12 +270,22 @@ defmodule Kogen.Engine.Build.Finish do
   defp reason_text(reason) when is_binary(reason), do: reason
   defp reason_text(reason), do: inspect(reason)
 
-  defp finish_line(:landed, sha, :ok), do: "land: landed #{sha}"
-  defp finish_line(:parked, reason, :ok), do: "build: parked (#{inspect(reason)})"
-  defp finish_line(:failed, reason, :ok), do: "build: failed (#{inspect(reason)})"
+  defp finish_line(_session, :landed, sha, :ok), do: "land: landed #{sha}"
 
-  defp finish_line(_status, reason, {:error, detail}),
+  defp finish_line(session, :parked, reason, :ok) do
+    verdict = verdict(session)
+
+    "parked #{session.intent.slug}: #{reason}; best candidate #{verdict} at " <>
+      "refs/kogen/parked/#{session.run.id} (Build #{String.slice(session.run.id, 0, 8)})"
+  end
+
+  defp finish_line(_session, :failed, reason, :ok), do: "build: failed (#{inspect(reason)})"
+
+  defp finish_line(_session, _status, reason, {:error, detail}),
     do: "build: cleanup failed (#{inspect(detail)}; #{inspect(reason)})"
+
+  defp verdict(session),
+    do: session.landing_verdict || if(session.failure, do: :red, else: :green)
 
   defp normalize_setup_failure(%Failure{} = failure), do: failure
 

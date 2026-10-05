@@ -91,7 +91,7 @@ defmodule Kogen.Queue.Drain do
           {outcome.class, outcome.reason} in @unavailable ->
             wait_for_provider(state_root, hooks, {next, outcome}, built, attempted)
 
-          outcome.status != :landed and outcome.class in [:environment, :controller] ->
+          outcome.status == :failed and outcome.class in [:environment, :controller] ->
             {:ok, summary(built, {:failed, outcome})}
 
           true ->
@@ -140,6 +140,13 @@ defmodule Kogen.Queue.Drain do
   @spec outcome_line(outcome()) :: String.t()
   def outcome_line(%{status: :landed} = outcome),
     do: "landed #{outcome.slug} #{short(outcome.landed_sha)}#{build_ref(outcome)}\n"
+
+  def outcome_line(%{status: :parked} = outcome) do
+    verdict = Map.get(outcome, :verdict, "unknown")
+
+    "parked #{outcome.slug}: #{outcome.reason}; best candidate #{verdict} at " <>
+      "refs/kogen/parked/#{outcome.run_id}#{build_ref(outcome)}\n"
+  end
 
   def outcome_line(outcome) do
     cause = [outcome.class, outcome.reason] |> Enum.reject(&is_nil/1) |> Enum.join("/")

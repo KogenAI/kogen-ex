@@ -309,6 +309,9 @@ defmodule Kogen.Build.Cycle do
     end
   end
 
+  defp handle_failure(state, _stage, %Failure{reason: :approved_acceptance_changed}),
+    do: finish(state, :failed, :approved_acceptance_changed)
+
   defp handle_failure(state, stage, %Failure{class: :candidate, reason: reason}) do
     repair(state, reason, %{failed_stage: stage})
   end

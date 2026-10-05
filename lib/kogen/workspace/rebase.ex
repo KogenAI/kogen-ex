@@ -33,13 +33,28 @@ defmodule Kogen.Workspace.Rebase do
       {:ok, 0, _output} ->
         :ok
 
-      {:ok, status, _output} ->
-        _abort = Git.run(path, ["rebase", "--abort"], git_env)
-        {:error, {:git_failed, status}}
+      {:ok, status, output} ->
+        conflicts(path, base_sha, git_env, status, output)
 
       {:error, reason} ->
         _abort = Git.run(path, ["rebase", "--abort"], git_env)
         {:error, reason}
+    end
+  end
+
+  defp conflicts(path, base, git_env, status, output) do
+    case Git.run(path, ["diff", "--name-only", "--diff-filter=U"], git_env) do
+      {:ok, 0, paths} when paths != "" ->
+        with {:ok, 0, _output} <- Git.run(path, ["rebase", "--quit"], git_env),
+             {:ok, 0, _output} <- Git.run(path, ["reset", "--mixed", base], git_env) do
+          {:error, {:rebase_conflict, String.split(paths, "\n", trim: true)}}
+        else
+          error -> {:error, {:rebase_cleanup_failed, error}}
+        end
+
+      _other ->
+        _abort = Git.run(path, ["rebase", "--abort"], git_env)
+        {:error, {:git_failed, status, output}}
     end
   end
 

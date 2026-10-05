@@ -13,6 +13,7 @@ defmodule Kogen.Runner.Driver do
   alias Kogen.Engine.Build.StageRunner
   alias Kogen.Runner.Audit
   alias Kogen.Runner.Ladder
+  alias Kogen.Runner.Landing
   alias Kogen.State
 
   @type member_result :: {:green | :failed, term(), Session.t()}
@@ -39,6 +40,11 @@ defmodule Kogen.Runner.Driver do
   defp run_effects(session, [], mode), do: finish_if_terminal(session, mode)
 
   defp run_effects(session, [{:record, event} | rest], mode) do
+    event =
+      if event.event == :finished,
+        do: Map.put(event, :verdict, session.landing_verdict),
+        else: event
+
     case State.record(session.run, event) do
       :ok ->
         run_effects(add_record_line(session, event), rest, mode)
@@ -110,6 +116,8 @@ defmodule Kogen.Runner.Driver do
   defp run_effects(session, [{:finish, status, reason} | _rest], mode),
     do: {:done, finish(session, status, reason, mode)}
 
+  defp run_stage(:commit, _args, session), do: Landing.prepare(session)
+  defp run_stage(:land, args, session), do: Landing.land(args, session)
   defp run_stage(:audit, args, session), do: Audit.run(args, session)
   defp run_stage(stage, args, session), do: StageRunner.run(stage, args, session)
 

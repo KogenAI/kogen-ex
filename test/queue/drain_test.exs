@@ -53,6 +53,28 @@ defmodule Kogen.Queue.DrainTest do
            )
   end
 
+  test "parking prints the preserved candidate and continues with the next Intent", %{
+    tmp_dir: tmp_dir
+  } do
+    {:ok, states} = Agent.start_link(fn -> %{"a" => {:approved, 1}, "b" => {:approved, 2}} end)
+
+    parked =
+      Map.put(%{outcome("a", :parked, :environment) | reason: "base_moved"}, :verdict, "red")
+
+    {:ok, lines} = Agent.start_link(fn -> [] end)
+
+    assert {:ok, %{builds: [^parked, %{slug: "b", status: :landed}], stop: :empty}} =
+             Drain.run(
+               tmp_dir,
+               hooks(states, %{"a" => parked, "b" => outcome("b", :landed, nil)}, lines)
+             )
+
+    assert "parked a: base_moved; best candidate red at refs/kogen/parked/run-a (Build run-a)\n" in Agent.get(
+             lines,
+             & &1
+           )
+  end
+
   test "stops on an environment failure", %{tmp_dir: tmp_dir} do
     {:ok, states} = Agent.start_link(fn -> %{"a" => {:approved, 1}, "b" => {:approved, 2}} end)
     outcomes = %{"a" => outcome("a", :failed, :environment)}

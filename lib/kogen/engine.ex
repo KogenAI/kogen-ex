@@ -17,6 +17,7 @@ defmodule Kogen.Engine do
     exports: [
       Build.CandidateSnapshot,
       Build.CheckStage,
+      Build.Commit,
       Build.Escalation,
       Build.Finish,
       Build.GateSupport,

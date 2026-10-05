@@ -219,7 +219,8 @@ defmodule Kogen.Kernel.Queueing do
            run_id: result.run_id,
            landed_sha: result.landed_sha,
            class: result.failure && result.failure.class,
-           reason: failure_reason(result)
+           reason: failure_reason(result),
+           verdict: to_string(result.verdict)
          }}
 
       {:error, reason} ->
@@ -228,6 +229,7 @@ defmodule Kogen.Kernel.Queueing do
   end
 
   defp failure_reason(%Result{status: :landed}), do: nil
+  defp failure_reason(%Result{status: :parked, reason: reason}), do: to_string(reason)
   defp failure_reason(%Result{failure: %{reason: reason}}), do: to_string(reason)
   defp failure_reason(%Result{reason: reason}), do: inspect(reason)
 
