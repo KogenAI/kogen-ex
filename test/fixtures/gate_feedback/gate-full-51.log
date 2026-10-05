@@ -1,0 +1,313 @@
+/Library/Developer/CommandLineTools/usr/bin/make --no-print-directory guard fmt compile-dev compile-test xref credo test acceptance dialyzer e2e
+mise exec -- mix kogen.guard
+mise exec -- mix format --check-formatted
+mise exec -- mix compile --force --warnings-as-errors
+mise exec -- mix compile --force --warnings-as-errors
+[0mWaiting for lock on the build directory (held by process $PID)
+[0mWaiting for lock on the build directory (held by process $PID)
+[0mWaiting for lock on the build directory (held by process $PID)
+[0mWaiting for lock on the build directory (held by process $PID)
+[0mWaiting for lock on the build directory (held by process $PID)
+Compiling 213 files (.ex)
+Compiling 197 files (.ex)
+Generated kogen app
+Generated kogen app
+Compiling 197 files (.ex)
+GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_AUTHOR_NAME='Kogen Test' GIT_AUTHOR_EMAIL=test@kogen.invalid GIT_COMMITTER_NAME='Kogen Test' GIT_COMMITTER_EMAIL=test@kogen.invalid TZ=Europe/Sarajevo LC_ALL=C MIX_ENV=test mise exec -- mix test --warnings-as-errors --no-compile tools/kogen_checks/test
+GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_AUTHOR_NAME='Kogen Test' GIT_AUTHOR_EMAIL=test@kogen.invalid GIT_COMMITTER_NAME='Kogen Test' GIT_COMMITTER_EMAIL=test@kogen.invalid TZ=Europe/Sarajevo LC_ALL=C MIX_ENV=test mise exec -- mix test --warnings-as-errors --no-compile --only acceptance test/acceptance
+GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_AUTHOR_NAME='Kogen Test' GIT_AUTHOR_EMAIL=test@kogen.invalid GIT_COMMITTER_NAME='Kogen Test' GIT_COMMITTER_EMAIL=test@kogen.invalid TZ=Europe/Sarajevo LC_ALL=C MIX_ENV=test mise exec -- mix test --warnings-as-errors --no-compile --only e2e test/e2e
+guard OK
+[0mWaiting for lock on the build directory (held by process $PID)
+[0mWaiting for lock on the build directory (held by process $PID)
+[0mWaiting for lock on the build directory (held by process $PID)
+[0mWaiting for lock on the build directory (held by process $PID)
+Running ExUnit with seed: 442988, max_cases: 24
+Excluding tags: [:test]
+Including tags: [:acceptance]
+
+Running ExUnit with seed: 488835, max_cases: 24
+Running ExUnit with seed: 511533, max_cases: 24
+
+Excluding tags: [:test]
+Including tags: [:e2e]
+
+.................................................shaper attempt=1 started turns_used=0/60 wall_remaining_ms=infinity
+.shaper attempt=1 model_pass_complete turns=1 calls=1
+.shaper attempt=1 started turns_used=0/60 wall_remaining_ms=infinity
+shaper attempt=1 model_pass_complete turns=1 calls=1
+shaper attempt=1 normalized intent approach label path=.kogen/intents/approval-setup/intent.md
+shaper attempt=1 normalized intent approach label path=.kogen/intents/origin-status/intent.md
+.
+Finished in 2.3 seconds (2.3s async, 0.00s sync)
+
+Result: 40 passed
+GIT_CONFIG_GLOBAL=/dev/null GIT_CONFIG_NOSYSTEM=1 GIT_AUTHOR_NAME='Kogen Test' GIT_AUTHOR_EMAIL=test@kogen.invalid GIT_COMMITTER_NAME='Kogen Test' GIT_COMMITTER_EMAIL=test@kogen.invalid TZ=Europe/Sarajevo LC_ALL=C MIX_ENV=test mise exec -- mix test --warnings-as-errors --no-compile --exclude fixture --exclude acceptance --exclude e2e --exclude seatbelt --exclude keychain
+.
+
+  1) test uses provided files without shaping and records their source (Kogen.Acceptance.BenchProvidedIntentTest)
+     test/acceptance/bench-provided-intent_test.exs:12
+     match (=) failed
+     code:  assert {:ok, %ProcResult{exit_status: 1}} = result
+     left:  {:ok, %Kogen.Contracts.ProcResult{exit_status: 1}}
+     right: {:ok,
+             %Kogen.Contracts.ProcResult{
+               argv: ["/bin/sh",
+                "$WORKDIR/bin/kogen-bench",
+                "$TMPDIR/kogen-tests/$PID-14/bench-provided-intent",
+                "$TMPDIR/kogen-tests/$PID-14/work/repo",
+                "$TMPDIR/kogen-tests/$PID-14/out"],
+               exit_status: 90,
+               timed_out: false,
+               output_tail: "",
+               log_path: nil,
+               duration_ms: 1932
+             }}
+     stacktrace:
+       test/acceptance/bench-provided-intent_test.exs:18: (test)
+
+Generated kogen app
+.mise exec -- mix xref graph --format cycles --label compile-connected --fail-above 0
+mise exec -- mix credo --strict
+mkdir -p "$HOME/.kogen/plt"
+mise exec -- mix dialyzer --quiet-with-result
+
+
+  2) test shapes from the prompt when no provided directory is set (Kogen.Acceptance.BenchProvidedIntentTest)
+     test/acceptance/bench-provided-intent_test.exs:26
+     match (=) failed
+     code:  assert {:ok, %ProcResult{exit_status: 1}} = result
+     left:  {:ok, %Kogen.Contracts.ProcResult{exit_status: 1}}
+     right: {:ok,
+             %Kogen.Contracts.ProcResult{
+               argv: ["/bin/sh",
+                "$WORKDIR/bin/kogen-bench",
+                "$TMPDIR/kogen-tests/$PID-68/bench-provided-intent",
+                "$TMPDIR/kogen-tests/$PID-68/work/repo",
+                "$TMPDIR/kogen-tests/$PID-68/out"],
+               exit_status: 90,
+               timed_out: false,
+               output_tail: "",
+               log_path: nil,
+               duration_ms: 1193
+             }}
+     stacktrace:
+       test/acceptance/bench-provided-intent_test.exs:29: (test)
+
+Running ExUnit with seed: 942158, max_cases: 24
+shaper attempt=1 validation_passed
+Excluding tags: [:fixture, :acceptance, :e2e, :seatbelt, :keychain]
+
+shaper attempt=1 validation_passed
+..................................[0mWaiting for lock on the build directory (held by process $PID)
+..........Checking 300 source files (this might take a while) ...
+....Live Harness smoke is opt-in; run mix test --only live test/harness/live_smoke_test.exs.
+shaper attempt=1 started turns_used=0/60 wall_remaining_ms=infinity
+.....
+10:17:06.426 [error] Process #PID<0.0.0> raised an exception
+** (MatchError) no match of right hand side value:
+
+    {:error, :timeout}
+
+    test/harness/exchange_test.exs:109: anonymous fn/3 in Kogen.Harness.ExchangeTest.start_idle_then_reply/1
+....
+
+  1) test an idle streamed model request retries exactly once and records the retry (Kogen.Harness.ExchangeTest)
+     test/harness/exchange_test.exs:10
+     ** (EXIT from #PID<0.0.0>) an exception was raised:
+         ** (MatchError) no match of right hand side value:
+
+         {:error, :timeout}
+
+             test/harness/exchange_test.exs:109: anonymous fn/3 in Kogen.Harness.ExchangeTest.start_idle_then_reply/1
+
+..........shaper attempt=1 started turns_used=0/60 wall_remaining_ms=infinity
+shaper attempt=1 started turns_used=0/60 wall_remaining_ms=infinity
+............
+  Warnings - please take a look                                                 
+┃ 
+┃ [W] ↘ An error branch drops its reason and returns a success default. Log, 
+┃       propagate, or re-raise the error.
+┃       lib/kogen/workspace/guard.ex:31:5 #(Kogen.Workspace.Guard.file_sha)
+┃ [W] ↘ An error branch drops its reason and returns a success default. Log, 
+┃       propagate, or re-raise the error.
+┃       lib/kogen/provider/chat_gpt/lock.ex:98:7 #(Kogen.Provider.ChatGPT.Lock.remove_stale)
+┃ [W] ↘ An error branch drops its reason and returns a success default. Log, 
+┃       propagate, or re-raise the error.
+┃       lib/kogen/provider/chat_gpt/lock.ex:87:5 #(Kogen.Provider.ChatGPT.Lock.old_directory?)
+┃ [W] ↘ An error branch drops its reason and returns a success default. Log, 
+┃       propagate, or re-raise the error.
+┃       lib/kogen/provider/chat_gpt/lock.ex:66:5 #(Kogen.Provider.ChatGPT.Lock.stale?)
+┃ [W] ↘ An error branch drops its reason and returns a success default. Log, 
+┃       propagate, or re-raise the error.
+┃       lib/kogen/kernel/shape_paths.ex:27:7 #(Kogen.Kernel.ShapePaths.setup_cache)
+┃ [W] ↘ An error branch drops its reason and returns a success default. Log, 
+┃       propagate, or re-raise the error.
+┃       lib/kogen/engine/build/setup.ex:46:7 #(Kogen.Engine.Build.Setup.run_cached)
+┃ [W] ↘ An error branch drops its reason and returns a success default. Log, 
+┃       propagate, or re-raise the error.
+┃       lib/kogen/engine/build/guard.ex:80:5 #(Kogen.Engine.Build.Guard.file_sha)
+
+Please report incorrect results: https://github.com/rrrene/credo/issues
+
+Analysis took 4.8 seconds (2.3s to load, 2.4s running 44 checks on 300 files)
+3595 mods/funs, found 7 warnings.
+
+Use `mix credo explain` to explain issues, `mix credo --help` for options.
+........................shaper attempt=1 started turns_used=0/60 wall_remaining_ms=infinity
+...[0mWaiting for lock on the build directory (held by process $PID)
+......[0mWaiting for lock on the build directory (held by process $PID)
+...[0mWaiting for lock on the build directory (held by process $PID)
+..[0mWaiting for lock on the build directory (held by process $PID)
+...................................................shaper attempt=1 model_pass_complete turns=1 calls=1
+..Live provider smoke is opt-in; run mix test --only live to execute it.
+......shaper attempt=1 model_pass_complete turns=1 calls=1
+shaper attempt=1 model_pass_complete turns=1 calls=1
+.........shaper attempt=1 normalized intent approach label path=.kogen/intents/shape-loop/intent.md
+.shaper attempt=1 normalized intent approach label path=.kogen/intents/shape-loop/intent.md
+........shaper attempt=1 normalized intent approach label path=.kogen/intents/shape-loop/intent.md
+...
+
+  2) test installed launcher uses its build OTP despite the project escript on PATH (Kogen.Kernel.InstallLocalTest)
+     test/kernel/install_local_test.exs:9
+     match (=) failed
+     code:  assert {:ok, %ProcResult{exit_status: 0, output_tail: install_output}} =
+              Proc.run(["make", "install-local", "KOGEN_INSTALL_HOME=#{install_home}"],
+                cd: @repo_root,
+                env: runtime.base_env
+              )
+     left:  {:ok, %Kogen.Contracts.ProcResult{exit_status: 0, output_tail: install_output}}
+     right: {:ok,
+             %Kogen.Contracts.ProcResult{
+               argv: ["make", "install-local",
+                "KOGEN_INSTALL_HOME=$TMPDIR/kogen-tests/$PID-24/install-home"],
+               exit_status: 2,
+               timed_out: false,
+               output_tail: "mise exec -- mix escript.build\n\e[0mWaiting for lock on the build directory (held by process $PID)\n\e[0mWaiting for lock on the build directory (held by process $PID)\n** (File.Error) could not read file \"$WORKDIR/_build/dev/lib/kogen/consolidated/Elixir.Jason.Encoder.beam\": no such file or directory\n    (elixir 1.20.4) lib/file.ex:451: File.read!/2\n    (mix 1.20.4) lib/mix/tasks/escript.build.ex:304: anonymous fn/1 in Mix.Tasks.Escript.Build.read_beams/1\n    (elixir 1.20.4) lib/enum.ex:1725: Enum.\"-map/2-lists^map/1-1-\"/2\n    (elixir 1.20.4) lib/enum.ex:1725: Enum.\"-map/2-lists^map/1-1-\"/2\n    (mix 1.20.4) lib/mix/tasks/escript.build.ex:204: Mix.Tasks.Escript.Build.escriptize/2\n    (mix 1.20.4) lib/mix/task.ex:502: anonymous fn/3 in Mix.Task.run_task/5\n    (mix 1.20.4) lib/mix/cli.ex:129: Mix.CLI.run_task/2\n    $HOME/.local/share/mise/installs/elixir/1.20.4-otp-29/bin/mix:7: (file)\nmake: *** [install-local] Error 1\n",
+               log_path: nil,
+               duration_ms: 10028
+             }}
+     stacktrace:
+       test/kernel/install_local_test.exs:23: (test)
+
+..shaper attempt=1 model_pass_complete turns=1 calls=1
+...............shaper attempt=1 normalized intent approach label path=.kogen/intents/shape-loop/intent.md
+shaper attempt=1 validation_failed reason=intent_lint_failed; repair_scheduled
+shaper attempt=2 started turns_used=1/60 wall_remaining_ms=infinity
+............shaper attempt=1 validation_stopped class=environment reason=tool_missing repairs=0 attempts=1 calls=1
+.......................shaper attempt=1 started turns_used=0/60 wall_remaining_ms=infinity
+....No cycles found
+.....shaper attempt=2 model_pass_complete turns=1 calls=1
+........shaper attempt=2 normalized intent approach label path=.kogen/intents/shape-loop/intent.md
+shaper attempt=2 validation_failed reason=intent_lint_failed; repair_scheduled
+shaper attempt=3 started turns_used=2/60 wall_remaining_ms=infinity
+...shaper attempt=1 model_pass_complete turns=1 calls=1
+Total errors: 0, Skipped: 0, Unnecessary Skips: 0
+done (passed successfully)
+shaper attempt=1 validation_passed
+..shaper attempt=1 validation_failed reason=all_items_keep; repair_scheduled
+shaper attempt=2 started turns_used=1/60 wall_remaining_ms=infinity
+shaper attempt=1 normalized intent approach label path=.kogen/intents/shape-loop/intent.md
+......shaper attempt=3 model_pass_complete turns=1 calls=1
+..shaper attempt=1 validation_stopped class=environment reason=tool_missing repairs=0 attempts=1 calls=1
+shaper attempt=1 started turns_used=0/60 wall_remaining_ms=infinity
+shaper attempt=3 normalized intent approach label path=.kogen/intents/shape-loop/intent.md
+shaper attempt=3 validation_failed reason=intent_lint_failed; repair_scheduled
+shaper attempt=4 started turns_used=3/60 wall_remaining_ms=infinity
+..shaper attempt=2 model_pass_complete turns=1 calls=1
+........shaper attempt=2 normalized intent approach label path=.kogen/intents/shape-loop/intent.md
+.shaper attempt=1 model_pass_complete turns=1 calls=1
+..shaper attempt=4 model_pass_complete turns=1 calls=1
+shaper attempt=1 validation_failed reason=generated_file_missing; repair_scheduled
+shaper attempt=2 started turns_used=1/60 wall_remaining_ms=infinity
+..shaper attempt=2 model_pass_complete turns=1 calls=1
+shaper attempt=2 normalized intent approach label path=.kogen/intents/shape-loop/intent.md
+..shaper attempt=4 normalized intent approach label path=.kogen/intents/shape-loop/intent.md
+shaper attempt=4 validation_failed reason=intent_lint_failed; repair_scheduled
+shaper attempt=5 started turns_used=4/60 wall_remaining_ms=infinity
+shaper attempt=5 model_pass_complete turns=1 calls=1
+..shaper attempt=5 normalized intent approach label path=.kogen/intents/shape-loop/intent.md
+shaper attempt=5 validation_failed reason=intent_lint_failed; repair_limit_reached repairs=4/4 attempts=5 calls=5
+...shaper attempt=1 started turns_used=0/60 wall_remaining_ms=infinity
+shaper attempt=2 validation_passed
+..shaper attempt=1 model_pass_complete turns=1 calls=1
+.shaper attempt=1 started turns_used=0/60 wall_remaining_ms=infinity
+...shaper attempt=1 normalized intent approach label path=.kogen/intents/shape-loop/intent.md
+.shaper attempt=1 model_pass_complete turns=1 calls=1
+shaper attempt=1 normalized intent approach label path=.kogen/intents/shape-loop/intent.md
+shaper attempt=1 validation_failed reason=intent_lint_failed; repair_scheduled
+shaper attempt=2 started turns_used=1/60 wall_remaining_ms=infinity
+shaper attempt=2 model_pass_complete turns=1 calls=1
+shaper attempt=2 normalized intent approach label path=.kogen/intents/shape-loop/intent.md
+shaper attempt=2 validation_failed reason=generated_file_missing; repair_scheduled
+shaper attempt=3 started turns_used=2/60 wall_remaining_ms=infinity
+shaper attempt=2 validation_passed
+...shaper attempt=3 model_pass_complete turns=1 calls=1
+.shaper attempt=1 started turns_used=0/60 wall_remaining_ms=infinity
+..shaper attempt=1 model_pass_complete turns=2 calls=2
+shaper attempt=1 normalized intent approach label path=.kogen/intents/shape-loop/intent.md
+shaper attempt=1 validation_failed reason=intent_lint_failed; repair_scheduled
+shaper attempt=2 started turns_used=2/60 wall_remaining_ms=infinity
+...shaper attempt=2 model_pass_complete turns=1 calls=1
+.shaper attempt=2 validation_failed reason=format_failed; repair_scheduled
+shaper attempt=3 started turns_used=3/60 wall_remaining_ms=infinity
+shaper attempt=3 model_pass_complete turns=1 calls=1
+shaper attempt=1 warning shape_reclassified items=A1
+shaper attempt=1 validation_passed
+shaper attempt=3 normalized intent approach label path=.kogen/intents/shape-loop/intent.md
+.shaper attempt=1 started turns_used=0/60 wall_remaining_ms=infinity
+shaper attempt=1 model_pass_complete turns=1 calls=1
+.shaper attempt=1 normalized intent approach label path=.kogen/intents/shape-loop/intent.md
+shaper attempt=3 validation_passed
+.shaper attempt=1 started turns_used=0/60 wall_remaining_ms=infinity
+shaper attempt=1 model_pass_complete turns=1 calls=1
+shaper attempt=1 normalized intent approach label path=.kogen/intents/shape-loop/intent.md
+.shaper attempt=3 validation_passed
+.shaper attempt=1 started turns_used=0/60 wall_remaining_ms=infinity
+.shaper attempt=1 model_pass_complete turns=1 calls=1
+shaper attempt=1 warning formatter_skipped reason=tool_missing
+shaper attempt=1 normalized intent approach label path=.kogen/intents/shape-loop/intent.md
+shaper attempt=1 validation_passed
+..shaper attempt=1 warning shape_reclassified items=A1
+shaper attempt=1 validation_passed
+...shaper attempt=1 validation_passed
+......shaper attempt=1 started turns_used=0/60 wall_remaining_ms=infinity
+shaper attempt=1 model_pass_complete turns=1 calls=1
+shaper attempt=1 normalized intent approach label path=.kogen/intents/shape-loop/intent.md
+shaper attempt=1 validation_failed reason=intent_lint_failed; repair_scheduled
+shaper attempt=2 started turns_used=1/60 wall_remaining_ms=infinity
+shaper attempt=2 model_pass_complete turns=1 calls=1
+.shaper attempt=2 normalized intent approach label path=.kogen/intents/shape-loop/intent.md
+shaper attempt=2 validation_failed reason=intent_lint_failed; repair_scheduled
+shaper attempt=3 started turns_used=2/60 wall_remaining_ms=infinity
+shaper attempt=3 model_pass_complete turns=1 calls=1
+.shaper attempt=3 normalized intent approach label path=.kogen/intents/shape-loop/intent.md
+shaper attempt=3 validation_failed reason=intent_lint_failed; repair_scheduled
+shaper attempt=4 started turns_used=3/60 wall_remaining_ms=infinity
+shaper attempt=4 model_pass_complete turns=1 calls=1
+..shaper attempt=4 normalized intent approach label path=.kogen/intents/shape-loop/intent.md
+shaper attempt=4 validation_failed reason=intent_lint_failed; repair_scheduled
+shaper attempt=5 started turns_used=4/60 wall_remaining_ms=infinity
+shaper attempt=5 model_pass_complete turns=1 calls=1
+shaper attempt=5 normalized intent approach label path=.kogen/intents/shape-loop/intent.md
+..shaper attempt=5 validation_passed
+.WARNING: ExUnit suite took 46027 ms (10 s warning threshold)
+
+Finished in 46.0 seconds (46.0s async, 0.00s sync)
+
+Result: 297/299 passed, 75 excluded
+Failed: 2 tests
+make[1]: *** [test] Error 2
+make[1]: *** Waiting for unfinished jobs....
+.WARNING: ExUnit suite took 51167 ms (10 s warning threshold)
+
+Finished in 51.1 seconds (51.1s async, 0.00s sync)
+
+Result: 48/50 passed
+Failed: 2 tests
+make[1]: *** [acceptance] Error 2
+.......WARNING: ExUnit suite took 107271 ms (10 s warning threshold)
+
+Finished in 107.2 seconds (107.2s async, 0.00s sync)
+
+Result: 19 passed
+make: *** [check-full] Error 2

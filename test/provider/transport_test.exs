@@ -5,6 +5,10 @@ defmodule Kogen.Provider.ChatGPT.TransportTest do
   alias Kogen.Contracts.ProviderError
   alias Kogen.Provider.ChatGPT
 
+  # Servers hand the captured request to the test process only after replying, so a
+  # loaded machine can deliver it long after the client returned.
+  @receive_ms 10_000
+
   test "streams fragmented SSE over OTP httpc with the required Responses body" do
     item = %{
       "id" => "msg_1",
@@ -19,7 +23,7 @@ defmodule Kogen.Provider.ChatGPT.TransportTest do
 
     assert {:ok, response} = ChatGPT.respond(config, request())
     assert response.text == "ok"
-    assert_receive {:captured_request, request_bytes}
+    assert_receive {:captured_request, request_bytes}, @receive_ms
     request_text = IO.iodata_to_binary(request_bytes)
     [headers, request_body] = :binary.split(request_text, "\r\n\r\n")
     encoded = :json.decode(request_body)
@@ -69,7 +73,7 @@ defmodule Kogen.Provider.ChatGPT.TransportTest do
 
       if expected_class == :usage_limit, do: assert(error.message =~ "Manage usage")
 
-      assert_receive {:captured_request, _request}
+      assert_receive {:captured_request, _request}, @receive_ms
     end)
   end
 
@@ -78,16 +82,16 @@ defmodule Kogen.Provider.ChatGPT.TransportTest do
     {url, _server} = start_server(200, partial, :chunked)
 
     assert {:error, %ProviderError{class: :malformed}} = ChatGPT.respond(config(url), request())
-    assert_receive {:captured_request, _request}
+    assert_receive {:captured_request, _request}, @receive_ms
   end
 
   test "classifies an HTTP request timeout" do
     {url, server} = start_hanging_server()
-    config = %{config(url) | timeout_ms: 25}
+    config = %{config(url) | timeout_ms: 250}
 
     assert {:error, %ProviderError{class: :timeout}} = ChatGPT.respond(config, request())
     send(server, :release)
-    assert_receive {:captured_request, _request}
+    assert_receive {:captured_request, _request}, @receive_ms
   end
 
   test "proxy URLs with credentials fail with a clear transport error" do
@@ -183,7 +187,7 @@ defmodule Kogen.Provider.ChatGPT.TransportTest do
     if request_complete?(buffer) do
       buffer
     else
-      {:ok, chunk} = :gen_tcp.recv(socket, 0, 2_000)
+      {:ok, chunk} = :gen_tcp.recv(socket, 0, @receive_ms)
       receive_request(socket, buffer <> chunk)
     end
   end

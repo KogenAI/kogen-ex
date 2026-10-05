@@ -7,6 +7,8 @@ defmodule Kogen.Harness.ExchangeTest do
   alias Kogen.Harness.Opts
   alias Kogen.Provider.ChatGPT
 
+  @server_wait_ms 20_000
+
   test "an idle streamed model request retries exactly once and records the retry", %{
     tmp_dir: tmp_dir
   } do
@@ -43,7 +45,7 @@ defmodule Kogen.Harness.ExchangeTest do
         access_token: "test-token",
         account_id: "test-account",
         endpoint: url,
-        timeout_ms: 65
+        timeout_ms: 400
       },
       proc_mod: Kogen.Proc,
       event_recorder: fn event ->
@@ -61,13 +63,13 @@ defmodule Kogen.Harness.ExchangeTest do
                instructions: "Shape the Intent.",
                items: [%{"role" => "user", "content" => []}],
                tool_names: [],
-               remaining_ms: 2_000
+               remaining_ms: 60_000
              })
 
     assert result.text == "ok"
     assert_receive {:http_request, :first, _bytes, first_at}
     assert_receive {:http_request, :retry, _bytes, retry_at}
-    assert retry_at - first_at >= 240
+    assert retry_at - first_at >= 560
     assert_receive {:recorded_event, %{event: :provider_retry, stage: :shape, attempt: 1}}
 
     events =
@@ -106,7 +108,7 @@ defmodule Kogen.Harness.ExchangeTest do
         send(parent, {:http_request, :first, first_request, System.monotonic_time(:millisecond)})
 
         # Leave the first response idle while accepting Kogen's backoff-delayed retry.
-        {:ok, retry_socket} = :gen_tcp.accept(listener, 2_000)
+        {:ok, retry_socket} = :gen_tcp.accept(listener, @server_wait_ms)
         retry_request = receive_request(retry_socket, <<>>)
         send(parent, {:http_request, :retry, retry_request, System.monotonic_time(:millisecond)})
         send_chunked(retry_socket, body)
@@ -117,7 +119,7 @@ defmodule Kogen.Harness.ExchangeTest do
         receive do
           :stop -> :ok
         after
-          2_000 -> :ok
+          @server_wait_ms -> :ok
         end
       end)
 
@@ -136,7 +138,7 @@ defmodule Kogen.Harness.ExchangeTest do
     if request_complete?(buffer) do
       buffer
     else
-      case :gen_tcp.recv(socket, 0, 2_000) do
+      case :gen_tcp.recv(socket, 0, @server_wait_ms) do
         {:ok, chunk} -> receive_request(socket, buffer <> chunk)
         {:error, reason} -> raise "test HTTP server failed to read request: #{inspect(reason)}"
       end

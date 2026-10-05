@@ -20,11 +20,16 @@ defmodule Kogen.Kernel.InstallLocalTest do
       File.write!(Path.join(project, ".tool-versions"), "erlang #{alternate_erlang}\n")
     end
 
+    # Build into a private directory so this test never waits on, or breaks, the
+    # build lock and consolidated protocols of the suite's own _build (prod needs
+    # only the app and the boundary compiler, so the build stays quick).
+    build_env = %{"MIX_ENV" => "prod", "MIX_BUILD_PATH" => Path.join(tmp_dir, "mix-build")}
+
     assert {:ok, %ProcResult{exit_status: 0, output_tail: install_output}} =
              Proc.run(
                ["make", "install-local", "KOGEN_INSTALL_HOME=#{install_home}"],
                cd: @repo_root,
-               env: runtime.base_env
+               env: Map.merge(runtime.base_env, build_env)
              )
 
     assert is_binary(install_output)

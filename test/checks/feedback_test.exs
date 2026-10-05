@@ -21,7 +21,7 @@ defmodule Kogen.Checks.FeedbackTest do
   test "formats noisy Credo and Dialyzer output as deduplicated findings" do
     result = analyze("full", ["make", "check-full"], 2, "gate-full-46.log")
 
-    assert result.exit_level == 3
+    assert result.exit_level == 1
 
     assert Enum.any?(
              result.findings,
@@ -31,11 +31,93 @@ defmodule Kogen.Checks.FeedbackTest do
 
     assert Enum.any?(result.findings, &(&1.tool == "dialyzer" and &1.rule == "pattern_match"))
     assert result.dialyzer_summaries == ["Total errors: 1, Skipped: 0, Unnecessary Skips: 0"]
-    assert Feedback.render_model_feedback([result]) == ""
+    assert Feedback.render_model_feedback([result]) =~ "[credo/FileSize]"
+  end
 
-    detail = Feedback.render_environment_detail([result])
-    assert detail =~ "exit 3"
-    assert detail =~ "raw log: logs/gate-full-46.log"
+  test "genuine test failures stay level 1 when the same run hit build-lock noise" do
+    result = analyze("full", ["make", "check-full"], 2, "gate-full-51.log")
+
+    assert result.exit_level == 1
+    assert result.reason == nil
+
+    errors = for %{severity: :error, tool: "exunit"} = finding <- result.findings, do: finding
+
+    assert [
+             %{
+               rule: "assertion",
+               path: "test/acceptance/bench-provided-intent_test.exs",
+               line: 12
+             },
+             %{
+               rule: "assertion",
+               path: "test/acceptance/bench-provided-intent_test.exs",
+               line: 26
+             },
+             %{rule: "failure", path: "test/harness/exchange_test.exs", line: 10}
+           ] = Enum.map(errors, &Map.take(&1, [:rule, :path, :line]))
+
+    assert [noise] =
+             for(%{rule: "environment"} = finding <- result.findings, do: finding)
+
+    assert noise.severity == :warning
+    assert noise.path == "test/kernel/install_local_test.exs"
+    assert noise.message =~ "environment noise"
+
+    refute Enum.any?(result.findings, &(&1.tool == "dialyzer" and &1.severity == :error))
+
+    feedback = Feedback.render_model_feedback([result])
+
+    assert feedback =~
+             "test/acceptance/bench-provided-intent_test.exs:12:1: error: [exunit/assertion]"
+
+    assert feedback =~
+             "test/acceptance/bench-provided-intent_test.exs:26:1: error: [exunit/assertion]"
+
+    assert feedback =~ "test/kernel/install_local_test.exs:9:1: warning: [exunit/environment]"
+    assert feedback =~ "exit 1"
+    refute feedback =~ "could not check"
+  end
+
+  test "a failed run whose only failure is environment noise is still level 3" do
+    [_before, noisy] =
+      String.split(fixture("gate-full-51.log"), "  2) test installed launcher", parts: 2)
+
+    [block, _rest] = String.split(noisy, "\n\n..", parts: 2)
+
+    output =
+      "  2) test installed launcher" <> block <> "\n\nResult: 298/299 passed\nFailed: 1 test\n"
+
+    result =
+      Feedback.analyze(%{
+        name: "tests",
+        argv: ["mix", "test"],
+        exit_status: 2,
+        timed_out: false,
+        output: output,
+        log_path: "logs/gate-full-51.log",
+        workdir: @workdir
+      })
+
+    assert result.exit_level == 3
+    assert result.reason == "a required tool or file was unavailable"
+    assert Feedback.render_model_feedback([result]) == ""
+    assert Feedback.render_environment_detail([result]) =~ "exit 3"
+  end
+
+  test "environment output with no failure location is level 3" do
+    result =
+      Feedback.analyze(%{
+        name: "full",
+        argv: ["make", "check-full"],
+        exit_status: 2,
+        timed_out: false,
+        output: "** (File.Error) could not read file \"x\": no such file or directory\n",
+        log_path: "logs/full.log",
+        workdir: @workdir
+      })
+
+    assert result.exit_level == 3
+    assert Feedback.render_environment_detail([result]) =~ "raw log: logs/full.log"
   end
 
   test "reports ExUnit assertions with location and trimmed left/right values" do

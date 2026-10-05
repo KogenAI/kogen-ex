@@ -3,6 +3,20 @@ defmodule Kogen.Checks.Feedback.Parser.Common do
   @message_chars 200
   @location ~r{(?<path>(?:\$WORKDIR/|/)?[A-Za-z0-9_.$-]+(?:/[A-Za-z0-9_.$-]+)*\.exs?):(?<line>\d+)(?::(?<col>\d+))?(?::(?<tail>.*))?}
 
+  @environment_patterns [
+    ~r/acceptance formatter report is (?:missing|empty|malformed)/i,
+    ~r/Operation not permitted/i,
+    ~r/Permission denied/i,
+    ~r/No such file or directory/i,
+    ~r/(?:command|tool) (?:was )?not found/i,
+    ~r/mise env failed/i,
+    ~r/(?:timed out|deadline reached)/i,
+    ~r/nothing collected|no tests? (?:were )?collected|no tests? to run/i,
+    ~r/(?:required )?fixture[s]? (?:is |are )?(?:missing|not found|unavailable)/i
+  ]
+
+  def environment_text?(text), do: Enum.any?(@environment_patterns, &Regex.match?(&1, text))
+
   def location(line) do
     case Regex.run(@location, cli_line(line), capture: :all_but_first) do
       [path, line] ->

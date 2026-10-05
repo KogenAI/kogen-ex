@@ -8,17 +8,6 @@ defmodule Kogen.Checks.Feedback do
 
   @failed_test_location ~r/(?:\A|\n)\s*\d+\)\s+test\b[^\n]*\n\s*([^\s]+\.exs:\d+)/
 
-  @environment_patterns [
-    ~r/acceptance formatter report is (?:missing|empty|malformed)/i,
-    ~r/Operation not permitted/i,
-    ~r/Permission denied/i,
-    ~r/No such file or directory/i,
-    ~r/(?:command|tool) (?:was )?not found/i,
-    ~r/mise env failed/i,
-    ~r/(?:timed out|deadline reached)/i,
-    ~r/nothing collected|no tests? (?:were )?collected|no tests? to run/i,
-    ~r/(?:required )?fixture[s]? (?:is |are )?(?:missing|not found|unavailable)/i
-  ]
   @usage_patterns [
     ~r/(?:unknown|unrecognized|invalid) (?:command.line )?(?:option|switch|argument)/i,
     ~r/^\s*usage:/im,
@@ -146,6 +135,7 @@ defmodule Kogen.Checks.Feedback do
   defp exit_level(%{output: output} = result) do
     cond do
       CommandExit.tool_missing?(result.exit_status) -> 3
+      result.exit_status != 0 and genuine_findings?(result.findings) -> 1
       environment_output?(output) -> 3
       usage_output?(output) -> 2
       result.exit_status == 0 and nothing_ran?(output) -> 3
@@ -284,8 +274,13 @@ defmodule Kogen.Checks.Feedback do
 
   defp environment_reason(_result, 3), do: "the check failed without output"
 
-  defp environment_output?(output),
-    do: Enum.any?(@environment_patterns, &Regex.match?(&1, output))
+  defp environment_output?(output), do: Common.environment_text?(output)
+
+  # A failure with a source location that is not itself environment noise is the
+  # candidate's to fix, even when the same run also hit environmental trouble.
+  defp genuine_findings?(findings),
+    do:
+      Enum.any?(findings, &(&1.severity == :error and is_binary(&1.path) and is_integer(&1.line)))
 
   defp usage_output?(output), do: Enum.any?(@usage_patterns, &Regex.match?(&1, output))
 

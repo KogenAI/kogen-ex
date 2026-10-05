@@ -11,7 +11,8 @@ defmodule Kogen.Checks.Feedback.Parser do
       truncate: 1,
       truncate: 2,
       cli_line: 1,
-      lines: 1
+      lines: 1,
+      environment_text?: 1
     ]
 
   alias Kogen.Checks.Feedback.Parser.Compile
@@ -135,7 +136,7 @@ defmodule Kogen.Checks.Feedback.Parser do
   end
 
   defp diagnostic_location(line) do
-    case location(line) do
+    case if(Regex.match?(~r/\.exs?:\d+:\d+:/, line), do: location(line), else: :error) do
       {:ok, path, line_number, col, tail} when col > 0 and tail != "" ->
         case String.split(String.trim(tail), ~r/\s+/, parts: 2) do
           [rule | _rest] ->
@@ -252,22 +253,30 @@ defmodule Kogen.Checks.Feedback.Parser do
     left = labeled_value(block, "left:")
     right = labeled_value(block, "right:")
     message = assertion_message(headline, left, right)
+    environmental? = block |> Enum.join("\n") |> environment_text?()
 
     %{
       tool: "exunit",
-      rule:
-        if(left || right || String.contains?(headline, "Assertion"),
-          do: "assertion",
-          else: "failure"
-        ),
-      severity: :error,
+      rule: exunit_rule(environmental?, assertion?(left, right, headline)),
+      severity: if(environmental?, do: :warning, else: :error),
       path: path,
       line: line_number,
       col: col,
       symbol: "#{current.module} \"#{truncate(current.name, 100)}\"",
-      message: message
+      message:
+        if(environmental?,
+          do: "environment noise, not a candidate failure: " <> message,
+          else: message
+        )
     }
   end
+
+  defp assertion?(left, right, headline),
+    do: not is_nil(left) or not is_nil(right) or String.contains?(headline, "Assertion")
+
+  defp exunit_rule(true, _assertion?), do: "environment"
+  defp exunit_rule(false, true), do: "assertion"
+  defp exunit_rule(false, _assertion?), do: "failure"
 
   defp exunit_location({:ok, path, line_number, col, _tail}, workdir),
     do: {normalize_path(path, workdir), line_number, col}
