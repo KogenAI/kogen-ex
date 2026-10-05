@@ -17,11 +17,29 @@ defmodule Kogen.Contracts.CheckBaseline do
     end)
   end
 
+  @doc """
+  Marks a failing check as base-red: its findings are a subset of the approval's, or it failed
+  on the base without parseable findings (unparseable or unavailable there) and still reports
+  nothing parseable, so its failure cannot be told apart from the base. Parseable findings on
+  such a check are new and still fail.
+  """
   @spec annotate(map(), [map()]) :: map()
   def annotate(%{name: name, exit_level: level, findings: findings} = assessment, baseline) do
-    base_red? = level in [1, 2] and matches?(baseline, name, findings)
+    base_red? =
+      (level in [1, 2] and matches?(baseline, name, findings)) or
+        (level in [1, 2, 3] and opaque_on_base?(baseline, name) and opaque?(findings))
+
     Map.put(assessment, :base_red?, base_red?)
   end
+
+  defp opaque_on_base?(baseline, name) do
+    case Enum.find(baseline, &(&1.name == name and &1.status == :red)) do
+      %{findings: base_findings} -> opaque?(base_findings)
+      _missing -> false
+    end
+  end
+
+  defp opaque?(findings), do: Enum.all?(findings, &is_nil(identity(&1)))
 
   @spec matches?([map()], String.t(), [map()]) :: boolean()
   def matches?(baseline, name, findings) do
