@@ -4,6 +4,7 @@ defmodule Kogen.E2e.Build do
   alias Kogen.Contracts.ProcResult
   alias Kogen.E2e.Build.Environment
   alias Kogen.E2e.Build.Fixture
+  alias Kogen.E2e.Build.IntentFixture
   alias Kogen.E2e.Build.Options
   alias Kogen.E2e.Build.Origin
   alias Kogen.E2e.Build.Result
@@ -218,8 +219,8 @@ defmodule Kogen.E2e.Build do
   end
 
   defp write_intent!(project, options) do
-    intent = Keyword.get(options, :intent, default_intent())
-    acceptance = Keyword.get(options, :acceptance, default_acceptance())
+    intent = Keyword.get(options, :intent, IntentFixture.intent())
+    acceptance = Keyword.get(options, :acceptance, IntentFixture.acceptance())
 
     intent_path = Path.join([project, ".kogen", "intents", @slug, "intent.md"])
     acceptance_path = Path.join([project, ".kogen", "acceptance", "#{@slug}_test.exs"])
@@ -229,43 +230,6 @@ defmodule Kogen.E2e.Build do
     File.write!(intent_path, intent)
     File.write!(acceptance_path, acceptance)
   end
-
-  defp default_intent do
-    """
-    ---
-    title: "Expose a ready value"
-    domains: [kernel]
-    size: small
-    ---
-    Make TinyApp.value/0 return the approved ready value.
-
-    ## Acceptance
-    - A1: TinyApp.value/0 returns :ready.
-
-    ## Verify
-    - A1: test
-
-    ## Notes
-    Keep the implementation inside lib/tiny_app.ex.
-    #{request_section()}
-    """
-  end
-
-  defp default_acceptance do
-    """
-    defmodule TinyApp.AcceptanceTest do
-      use ExUnit.Case, async: true
-
-      @tag intent: "build-engine/A1"
-      test "returns the ready value" do
-        assert TinyApp.value() == :ready
-      end
-    end
-    """
-  end
-
-  defp request_section,
-    do: "\n## Request\nPreserve this fixture wording verbatim as source context."
 
   defp write_seed!(seed, options) do
     files = %{
