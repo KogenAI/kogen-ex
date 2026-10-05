@@ -339,10 +339,11 @@ defmodule Kogen.Harness.Developer do
     {:ok,
      @developer_prompt <>
        "\n\nShell-only recipe: acceptance tests and the Intent files are read-only, including " <>
-       "when using shell commands or formatters. Inspect efficiently with `sed -n` and `rg -n`; edit with a " <>
-       "short `apply_patch <<'PATCH' ... PATCH` heredoc when available, or a focused " <>
-       "`python3 - <<'PY'` edit. Combine related reads and keep command output focused. " <>
-       "All file changes must stay inside the worktree."}
+       "when using shell commands or formatters. Inspect with `sed -n`, `grep -n`, or `grep -R`; do not " <>
+       "assume `rg` or a shell `apply_patch` command is installed. Make focused edits with " <>
+       "`python3 - <<'PY'`. Run Elixir commands through `mise exec -- ...` so the pinned Elixir and " <>
+       "Erlang versions are used; a direct Elixir wrapper can fail to find `erl`. Combine related reads " <>
+       "and keep command output focused. All file changes must stay inside the worktree."}
   end
 
   defp validate_limits(opts) do

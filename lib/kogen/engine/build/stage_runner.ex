@@ -5,6 +5,7 @@ defmodule Kogen.Engine.Build.StageRunner do
   alias Kogen.Contracts.Failure
   alias Kogen.Contracts.ProviderError
   alias Kogen.Engine.Build.Commit
+  alias Kogen.Engine.Build.GateSummary
   alias Kogen.Engine.Build.GateSupport
   alias Kogen.Engine.Build.Guard
   alias Kogen.Engine.Build.PhaseTiming, as: Timing
@@ -187,11 +188,7 @@ defmodule Kogen.Engine.Build.StageRunner do
        [
          {:stage_ok, :develop, %{tree: tree}},
          {:stage_ok, :done_gate,
-          %{
-            outcome: result.outcome,
-            failed_test_count: failed_test_count,
-            findings: Map.get(result.gate || %{}, :failures, [])
-          }}
+          GateSummary.done_gate(result.gate, result.outcome, failed_test_count)}
        ]}
     end
   end

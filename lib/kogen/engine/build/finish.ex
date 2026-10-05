@@ -2,6 +2,7 @@ defmodule Kogen.Engine.Build.Finish do
   @moduledoc false
 
   alias Kogen.Contracts.Failure
+  alias Kogen.Engine.Build.GateSummary
   alias Kogen.Engine.Build.Guard
   alias Kogen.Engine.Build.Request
   alias Kogen.Engine.Build.Result
@@ -33,7 +34,14 @@ defmodule Kogen.Engine.Build.Finish do
   @spec terminal_failure(Session.t(), Failure.t()) :: {:ok, Result.t()}
   def terminal_failure(%Session{} = session, %Failure{} = failure) do
     record =
-      State.record(session.run, %{event: :finished, status: :failed, reason: failure.reason})
+      State.record(session.run, %{
+        event: :finished,
+        status: :failed,
+        reason: failure.reason,
+        attempt: session.attempt,
+        gate_summary: GateSummary.compact(session.last_harness && session.last_harness.gate),
+        stop: failure_stop(failure, session.attempt)
+      })
 
     preserve = preserve_candidate(session, :failed)
     release = release_claim(session)
@@ -69,7 +77,15 @@ defmodule Kogen.Engine.Build.Finish do
         detail: failure.detail
       })
 
-    terminal = State.record(run, %{event: :finished, status: :failed, reason: failure.reason})
+    terminal =
+      State.record(run, %{
+        event: :finished,
+        status: :failed,
+        reason: failure.reason,
+        attempt: :builder,
+        stop: failure_stop(failure, :builder)
+      })
+
     release = release_setup_claim(request, run, claimed?)
     failure = persistence_failure(failure, combine(first, terminal), release)
 
@@ -179,6 +195,28 @@ defmodule Kogen.Engine.Build.Finish do
     do: session.landed_sha || reason
 
   defp landed_sha(_status, _session, _reason), do: nil
+
+  defp failure_stop(failure, attempt) do
+    %{
+      reason: failure.reason,
+      reason_text: reason_text(failure.reason),
+      class: failure.class,
+      attempt: attempt,
+      repair_cap: 0,
+      repairs_used: 0,
+      repairs_remaining: 0,
+      failed_test_count: nil,
+      check_count: 0,
+      failed_check_count: 0,
+      fix_count: 0,
+      failed_fix_count: 0,
+      finding_count: 0
+    }
+  end
+
+  defp reason_text(reason) when is_atom(reason), do: Atom.to_string(reason)
+  defp reason_text(reason) when is_binary(reason), do: reason
+  defp reason_text(reason), do: inspect(reason)
 
   defp finish_line(:landed, sha, :ok), do: "land: landed #{sha}"
   defp finish_line(:parked, reason, :ok), do: "build: parked (#{inspect(reason)})"

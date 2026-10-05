@@ -3,6 +3,7 @@ defmodule Kogen.Build.Cycle do
 
   alias Kogen.Build.Cycle.Escalation
   alias Kogen.Build.Cycle.ProviderFailure
+  alias Kogen.Build.Cycle.Stop
   alias Kogen.Build.Recipe
   alias Kogen.Contracts.Failure
 
@@ -24,6 +25,7 @@ defmodule Kogen.Build.Cycle do
       :attempt,
       :escalation_used?,
       :last_gate_findings,
+      :last_gate_summary,
       :result
     ]
     defstruct @enforce_keys
@@ -43,6 +45,7 @@ defmodule Kogen.Build.Cycle do
             attempt: :builder | :escalation,
             escalation_used?: boolean(),
             last_gate_findings: [String.t()],
+            last_gate_summary: map() | nil,
             result: {atom(), term()} | nil
           }
   end
@@ -83,6 +86,7 @@ defmodule Kogen.Build.Cycle do
       attempt: :builder,
       escalation_used?: false,
       last_gate_findings: [],
+      last_gate_summary: nil,
       result: nil
     }
   end
@@ -162,6 +166,12 @@ defmodule Kogen.Build.Cycle do
   end
 
   defp stage_succeeded(state, :done_gate, data) do
+    state =
+      case Map.get(data, :gate_summary) do
+        summary when is_map(summary) -> %{state | last_gate_summary: summary}
+        _summary -> state
+      end
+
     case Map.get(data, :outcome, :done) do
       :done ->
         advance_and_run(state, :done_gate)
@@ -345,7 +355,13 @@ defmodule Kogen.Build.Cycle do
 
     {next,
      [
-       record(:finished, %{status: status, reason: reason, attempt: state.attempt}),
+       record(:finished, %{
+         status: status,
+         reason: reason,
+         attempt: state.attempt,
+         gate_summary: state.last_gate_summary,
+         stop: Stop.summary(state, reason)
+       }),
        {:finish, status, reason}
      ]}
   end

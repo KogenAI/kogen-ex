@@ -24,6 +24,8 @@ defmodule Kogen.State.Json do
     trigger: "trigger",
     summary: "summary",
     findings: "findings",
+    gate_summary: "gate_summary",
+    stop: "stop",
     phase: "phase",
     name: "name",
     stage: "stage",

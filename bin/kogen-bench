@@ -7,6 +7,13 @@ usage() {
 }
 
 [ "$#" -eq 3 ] || usage
+script_path=$0
+case "$script_path" in
+  */*) ;;
+  *) script_path=$(command -v "$script_path") ;;
+esac
+script_dir=$(cd "$(dirname "$script_path")" && pwd -P)
+format_check_script="$script_dir/kogen-format-check"
 recipe=${KOGEN_BENCH_RECIPE:-staged}
 case "$recipe" in
   staged|plan-shell|direct|direct-shell|direct-escalate|escalate-shell) ;;
@@ -146,14 +153,14 @@ git clone --quiet "$work_dir" "$project_dir"
 git -C "$project_dir" checkout --quiet -B main "$work_base"
 mkdir -p "$project_dir/.kogen"
 python3 - "$task_json" "$project_dir/.kogen/project.yaml" "$scratch/project_tmpdir" \
-  "$timer_script" "$phase_file" "$timings_file" <<'PY'
+  "$timer_script" "$phase_file" "$timings_file" "$format_check_script" <<'PY'
 import json
 import os
 import re
 import shutil
 import sys
 
-source_path, target_path, tmpdir_path, timer_path, phase_path, event_path = sys.argv[1:]
+source_path, target_path, tmpdir_path, timer_path, phase_path, event_path, format_check_script = sys.argv[1:]
 with open(source_path, encoding="utf-8") as source:
     document = json.load(source)
 
@@ -206,16 +213,17 @@ quote = lambda value: json.dumps(str(value), ensure_ascii=False)
 array = lambda values: "[" + ", ".join(quote(value) for value in values) + "]"
 timer_prefix = [sys.executable, timer_path, phase_path, event_path]
 timed = lambda name, argv: timer_prefix + [name, "--"] + argv
+format_argv = [sys.executable, format_check_script] + prefix + ["mix", "format"]
 
 lines = [
     "name: kogen-bench",
-    "format: " + array(timed("format", prefix + ["mix", "format"])),
+    "format: " + array(timed("format", format_argv)),
     "checks:",
     "  - name: tests",
     "    argv: " + array(timed("check:tests", prefix + ["mix", "test"])),
     "    timeout_ms: 900000",
     "  - name: format",
-    "    argv: " + array(timed("check:format", prefix + ["mix", "format", "--check-formatted"])),
+    "    argv: " + array(timed("check:format", format_argv + ["--check-formatted"])),
     "    timeout_ms: 300000",
     "acceptance_checks:",
     "  - name: compile-acceptance",
@@ -570,6 +578,8 @@ result = {
     "stages": stages,
     "attempts": report.get("attempts", []),
     "escalations": report.get("escalations", []),
+    "last_gate": report.get("last_gate"),
+    "stop": report.get("stop"),
     "phases": phases,
     "total": {
         "tokens": totals,
@@ -771,6 +781,8 @@ result = {
     "shape": {"model": shape_model, "effort": shape_effort, "wall_ms": shape_wall_ms},
     "attempts": report.get("attempts", []),
     "escalations": report.get("escalations", []),
+    "last_gate": report.get("last_gate"),
+    "stop": report.get("stop"),
     "stages": stages,
     "phases": phases,
     "total": {

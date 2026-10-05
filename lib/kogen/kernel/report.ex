@@ -55,7 +55,9 @@ defmodule Kogen.Kernel.Report do
         {"model_stages", model_stages(events)},
         {"phase_timings", phase_timings(events)},
         {"findings", findings(events)},
-        {"failures", failures(events)}
+        {"failures", failures(events)},
+        {"last_gate", last_gate(events)},
+        {"stop", stop(events)}
       ])
 
     {:ok, report |> :json.encode() |> IO.iodata_to_binary()}
@@ -185,6 +187,45 @@ defmodule Kogen.Kernel.Report do
       ])
     end
   end
+
+  defp last_gate(events) do
+    case finished_event(events) do
+      %Event{gate_summary: summary} when is_map(summary) -> summary
+      _event -> nil
+    end
+  end
+
+  defp stop(events) do
+    case finished_event(events) do
+      %Event{status: "failed", stop: stop} when is_map(stop) ->
+        stop
+
+      %Event{status: "failed", reason: reason, attempt: attempt} ->
+        json_object([
+          {"reason", nullable(reason)},
+          {"reason_text", nullable(reason_text(reason))},
+          {"attempt", nullable(attempt)},
+          {"repair_cap", :null},
+          {"repairs_used", :null},
+          {"repairs_remaining", :null},
+          {"failed_test_count", :null},
+          {"check_count", :null},
+          {"failed_check_count", :null},
+          {"fix_count", :null},
+          {"failed_fix_count", :null},
+          {"finding_count", :null}
+        ])
+
+      _event ->
+        nil
+    end
+  end
+
+  defp finished_event(events), do: Enum.find(Enum.reverse(events), &(&1.event == "finished"))
+
+  defp reason_text(nil), do: nil
+  defp reason_text(reason) when is_binary(reason), do: reason
+  defp reason_text(reason), do: inspect(reason)
 
   defp excused_flakes(events) do
     for %Event{event: "flake_excused"} = event <- events do

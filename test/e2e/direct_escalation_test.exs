@@ -10,6 +10,58 @@ defmodule Kogen.E2e.DirectEscalationTest do
   @moduletag :e2e
   @tag timeout: 120_000
 
+  test "failed Build report includes last gate findings and stop counts", context do
+    seed_project =
+      Build.prepare_seed!(Path.join(context.tmp_dir, "failed-report-seed"),
+        project_config: gate_project()
+      )
+
+    parent = Path.join(context.tmp_dir, "failed-report")
+    File.mkdir_p!(parent)
+
+    script = [
+      ScriptedProvider.write(:develop, "lib/tiny_app.ex", source("luna", :wrong)),
+      ScriptedProvider.answer(:develop, "Done."),
+      ScriptedProvider.answer(:develop, "Done.")
+    ]
+
+    result =
+      Build.run!(parent, script, %Options{seed_project: seed_project, recipe: "direct"})
+
+    assert result.build.status == :failed
+    assert result.build.reason == :unchanged
+    assert {:ok, report} = Build.report(result)
+
+    decoded = :json.decode(report)
+
+    assert %{
+             "last_gate" => %{"status" => "fail", "checks" => checks, "findings" => findings}
+           } = decoded
+
+    assert Enum.any?(checks, &(&1["name"] == "tests" and &1["exit_level"] == 1))
+
+    assert Enum.any?(findings, fn finding ->
+             is_binary(finding["path"]) and String.ends_with?(finding["path"], "_test.exs") and
+               is_integer(finding["line"]) and
+               finding["location"] == "#{finding["path"]}:#{finding["line"]}" and
+               is_binary(finding["message"]) and finding["message"] != ""
+           end)
+
+    assert %{
+             "stop" => %{
+               "reason" => "unchanged",
+               "reason_text" => "unchanged",
+               "attempt" => "builder",
+               "repair_cap" => 2,
+               "repairs_used" => 1,
+               "repairs_remaining" => 1,
+               "failed_test_count" => 1,
+               "check_count" => 1,
+               "failed_check_count" => 1
+             }
+           } = decoded
+  end
+
   test "retries a red Luna candidate from a fresh base tree", context do
     seed_project =
       Build.prepare_seed!(Path.join(context.tmp_dir, "seed"), project_config: gate_project())
