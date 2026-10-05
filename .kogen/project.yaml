@@ -1,4 +1,6 @@
 name: kogen
+build:
+  recipe: plan-shell
 checks:
   - name: full
     argv: [make, check-full]

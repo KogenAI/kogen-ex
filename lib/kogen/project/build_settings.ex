@@ -4,7 +4,13 @@ defmodule Kogen.Project.BuildSettings do
   alias Kogen.Contracts.Yaml
 
   @recipes ~w(staged plan-shell direct direct-shell direct-escalate escalate-shell)
-  @roles ~w(builder planner reviewer context shaper)
+  @roles %{
+    "builder" => :builder,
+    "planner" => :planner,
+    "reviewer" => :reviewer,
+    "context" => :context,
+    "shaper" => :shaper
+  }
 
   @spec parse(term()) :: {:ok, map() | nil} | {:error, [map()]}
   def parse(nil), do: {:ok, nil}
@@ -42,7 +48,10 @@ defmodule Kogen.Project.BuildSettings do
         Map.merge(machine_values, project_values)
       end)
 
-    %{recipe: Map.get(project, :recipe) || Map.get(machine, :recipe) || "staged", roles: roles}
+    %{
+      recipe: Map.get(project, :recipe) || Map.get(machine, :recipe) || "plan-shell",
+      roles: roles
+    }
   end
 
   defp parse_machine(source) do
@@ -93,7 +102,7 @@ defmodule Kogen.Project.BuildSettings do
   defp parse_roles(values) do
     Enum.reduce(values, {%{}, []}, fn {name, fields}, {roles, errors} ->
       cond do
-        name not in @roles ->
+        not Map.has_key?(@roles, name) ->
           {roles, errors ++ [issue("build.roles has unknown role #{inspect(name)}")]}
 
         not is_map(fields) ->
@@ -101,7 +110,7 @@ defmodule Kogen.Project.BuildSettings do
 
         true ->
           {settings, field_errors} = role_settings(name, fields)
-          {Map.put(roles, String.to_existing_atom(name), settings), errors ++ field_errors}
+          {Map.put(roles, Map.fetch!(@roles, name), settings), errors ++ field_errors}
       end
     end)
   end

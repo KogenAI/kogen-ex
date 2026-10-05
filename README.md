@@ -34,7 +34,7 @@ Build settings belong in `.kogen/project.yaml`:
 ```yaml
 base: main
 build:
-  recipe: staged
+  recipe: plan-shell
   roles:
     builder:
       model: gpt-6-luna

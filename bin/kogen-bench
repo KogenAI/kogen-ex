@@ -14,7 +14,7 @@ case "$script_path" in
 esac
 script_dir=$(cd "$(dirname "$script_path")" && pwd -P)
 format_check_script="$script_dir/kogen-format-check"
-recipe=${KOGEN_BENCH_RECIPE:-staged}
+recipe=${KOGEN_BENCH_RECIPE:-plan-shell}
 case "$recipe" in
   staged|plan-shell|direct|direct-shell|direct-escalate|escalate-shell) ;;
   *) echo "KOGEN_BENCH_RECIPE must be staged, plan-shell, direct, direct-shell, direct-escalate, or escalate-shell" >&2; exit 2 ;;
