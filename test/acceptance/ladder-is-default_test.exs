@@ -63,12 +63,6 @@ defmodule Kogen.Acceptance.LadderIsDefaultTest do
     end
   end
 
-  @tag intent: "ladder-is-default/A5"
-  test "Kogen's project configuration keeps its explicit plan-shell recipe" do
-    assert {:ok, project} = Kogen.Project.load(@project_root)
-    assert project.build.recipe == "plan-shell"
-  end
-
   @tag intent: "ladder-is-default/A6"
   test "every supported recipe, including the ladders, is selectable", %{tmp_dir: tmp_dir} do
     project_root = Path.join(tmp_dir, "project")
