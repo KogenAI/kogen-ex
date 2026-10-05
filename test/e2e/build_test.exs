@@ -164,6 +164,7 @@ defmodule Kogen.E2e.BuildTest do
     assert result.build.failure.class == :candidate
     assert result.run_status == :failed
     assert result.claim_released
+    assert Enum.any?(result.events, &(&1.event == "finished" and &1.status == "failed"))
     approved_base = fixture.approved_base
 
     current_base = fixture.origin |> Git.git!(["rev-parse", "refs/heads/main"]) |> String.trim()

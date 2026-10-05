@@ -118,15 +118,18 @@ defmodule Kogen.Engine.Runtime do
   end
 
   defp runtime_markers(script_path, ert_dir, ert_bin) do
-    [{"KOGEN_ERTS_DIR", ert_dir}, {"KOGEN_ERTS_BIN", ert_bin}]
-    |> maybe_escript_marker(script_path)
-    |> Map.new()
+    case script_path do
+      path when is_binary(path) ->
+        Map.new([
+          {"KOGEN_ERTS_DIR", ert_dir},
+          {"KOGEN_ERTS_BIN", ert_bin},
+          {"KOGEN_ESCRIPT_DIR", Path.dirname(path)}
+        ])
+
+      nil ->
+        %{}
+    end
   end
-
-  defp maybe_escript_marker(markers, nil), do: markers
-
-  defp maybe_escript_marker(markers, script_path),
-    do: markers ++ [{"KOGEN_ESCRIPT_DIR", Path.dirname(script_path)}]
 
   defp runtime_markers_from(env) do
     Map.take(env, ["KOGEN_ERTS_DIR", "KOGEN_ERTS_BIN", "KOGEN_ESCRIPT_DIR", "KOGEN_BIN_DIR"])

@@ -154,7 +154,9 @@ defmodule Kogen.Kernel.RuntimeDiscovery do
 
       name ->
         path = List.to_string(name)
-        if File.regular?(path), do: path
+
+        if File.regular?(path) and Path.basename(path) in ["kogen", "kogen.escript"],
+          do: path
     end
   end
 

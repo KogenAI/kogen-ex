@@ -51,7 +51,10 @@ defmodule Kogen.Kernel.RuntimeTest do
     assert {:ok, ^generation} = RuntimeDiscovery.resolve_script_path(link)
   end
 
-  test "runtime discovery accepts BEAM callers without an escript path" do
-    assert {:ok, %Runtime{}} = RuntimeDiscovery.runtime()
+  test "runtime discovery does not treat Mix as the Kogen escript" do
+    assert {:ok, %Runtime{base_env: env}} = RuntimeDiscovery.runtime()
+    refute Map.has_key?(env, "KOGEN_ESCRIPT_DIR")
+    refute Map.has_key?(env, "KOGEN_ERTS_DIR")
+    refute Map.has_key?(env, "KOGEN_ERTS_BIN")
   end
 end

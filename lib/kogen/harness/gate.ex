@@ -134,10 +134,38 @@ defmodule Kogen.Harness.Gate do
         Map.merge(classification, %{retry: retry, retry_argv: retry_argv})
       )
     else
-      detail =
-        "\nSame-seed rerun still failed: #{inspect(test_ids)} (seed #{seed}).\n#{retry.output}"
+      retry_ids = Feedback.failed_test_ids(retry.output, opts.workdir)
 
-      {%{original | output: original.output <> detail}, []}
+      if same_test_ids?(test_ids, retry_ids) and
+           base_red?(opts, retry_argv, deadline, spec.timeout_ms, test_ids) do
+        detail =
+          "Environment failure (base-red): the same ExUnit failures reproduced on the clean " <>
+            "base under the configured sandbox; skipped Developer repair for " <>
+            "#{inspect(test_ids)}."
+
+        {%{original | exit_status: 3, timed_out: false, output: detail}, []}
+      else
+        detail =
+          "\nSame-seed rerun still failed: #{inspect(test_ids)} (seed #{seed}).\n#{retry.output}"
+
+        {%{original | output: original.output <> detail}, []}
+      end
+    end
+  end
+
+  defp same_test_ids?(left, right) do
+    left != [] and MapSet.new(left) == MapSet.new(right)
+  end
+
+  defp base_red?(opts, argv, deadline, timeout_ms, test_ids) do
+    case run_base_test(opts, argv, deadline, timeout_ms) do
+      {:ok, %ProcResult{exit_status: status, timed_out: false, output_tail: output}}
+      when is_integer(status) and status != 0 ->
+        base_failed_ids = Feedback.failed_test_ids(output, opts.workdir)
+        same_test_ids?(test_ids, base_failed_ids)
+
+      _other ->
+        false
     end
   end
 

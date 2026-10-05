@@ -55,6 +55,35 @@ defmodule Kogen.Harness.GateTest do
     assert result.failed_test_count == 2
   end
 
+  @tag :seatbelt
+  test "persistent failures on the clean base are reported as sandbox environment", %{
+    tmp_dir: tmp_dir
+  } do
+    write_test_source!(tmp_dir)
+    output = two_failed_output()
+    Process.put(:gate_script_results, [{1, output}, {1, output}])
+
+    base_test = fn argv, _timeout ->
+      Process.put(:gate_base_argv, argv)
+      {:ok, process_result(argv, 1, output)}
+    end
+
+    opts = options(tmp_dir, base_test, fn -> {:ok, ["lib/tiny_app/component.ex"]} end)
+
+    assert {:ok, result} = Gate.run(opts, deadline())
+    assert result.status == :environment
+    assert result.flake_excused == []
+    assert [%{exit_status: 3, exit_level: 3, findings: [], output: detail}] = result.checks
+    assert detail =~ "base-red"
+    assert detail =~ "configured sandbox"
+    assert detail =~ "test/sample_test.exs:12"
+
+    [{_first_argv, _first_options}, {retry_argv, _retry_options}] =
+      Enum.reverse(Process.get(:gate_command_calls))
+
+    assert Process.get(:gate_base_argv) == retry_argv
+  end
+
   test "compile errors from mix test have no comparable failed-test count", %{tmp_dir: tmp_dir} do
     write_test_source!(tmp_dir)
 
