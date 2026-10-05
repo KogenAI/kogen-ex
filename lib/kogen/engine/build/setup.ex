@@ -42,13 +42,9 @@ defmodule Kogen.Engine.Build.Setup do
   def run_cached(%Session{} = session) do
     cache_root = Path.join(session.request.workspace_root, "setup-cache")
 
-    base_tree_sha =
-      case Workspace.rev_parse(session.workdir, "HEAD^{tree}", session.git_env) do
-        {:ok, sha} -> sha
-        {:error, _reason} -> nil
-      end
-
-    with {:ok, setup_result} <-
+    with {:ok, base_tree_sha} <-
+           Workspace.rev_parse(session.workdir, "HEAD^{tree}", session.git_env),
+         {:ok, setup_result} <-
            ProjectDomain.run_setup(
              session.project,
              session.workdir,

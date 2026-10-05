@@ -5,16 +5,17 @@ defmodule Kogen.Workspace.Guard do
   alias Kogen.Contracts.Project
   alias Kogen.Workspace
 
+  @absent_digest :sha256 |> :crypto.hash("kogen:absent") |> Base.encode16(case: :lower)
+
+  @spec absent_digest() :: String.t()
+  def absent_digest, do: @absent_digest
+
   @spec protected_violations(Path.t(), String.t(), %{String.t() => String.t()}, map()) ::
           {:ok, [String.t()]} | {:error, term()}
   def protected_violations(workdir, base_sha, manifest, git_env) do
-    with {:ok, _changed} <- Workspace.changed_paths(workdir, base_sha, git_env) do
-      mismatches =
-        Enum.filter(manifest, fn {path, approved_sha} ->
-          not safe_manifest_path?(path) or file_sha(workdir, path) != approved_sha
-        end)
-
-      {:ok, mismatches |> Enum.map(&elem(&1, 0)) |> Enum.sort()}
+    with {:ok, _changed} <- Workspace.changed_paths(workdir, base_sha, git_env),
+         {:ok, mismatches} <- mismatched_paths(workdir, manifest) do
+      {:ok, Enum.sort(mismatches)}
     end
   end
 
@@ -27,12 +28,36 @@ defmodule Kogen.Workspace.Guard do
     end
   end
 
-  defp file_sha(root, path) do
-    case File.read(Path.join(root, path)) do
-      {:ok, contents} -> :sha256 |> :crypto.hash(contents) |> Base.encode16(case: :lower)
-      {:error, _reason} -> nil
+  defp mismatched_paths(workdir, manifest) do
+    Enum.reduce_while(manifest, {:ok, []}, fn {path, approved_sha}, {:ok, mismatches} ->
+      case matches?(workdir, path, approved_sha) do
+        {:ok, true} -> {:cont, {:ok, mismatches}}
+        {:ok, false} -> {:cont, {:ok, [path | mismatches]}}
+        {:error, reason} -> {:halt, {:error, {:protected_unreadable, path, reason}}}
+      end
+    end)
+  end
+
+  defp matches?(workdir, path, approved_sha) do
+    if safe_manifest_path?(path) do
+      file_matches?(Path.join(workdir, path), approved_sha)
+    else
+      {:ok, false}
     end
   end
+
+  # A removed or replaced file differs from the approved bytes unless the path was approved as
+  # absent; any other read failure is unknown.
+  defp file_matches?(full_path, approved_sha) do
+    case File.read(full_path) do
+      {:ok, contents} -> {:ok, sha256(contents) == approved_sha}
+      {:error, reason} when reason in [:enoent, :enotdir] -> {:ok, approved_sha == @absent_digest}
+      {:error, :eisdir} -> {:ok, false}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  defp sha256(contents), do: :sha256 |> :crypto.hash(contents) |> Base.encode16(case: :lower)
 
   defp safe_manifest_path?(path) do
     Path.type(path) == :relative and ".." not in Path.split(path) and path not in ["", "."]

@@ -22,22 +22,21 @@ defmodule Kogen.Kernel.ShapeExecution do
          {:ok, runtime, process_env, run_dir} <-
            shape_environment(slug, project_root, runtime, project),
          {:ok, provider_config, _source, _label} <-
-           Kogen.Kernel.provider_config(label: project.account) do
-      request =
-        shape_request(%ShapeInputs{
-          slug: slug,
-          project_root: project_root,
-          task: task,
-          model: default_model,
-          effort: default_effort,
-          project: project,
-          provider_config: provider_config,
-          runtime: runtime,
-          process_env: process_env,
-          run_dir: run_dir,
-          home: home
-        })
-
+           Kogen.Kernel.provider_config(label: project.account),
+         {:ok, request} <-
+           shape_request(%ShapeInputs{
+             slug: slug,
+             project_root: project_root,
+             task: task,
+             model: default_model,
+             effort: default_effort,
+             project: project,
+             provider_config: provider_config,
+             runtime: runtime,
+             process_env: process_env,
+             run_dir: run_dir,
+             home: home
+           }) do
       Shaper.shape(request)
     end
   end
@@ -70,9 +69,13 @@ defmodule Kogen.Kernel.ShapeExecution do
   defp shape_request(%ShapeInputs{} = inputs) do
     git_env = Runtime.git_environment(inputs.process_env)
 
-    {setup_cache_root, base_tree_sha} =
-      ShapePaths.setup_cache(inputs.project_root, inputs.home, git_env)
+    with {:ok, {setup_cache_root, base_tree_sha}} <-
+           ShapePaths.setup_cache(inputs.project_root, inputs.home, git_env) do
+      {:ok, build_shape_request(inputs, git_env, setup_cache_root, base_tree_sha)}
+    end
+  end
 
+  defp build_shape_request(inputs, git_env, setup_cache_root, base_tree_sha) do
     %ShapeRequest{
       workdir: inputs.project_root,
       slug: inputs.slug,

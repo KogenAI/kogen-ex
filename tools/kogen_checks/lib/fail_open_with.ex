@@ -1,13 +1,17 @@
 defmodule KogenChecks.Check.FailOpenWith do
-  @moduledoc "Flags error branches that turn failures into success-shaped values."
+  @moduledoc """
+  Flags error branches that turn failures into success-shaped values.
+
+  A `with ... else` branch that maps an unexpected failure to a success shape fails the gate.
+  A `case` clause that maps `{:error, reason}` to a literal success default is an advisory:
+  it stays visible under `--strict` and never changes the exit status.
+  """
   use Credo.Check,
     category: :warning,
-    base_priority: :low,
-    # This advisory should remain visible under --strict without failing the gate.
-    exit_status: 0,
+    base_priority: :high,
     param_defaults: [included_paths: ["lib/"]],
     explanations: [
-      check: "Log, propagate, or re-raise an error instead of returning a success default."
+      check: "Match the errors a `with` can produce or let the unmatched value propagate."
     ]
 
   @log_functions [
@@ -63,7 +67,7 @@ defmodule KogenChecks.Check.FailOpenWith do
     arrows = for {:->, _, [[pattern], body]} <- clauses, do: {pattern, body}
 
     if Enum.any?(arrows, &fail_open?/1) do
-      [issue(issue_meta, "with", meta[:line])]
+      [with_issue(issue_meta, meta[:line])]
     else
       []
     end
@@ -75,7 +79,7 @@ defmodule KogenChecks.Check.FailOpenWith do
     arrows = for {:->, _, [[pattern], body]} <- clauses, do: {pattern, body}
 
     if Enum.any?(arrows, &error_to_default?/1) do
-      [issue(issue_meta, "case", meta[:line])]
+      [case_advisory(issue_meta, meta[:line])]
     else
       []
     end
@@ -83,35 +87,58 @@ defmodule KogenChecks.Check.FailOpenWith do
 
   defp check_case(_clauses, _meta, _issue_meta), do: []
 
-  defp issue(issue_meta, trigger, line_no) do
+  defp with_issue(issue_meta, line_no) do
     format_issue(issue_meta,
       message:
-        "An error branch drops its reason and returns a success default. Log, propagate, or re-raise the error.",
-      trigger: trigger,
+        "with/else maps an unexpected failure to a success-shaped value. Match real error shapes or drop `else`.",
+      trigger: "with",
       line_no: line_no
     )
   end
 
+  # Advisory only: low priority and exit status 0, so it is shown but never fails the gate.
+  defp case_advisory(issue_meta, line_no) do
+    format_issue(issue_meta,
+      message:
+        "An error branch drops its reason and returns a success default. Log, propagate, or re-raise the error.",
+      trigger: "case",
+      line_no: line_no,
+      priority: Credo.Priority.to_integer(:low),
+      exit_status: 0
+    )
+  end
+
   defp fail_open?({pattern, body}) do
-    not logs?(body) and
-      (catch_all_failure?(pattern, last(body)) or error_to_default?(pattern, body))
+    catch_all_failure?(pattern, last(body)) or error_to_literal?(pattern, last(body))
   end
 
   defp catch_all_failure?(pattern, result) do
     catch_all?(pattern) and not same_value?(pattern, result) and not error_result?(result)
   end
 
-  defp error_to_default?({pattern, body}) do
-    error_to_default?(pattern, body)
+  defp error_to_literal?(pattern, result) do
+    with_error_pattern?(pattern) and with_literal?(result)
   end
 
-  defp error_to_default?(pattern, body) do
+  defp error_to_default?({pattern, body}) do
     error_pattern?(pattern) and not logs?(body) and default_value?(last(body))
   end
 
   defp catch_all?({name, _, context}) when is_atom(name) and is_atom(context), do: true
 
   defp catch_all?(_pattern), do: false
+
+  defp with_error_pattern?({:error, _}), do: true
+  defp with_error_pattern?({:{}, _, [:error | _]}), do: true
+  defp with_error_pattern?([{:error, _} | _]), do: true
+  defp with_error_pattern?(_pattern), do: false
+
+  defp with_literal?(value) when value in [nil, true, false, :ok, [], ""] or is_number(value),
+    do: true
+
+  defp with_literal?({:ok, value}), do: with_literal?(value)
+  defp with_literal?({:%{}, _, []}), do: true
+  defp with_literal?(_value), do: false
 
   defp error_pattern?({:error, reason}), do: variable?(reason)
   defp error_pattern?({:{}, _, [:error, reason]}), do: variable?(reason)

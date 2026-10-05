@@ -37,15 +37,20 @@ defmodule Kogen.Provider.ChatGPT.Lock do
         end
 
       {:error, :eexist} ->
-        if stale?(path) do
-          remove_stale(path)
-          acquire(path, deadline)
-        else
-          wait(path, deadline)
-        end
+        contend(path, deadline)
 
       {:error, reason} ->
         {:error, reason}
+    end
+  end
+
+  defp contend(path, deadline) do
+    with {:ok, stale?} <- stale?(path) do
+      if stale? do
+        with :ok <- remove_stale(path), do: acquire(path, deadline)
+      else
+        wait(path, deadline)
+      end
     end
   end
 
@@ -64,9 +69,9 @@ defmodule Kogen.Provider.ChatGPT.Lock do
 
   defp stale?(path) do
     case File.read(Path.join(path, "owner")) do
-      {:ok, contents} -> owner_stale?(contents)
+      {:ok, contents} -> {:ok, owner_stale?(contents)}
       {:error, :enoent} -> old_directory?(path)
-      {:error, _reason} -> false
+      {:error, reason} -> {:error, reason}
     end
   end
 
@@ -85,27 +90,28 @@ defmodule Kogen.Provider.ChatGPT.Lock do
 
   defp old_directory?(path) do
     case File.stat(path, time: :posix) do
-      {:ok, stat} -> System.system_time(:second) - stat.mtime > div(@stale_ms, 1_000)
-      {:error, _reason} -> false
+      {:ok, stat} -> {:ok, System.system_time(:second) - stat.mtime > div(@stale_ms, 1_000)}
+      {:error, :enoent} -> {:ok, false}
+      {:error, reason} -> {:error, reason}
     end
   end
 
   defp remove_stale(path) do
-    if stale?(path) do
-      stale_path =
-        path <> ".stale-" <> Base.url_encode64(:crypto.strong_rand_bytes(9), padding: false)
+    stale_path =
+      path <> ".stale-" <> Base.url_encode64(:crypto.strong_rand_bytes(9), padding: false)
 
-      case File.rename(path, stale_path) do
-        :ok ->
-          File.rm(Path.join(stale_path, "owner"))
-          File.rmdir(stale_path)
+    case File.rename(path, stale_path) do
+      :ok ->
+        _ = File.rm(Path.join(stale_path, "owner"))
+        _ = File.rmdir(stale_path)
+        :ok
 
-        {:error, _reason} ->
-          :ok
-      end
+      {:error, :enoent} ->
+        :ok
+
+      {:error, reason} ->
+        {:error, reason}
     end
-
-    :ok
   end
 
   defp release(path, token) do

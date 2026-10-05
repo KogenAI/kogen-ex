@@ -3,7 +3,7 @@ defmodule KogenChecks.Check.FailOpenWithTest do
 
   alias KogenChecks.Check.FailOpenWith
 
-  test "flags success defaults from case and with error clauses" do
+  test "case clauses that map errors to success defaults are low-priority advisories" do
     """
     defmodule X do
       def ancestor?(git_result) do
@@ -24,8 +24,31 @@ defmodule KogenChecks.Check.FailOpenWithTest do
           {:error, _reason} -> false
         end
       end
+    end
+    """
+    |> to_source_file("lib/kogen/build/x.ex")
+    |> run_check(FailOpenWith)
+    |> assert_issues(fn issues ->
+      assert length(issues) == 2
+      assert Enum.all?(issues, &(&1.category == :warning))
+      assert Enum.all?(issues, &(&1.trigger == "case"))
+      assert Enum.all?(issues, &(Credo.Priority.to_atom(&1.priority) == :low))
+      assert Enum.all?(issues, &(&1.exit_status == 0))
+    end)
+  end
 
-      def with_default(value) do
+  test "with/else clauses that map errors to success shapes fail the gate" do
+    """
+    defmodule X do
+      def catch_all(output) do
+        with {:ok, prediction} <- parse_prediction(output) do
+          prediction
+        else
+          _invalid_output -> :ok
+        end
+      end
+
+      def error_to_empty(value) do
         with {:ok, result} <- fetch(value) do
           result
         else
@@ -33,11 +56,13 @@ defmodule KogenChecks.Check.FailOpenWithTest do
         end
       end
 
-      def prediction_handler(output) do
-        with {:ok, prediction} <- parse_prediction(output) do
-          prediction
+      def logged_but_swallowed(value) do
+        with {:ok, result} <- fetch(value) do
+          result
         else
-          _invalid_output -> :ok
+          {:error, reason} ->
+            Logger.warning("fetch failed: \#{inspect(reason)}")
+            :ok
         end
       end
     end
@@ -45,10 +70,38 @@ defmodule KogenChecks.Check.FailOpenWithTest do
     |> to_source_file("lib/kogen/build/x.ex")
     |> run_check(FailOpenWith)
     |> assert_issues(fn issues ->
-      assert length(issues) == 4
-      assert Enum.all?(issues, &(&1.category == :warning))
-      assert Enum.all?(issues, &(Credo.Priority.to_atom(&1.priority) == :low))
-      assert Enum.all?(issues, &(&1.exit_status == 0))
+      assert length(issues) == 3
+      assert Enum.all?(issues, &(&1.trigger == "with"))
+      assert Enum.all?(issues, &(Credo.Priority.to_atom(&1.priority) == :high))
+      assert Enum.all?(issues, &(&1.exit_status != 0))
+    end)
+  end
+
+  test "a with and a case in one file keep their separate exit statuses" do
+    """
+    defmodule X do
+      def f(value) do
+        with {:ok, result} <- fetch(value) do
+          result
+        else
+          {:error, _reason} -> nil
+        end
+      end
+
+      def g(value) do
+        case fetch(value) do
+          {:ok, result} -> result
+          {:error, _reason} -> nil
+        end
+      end
+    end
+    """
+    |> to_source_file("lib/kogen/build/x.ex")
+    |> run_check(FailOpenWith)
+    |> assert_issues(fn issues ->
+      statuses = issues |> Enum.map(&{&1.trigger, &1.exit_status}) |> Enum.sort()
+      assert [{"case", 0}, {"with", status}] = statuses
+      assert status != 0
     end)
   end
 
@@ -61,16 +114,6 @@ defmodule KogenChecks.Check.FailOpenWithTest do
         case value do
           {:error, reason} ->
             Logger.warning("fetch failed: \#{inspect(reason)}")
-            :ok
-        end
-      end
-
-      def logged_with(value) do
-        with {:ok, result} <- fetch(value) do
-          result
-        else
-          {:error, reason} ->
-            :logger.warning("fetch failed: ~p", [reason])
             :ok
         end
       end

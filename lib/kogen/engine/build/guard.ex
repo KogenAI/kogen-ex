@@ -9,21 +9,12 @@ defmodule Kogen.Engine.Build.Guard do
   @spec check(Path.t(), String.t(), Intent.t(), Project.t(), map(), map()) ::
           :ok | {:error, Failure.t()}
   def check(workdir, base_sha, _intent, _project, manifest, git_env) do
-    case Workspace.changed_paths(workdir, base_sha, git_env) do
-      {:ok, _changed} ->
-        protected =
-          manifest
-          |> Enum.filter(fn {path, sha} ->
-            not safe_manifest_path?(path) or file_sha(workdir, path) != sha
-          end)
-          |> Enum.map(&elem(&1, 0))
-          |> Enum.sort()
+    case Workspace.protected_violations(workdir, base_sha, manifest, git_env) do
+      {:ok, []} ->
+        :ok
 
-        if protected == [] do
-          :ok
-        else
-          failure(:protected_edit, "Protected paths changed: #{Enum.join(protected, ", ")}")
-        end
+      {:ok, protected} ->
+        failure(:protected_edit, "Protected paths changed: #{Enum.join(protected, ", ")}")
 
       {:error, reason} ->
         failure(
@@ -72,16 +63,6 @@ defmodule Kogen.Engine.Build.Guard do
 
   @spec tree_hash(Path.t(), map()) :: {:ok, String.t()} | {:error, term()}
   def tree_hash(workdir, git_env), do: Workspace.tree_hash(workdir, git_env)
-
-  defp safe_manifest_path?(path),
-    do: Path.type(path) == :relative and ".." not in Path.split(path) and path not in ["", "."]
-
-  defp file_sha(root, path) do
-    case File.read(Path.join(root, path)) do
-      {:ok, contents} -> :sha256 |> :crypto.hash(contents) |> Base.encode16(case: :lower)
-      {:error, _reason} -> nil
-    end
-  end
 
   defp under_prefix?(path, prefixes),
     do:

@@ -19,16 +19,12 @@ defmodule Kogen.Kernel.ShapePaths do
   end
 
   @spec setup_cache(Path.t(), Path.t(), %{String.t() => String.t()}) ::
-          {Path.t(), String.t() | nil}
+          {:ok, {Path.t(), String.t()}} | {:error, term()}
   def setup_cache(project_root, home, git_env) do
     cache_root = Path.join(Workspaces.root(project_root, home), "setup-cache")
 
-    base_tree_sha =
-      case Workspace.rev_parse(project_root, "HEAD^{tree}", git_env) do
-        {:ok, sha} -> sha
-        {:error, _reason} -> nil
-      end
-
-    {cache_root, base_tree_sha}
+    with {:ok, base_tree_sha} <- Workspace.rev_parse(project_root, "HEAD^{tree}", git_env) do
+      {:ok, {cache_root, base_tree_sha}}
+    end
   end
 end
