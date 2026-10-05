@@ -6,10 +6,11 @@ defmodule Kogen.Harness.ExchangeTest do
   alias Kogen.Harness.Exchange.Request
   alias Kogen.Harness.Opts
   alias Kogen.Provider.ChatGPT
+  alias Kogen.Resilience.Policy
 
   @server_wait_ms 20_000
 
-  test "an idle streamed model request retries exactly once and records the retry", %{
+  test "an idle streamed model request is retried and the retry is recorded", %{
     tmp_dir: tmp_dir
   } do
     item = %{
@@ -48,6 +49,7 @@ defmodule Kogen.Harness.ExchangeTest do
         timeout_ms: 400
       },
       proc_mod: Kogen.Proc,
+      resilience: %Policy{backoff_base_ms: 50, backoff_max_ms: 100},
       event_recorder: fn event ->
         send(test_process, {:recorded_event, event})
         :ok
@@ -69,7 +71,7 @@ defmodule Kogen.Harness.ExchangeTest do
     assert result.text == "ok"
     assert_receive {:http_request, :first, _bytes, first_at}
     assert_receive {:http_request, :retry, _bytes, retry_at}
-    assert retry_at - first_at >= 560
+    assert retry_at - first_at >= 400
     assert_receive {:recorded_event, %{event: :provider_retry, stage: :shape, attempt: 1}}
 
     events =

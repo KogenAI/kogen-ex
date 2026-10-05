@@ -32,7 +32,7 @@ defmodule Kogen.Kernel.CLI.Runner do
          {:ok, result} <- Kogen.Kernel.shape(slug, args.project, task) do
       render_shape(result, args.json)
     else
-      {:error, reason} -> ErrorOutput.format(reason)
+      {:error, reason} -> ErrorOutput.format_shape(reason)
     end
   end
 

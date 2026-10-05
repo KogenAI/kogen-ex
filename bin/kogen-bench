@@ -28,6 +28,11 @@ builder_model=${KOGEN_BENCH_MODEL:-gpt-6-luna}
 builder_effort=${KOGEN_BENCH_EFFORT:-max}
 shape_model=${KOGEN_BENCH_SHAPE_MODEL:-gpt-6-luna}
 shape_effort=${KOGEN_BENCH_SHAPE_EFFORT:-max}
+shape_fallback=${KOGEN_BENCH_SHAPE_FALLBACK:-raw}
+case "$shape_fallback" in
+  raw|none) ;;
+  *) echo "KOGEN_BENCH_SHAPE_FALLBACK must be raw or none" >&2; exit 2 ;;
+esac
 provided_intent_dir=${KOGEN_BENCH_INTENT_DIR:-}
 intent_source=shaped
 [ -z "$provided_intent_dir" ] || intent_source=provided
@@ -690,6 +695,51 @@ with open(output_path, "w", encoding="utf-8") as output:
 PY
 }
 
+write_raw_fallback_intent() {
+  mkdir -p "$project_dir/.kogen/intents/$slug" "$project_dir/.kogen/acceptance"
+  python3 - "$prompt_file" "$slug" "$project_dir/.kogen/intents/$slug/intent.md" \
+    "$project_dir/.kogen/acceptance/${slug}_test.exs" <<'PY'
+import sys
+
+prompt_path, slug, intent_path, test_path = sys.argv[1:]
+with open(prompt_path, encoding="utf-8") as source:
+    prompt = source.read()
+
+intent = (
+    "---\n"
+    "title: Raw request fallback\n"
+    "domains: [app]\n"
+    "size: small\n"
+    "---\n"
+    "Shaping stopped on a provider error, so build the task straight from the Request section "
+    "below. Implement the Request. Keep the project compiling and its existing tests green.\n"
+    "\n"
+    "## Acceptance\n"
+    "- A1: The project compiles and its smoke test passes.\n"
+    "\n"
+    "## Verify\n"
+    "- A1: test keep\n"
+    "\n"
+    "## Request\n"
+) + prompt
+
+smoke_test = f"""defmodule KogenBenchRawFallbackSmokeTest do
+  use ExUnit.Case, async: true
+
+  @tag intent: "{slug}/A1"
+  test "the project compiles and its Mix project loads" do
+    assert is_atom(Mix.Project.config()[:app])
+  end
+end
+"""
+
+with open(intent_path, "w", encoding="utf-8") as target:
+    target.write(intent)
+with open(test_path, "w", encoding="utf-8") as target:
+    target.write(smoke_test)
+PY
+}
+
 slug=$(basename "$task_dir")
 runtime_tmpdir=$(cat "$scratch/project_tmpdir")
 setup_log_path="${runtime_tmpdir%/}/$(basename "$scratch")-$slug-setup.log"
@@ -707,10 +757,19 @@ else
   else
     stage_status=$?
     shape_wall_ms=$CAPTURE_WALL_MS
-    copy_bench_setup_log
     copy_shaper_setup_logs
-    write_failed_usage shape "$shape_model" "$shape_effort" "$stage_status" "$CAPTURE_WALL_MS"
-    exit "$stage_status"
+    # Exit 4 is a provider error that survived the shaper's retries. Build from the raw prompt
+    # instead of producing nothing; any other shaping failure still ends the run.
+    if [ "$stage_status" -eq 4 ] && [ "$shape_fallback" = raw ]; then
+      log_line "shape stopped on a provider error after its retries (exit 4); falling back to a minimal Intent whose Request is the raw prompt"
+      write_raw_fallback_intent
+      intent_source=raw-fallback
+      rm -f "$out_dir/shape.json"
+    else
+      copy_bench_setup_log
+      write_failed_usage shape "$shape_model" "$shape_effort" "$stage_status" "$CAPTURE_WALL_MS"
+      exit "$stage_status"
+    fi
   fi
 fi
 copy_bench_setup_log

@@ -5,6 +5,29 @@ defmodule Kogen.Kernel.CLI.ErrorOutput do
   alias Kogen.Contracts.ProviderError
   alias Kogen.Engine.Runtime
 
+  @doc "Formats a shaping failure; provider errors say that no Intent was written."
+  def format_shape(%ProviderError{class: class} = error),
+    do: shape_provider_failure(class, format(error))
+
+  def format_shape(%Failure{class: :provider, reason: class} = failure),
+    do: shape_provider_failure(class, format(failure))
+
+  def format_shape(reason), do: format(reason)
+
+  defp shape_provider_failure(class, {code, text}) when class in [:login, :usage_limit] do
+    {code,
+     text <>
+       "shape/provider_failed: shaping stopped on a provider error that retrying cannot fix; " <>
+       "no Intent was written. Fix the account, then run kogen intent shape again.\n"}
+  end
+
+  defp shape_provider_failure(_class, {code, text}) do
+    {code,
+     text <>
+       "shape/provider_failed: shaping stopped on a provider error after its retries; " <>
+       "no Intent was written. Run kogen intent shape again, or write the Intent yourself.\n"}
+  end
+
   def format(%Failure{} = failure) do
     {failure_code(failure), "#{failure.class}/#{failure.reason}: #{failure.detail}\n"}
   end

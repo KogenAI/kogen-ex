@@ -28,6 +28,10 @@ defmodule Kogen.Harness.Codec do
   def user_item(text),
     do: %{"role" => "user", "content" => [%{"type" => "input_text", "text" => text}]}
 
+  @doc "Encrypted reasoning items belong to the model that produced them, so a fallback model drops them."
+  @spec without_reasoning([map()]) :: [map()]
+  def without_reasoning(items), do: Enum.reject(items, &(Map.get(&1, "type") == "reasoning"))
+
   @spec function_output(String.t(), String.t()) :: map()
   def function_output(call_id, output),
     do: %{"type" => "function_call_output", "call_id" => call_id, "output" => output}

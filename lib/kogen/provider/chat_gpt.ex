@@ -24,6 +24,8 @@ defmodule Kogen.Provider.ChatGPT do
               label: "custom",
               endpoint: nil,
               timeout_ms: nil,
+              first_byte_timeout_ms: 120_000,
+              total_timeout_ms: 600_000,
               credential_path: nil,
               credential_root: nil,
               backend: nil,
@@ -36,6 +38,8 @@ defmodule Kogen.Provider.ChatGPT do
             label: String.t(),
             endpoint: String.t(),
             timeout_ms: pos_integer(),
+            first_byte_timeout_ms: pos_integer(),
+            total_timeout_ms: pos_integer(),
             credential_path: Path.t() | nil,
             credential_root: Path.t() | nil,
             backend: :file | :keychain | nil,
@@ -186,7 +190,9 @@ defmodule Kogen.Provider.ChatGPT do
              headers(config, token, account_id),
              body,
              config.timeout_ms,
-             proxy_env: config.proxy_env
+             proxy_env: config.proxy_env,
+             first_byte_ms: config.first_byte_timeout_ms,
+             total_ms: config.total_timeout_ms
            ) do
       handle_response(response)
     else
@@ -235,18 +241,25 @@ defmodule Kogen.Provider.ChatGPT do
 
   defp valid_config?(%Config{source: :kogen_owned} = config) do
     is_binary(config.credential_root) and config.backend in [:file, :keychain] and
-      is_binary(config.label) and is_binary(config.endpoint) and valid_timeout?(config.timeout_ms)
+      is_binary(config.label) and is_binary(config.endpoint) and valid_timeouts?(config)
   end
 
   defp valid_config?(%Config{source: :custom} = config) do
     custom_token? = is_binary(config.access_token) and config.access_token != ""
 
-    is_binary(config.endpoint) and valid_timeout?(config.timeout_ms) and
+    is_binary(config.endpoint) and valid_timeouts?(config) and
       (is_binary(config.credential_path) or custom_token?)
   end
 
   defp valid_config?(_config), do: false
   defp valid_timeout?(timeout), do: is_integer(timeout) and timeout > 0
+
+  defp valid_timeouts?(config) do
+    Enum.all?(
+      [config.timeout_ms, config.first_byte_timeout_ms, config.total_timeout_ms],
+      &valid_timeout?/1
+    )
+  end
 
   defp response_error(401, _body) do
     provider_error(:login, "ChatGPT rejected the login; sign in again.")

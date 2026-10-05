@@ -42,8 +42,10 @@ defmodule KogenChecks.GateWiringTest do
           Kogen.Proc,
           Kogen.Provider,
           Kogen.Project,
+          Kogen.Resilience,
           Kogen.Tooling
         ],
+        Kogen.Resilience => [],
         Kogen.Tooling => [Kogen.Proc],
         Kogen.Queue => [Kogen.Proc, Kogen.State, Kogen.Workspace],
         Kogen.Engine => [

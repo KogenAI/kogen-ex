@@ -1,6 +1,8 @@
 defmodule Kogen.Harness.Opts do
   @moduledoc "Explicit runtime inputs for one Harness pipeline."
 
+  alias Kogen.Resilience.Policy
+
   @enforce_keys [:workdir, :run_dir, :project, :provider_mod, :provider_config, :proc_mod]
   defstruct [
     :workdir,
@@ -24,6 +26,7 @@ defmodule Kogen.Harness.Opts do
     flake_excused_test_ids: [],
     models: %{builder: {"gpt-6-luna", "max"}, strong: {"gpt-6.1-sol", "high"}},
     limits: %{max_turns: 60, wall_ms: 1_800_000},
+    resilience: %Policy{},
     repairs_left: 2,
     protected: []
   ]
@@ -57,6 +60,7 @@ defmodule Kogen.Harness.Opts do
             optional(:reviewer) => model()
           },
           limits: %{max_turns: pos_integer(), wall_ms: pos_integer() | :infinity},
+          resilience: Policy.t(),
           repairs_left: non_neg_integer(),
           protected: [String.t()]
         }

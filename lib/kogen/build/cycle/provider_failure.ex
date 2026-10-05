@@ -2,9 +2,12 @@ defmodule Kogen.Build.Cycle.ProviderFailure do
   @moduledoc false
 
   @provider_retries 2
+  # The exchange already retried timeouts inside the wall budget; repeating the whole stage would
+  # only spend a fresh budget. Login and usage-limit errors cannot succeed on retry.
+  @retryable [:transport, :overload, :malformed]
 
   def retry(state, stage, reason) do
-    if reason in [:timeout, :transport] or state.provider_retries >= @provider_retries do
+    if reason not in @retryable or state.provider_retries >= @provider_retries do
       {:stop, {:provider_retries_exhausted, reason}}
     else
       retry_stage(state, stage, reason)

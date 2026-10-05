@@ -13,7 +13,7 @@ defmodule Kogen.Http.Transport do
 
   defmodule State do
     @moduledoc false
-    defstruct status: nil, chunks: [], size: 0
+    defstruct status: nil, chunks: [], size: 0, total_deadline: :infinity
   end
 
   @max_response_bytes 16_000_000
@@ -62,11 +62,13 @@ defmodule Kogen.Http.Transport do
            full_result: true
          ) do
       {:ok, ref} ->
+        now = System.monotonic_time(:millisecond)
+
         receive_response(
           ref,
-          System.monotonic_time(:millisecond) + timeout_ms,
+          now + min(Keyword.get(opts, :first_byte_ms, timeout_ms), timeout_ms),
           timeout_ms,
-          %State{},
+          %State{total_deadline: total_deadline(now, Keyword.get(opts, :total_ms))},
           profile
         )
 
@@ -74,6 +76,9 @@ defmodule Kogen.Http.Transport do
         {:error, :transport}
     end
   end
+
+  defp total_deadline(_now, nil), do: :infinity
+  defp total_deadline(now, total_ms), do: now + total_ms
 
   defp request_small(method, request, url, timeout_ms, opts) do
     with {:ok, _apps} <- Application.ensure_all_started(:inets),
@@ -187,7 +192,7 @@ defmodule Kogen.Http.Transport do
     else
       receive_response(
         ref,
-        System.monotonic_time(:millisecond) + idle_timeout_ms,
+        min(System.monotonic_time(:millisecond) + idle_timeout_ms, state.total_deadline),
         idle_timeout_ms,
         %{state | chunks: [chunk | state.chunks], size: size},
         profile

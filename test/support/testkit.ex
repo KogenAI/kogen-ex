@@ -6,6 +6,7 @@ defmodule Kogen.Testkit do
       BenchmarkAuth,
       BudgetFormatter,
       Case,
+      FakeResponsesServer,
       Git,
       HarnessScriptedProvider,
       IntentFixture,

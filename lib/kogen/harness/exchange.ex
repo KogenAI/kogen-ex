@@ -36,8 +36,8 @@ defmodule Kogen.Harness.Exchange do
   alias Kogen.Harness.Opts
   alias Kogen.Harness.PromptCacheKey
   alias Kogen.Harness.Recording
-
-  @retry_backoff_ms 200
+  alias Kogen.Resilience.Policy
+  alias Kogen.Resilience.Retry
 
   @spec respond(Opts.t(), Request.t()) :: {:ok, ModelResponse.t()} | {:error, term()}
   def respond(%Opts{} = opts, %Request{} = exchange_request) do
@@ -51,68 +51,118 @@ defmodule Kogen.Harness.Exchange do
              exchange_request.turn,
              request
            ) do
+      retry =
+        Retry.new(
+          Policy.role(exchange_request.stage),
+          {exchange_request.model, exchange_request.effort}
+        )
+
       deadline = wall_deadline(exchange_request.remaining_ms)
-      result = provider_call(opts, request, exchange_request.remaining_ms)
-      respond_after_first_attempt(opts, exchange_request, request, deadline, result)
+      attempt(opts, exchange_request, request, deadline, retry)
     end
   end
 
-  defp respond_after_first_attempt(
+  # One provider call, capped per attempt and by the wall budget. Retryable failures back off
+  # with jitter and retry inside that budget; after an overload streak the next model is used.
+  defp attempt(opts, exchange_request, request, deadline, retry) do
+    result = provider_call(opts, request, attempt_budget(opts, deadline))
+
+    case result do
+      {:error, %ProviderError{class: class} = error} ->
+        decision = Retry.next(opts.resilience, retry, class, remaining_ms(deadline))
+        after_failure(opts, {exchange_request, request, deadline}, {error, retry, decision})
+
+      _result ->
+        record_response(opts, exchange_request, result)
+    end
+  end
+
+  defp after_failure(opts, {exchange_request, _request, _deadline}, {error, _retry, :stop}),
+    do: record_response(opts, exchange_request, {:error, error})
+
+  defp after_failure(
          opts,
-         exchange_request,
-         request,
-         deadline,
-         {:error, %ProviderError{class: class} = error}
-       )
-       when class in [:timeout, :transport] do
-    remaining = remaining_ms(deadline)
+         {exchange_request, request, deadline},
+         {error, retry, {:retry, next, delay_ms, fallback}}
+       ) do
+    {next_exchange, next_request} = switch_model(opts, exchange_request, request, fallback)
 
-    if remaining == :infinity or remaining > @retry_backoff_ms do
-      retry_after_transient_error(opts, exchange_request, request, deadline, error)
-    else
-      record_response(opts, exchange_request, {:error, error})
+    with :ok <- record_provider_error(opts, exchange_request, error),
+         :ok <- record_retry(opts, exchange_request, retry, error, delay_ms),
+         :ok <- record_fallback(opts, exchange_request, retry, fallback),
+         :ok <- backoff(delay_ms),
+         :ok <-
+           Recording.append(
+             opts,
+             :request,
+             next_exchange.stage,
+             next_exchange.turn,
+             next_request
+           ) do
+      attempt(opts, next_exchange, next_request, deadline, next)
     end
   end
 
-  defp respond_after_first_attempt(opts, exchange_request, _request, _deadline, result),
-    do: record_response(opts, exchange_request, result)
+  defp attempt_budget(opts, deadline) do
+    case remaining_ms(deadline) do
+      :infinity -> opts.resilience.request_cap_ms
+      remaining -> min(remaining, opts.resilience.request_cap_ms)
+    end
+  end
 
-  defp retry_after_transient_error(opts, exchange_request, request, deadline, error) do
-    retry_event = %{
+  defp backoff(delay_ms) do
+    receive do
+    after
+      delay_ms -> :ok
+    end
+  end
+
+  defp switch_model(_opts, exchange_request, request, nil), do: {exchange_request, request}
+
+  defp switch_model(opts, exchange_request, _request, {model, effort}) do
+    items = Codec.without_reasoning(exchange_request.items)
+    switched = %{exchange_request | model: model, effort: effort, items: items}
+    {switched, build_request(opts, switched)}
+  end
+
+  defp record_provider_error(opts, exchange_request, error),
+    do:
+      Recording.append(
+        opts,
+        :provider_error,
+        exchange_request.stage,
+        exchange_request.turn,
+        error
+      )
+
+  defp record_retry(opts, exchange_request, retry, error, delay_ms) do
+    record_event(opts, exchange_request, %{
       event: :provider_retry,
       stage: exchange_request.stage,
       turn: exchange_request.turn,
-      attempt: 1,
+      attempt: retry.attempt,
       reason: error.class,
-      detail: "Retrying idempotent model request once after #{error.class}."
-    }
+      delay_ms: delay_ms,
+      model: elem(retry.model, 0),
+      detail: "Retrying idempotent model request after #{error.class}."
+    })
+  end
 
-    with :ok <-
-           Recording.append(
-             opts,
-             :provider_error,
-             exchange_request.stage,
-             exchange_request.turn,
-             error
-           ),
-         :ok <- record_event(opts, exchange_request, retry_event) do
-      receive do
-      after
-        @retry_backoff_ms -> :ok
-      end
+  defp record_fallback(_opts, _exchange_request, _retry, nil), do: :ok
 
-      with :ok <-
-             Recording.append(
-               opts,
-               :request,
-               exchange_request.stage,
-               exchange_request.turn,
-               request
-             ) do
-        result = provider_call(opts, request, remaining_ms(deadline))
-        record_response(opts, exchange_request, result)
-      end
-    end
+  defp record_fallback(opts, exchange_request, retry, {model, effort}) do
+    {from_model, from_effort} = retry.model
+
+    record_event(opts, exchange_request, %{
+      event: :model_fallback,
+      stage: exchange_request.stage,
+      turn: exchange_request.turn,
+      from: %{model: from_model, effort: from_effort},
+      to: %{model: model, effort: effort},
+      reason: :overload,
+      detail:
+        "Falling back after #{opts.resilience.overload_fallback_after} consecutive overloads."
+    })
   end
 
   defp record_event(%Opts{event_recorder: nil} = opts, request, event) do
@@ -155,18 +205,6 @@ defmodule Kogen.Harness.Exchange do
   defp provider_call(_opts, _request, remaining_ms)
        when is_integer(remaining_ms) and remaining_ms <= 0, do: timeout_error()
 
-  defp provider_call(opts, %ModelRequest{} = request, :infinity) do
-    caller = self()
-    result_ref = make_ref()
-
-    {worker, monitor} =
-      spawn_monitor(fn ->
-        send(caller, {result_ref, opts.provider_mod.respond(opts.provider_config, request)})
-      end)
-
-    await_provider(result_ref, worker, monitor, :infinity)
-  end
-
   defp provider_call(opts, %ModelRequest{} = request, remaining_ms) do
     caller = self()
     result_ref = make_ref()
@@ -179,26 +217,7 @@ defmodule Kogen.Harness.Exchange do
     await_provider(result_ref, worker, monitor, remaining_ms)
   end
 
-  defp await_provider(result_ref, worker, monitor, :infinity) do
-    receive do
-      {^result_ref, {:ok, %ModelResponse{} = response}} ->
-        Process.demonitor(monitor, [:flush])
-        {:ok, response}
-
-      {^result_ref, {:error, %ProviderError{} = error}} ->
-        Process.demonitor(monitor, [:flush])
-        {:error, error}
-
-      {^result_ref, _invalid} ->
-        Process.demonitor(monitor, [:flush])
-        provider_error(:malformed, "Provider returned an invalid response.")
-
-      {:DOWN, ^monitor, :process, ^worker, reason} ->
-        provider_error(:transport, "Provider process failed: #{inspect(reason)}")
-    end
-  end
-
-  defp await_provider(result_ref, worker, monitor, remaining_ms) when is_integer(remaining_ms) do
+  defp await_provider(result_ref, worker, monitor, remaining_ms) do
     receive do
       {^result_ref, {:ok, %ModelResponse{} = response}} ->
         Process.demonitor(monitor, [:flush])

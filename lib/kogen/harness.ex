@@ -7,6 +7,7 @@ defmodule Kogen.Harness do
       Kogen.Proc,
       Kogen.Provider,
       Kogen.Project,
+      Kogen.Resilience,
       Kogen.Tooling
     ],
     exports: [Opts, Pack, Plan, Review, Result, ShapePass, ShapeCall, PhaseTiming]
