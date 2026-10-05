@@ -37,6 +37,8 @@ defmodule Kogen.MixProject do
       {:boundary, "== 0.11.0", runtime: false},
       {:credo, "== 1.7.19", only: [:dev, :test], runtime: false},
       {:dialyxir, "== 1.4.8", only: [:dev, :test], runtime: false},
+      {:ex_dna, "== 1.5.4", only: :dev, runtime: false},
+      {:reach, "== 2.8.4", only: :dev, runtime: false},
       {:styler, "== 1.12.2", only: [:dev, :test], runtime: false},
       {:kogen_checks, path: "tools/kogen_checks", only: [:dev, :test], runtime: false}
     ]

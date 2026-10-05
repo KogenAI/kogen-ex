@@ -92,7 +92,7 @@ defmodule Kogen.Build.GateSummary do
 
   defp command(command, kind) do
     summary = %{
-      kind: kind,
+      kind: if(Map.get(command, :advisory?, false), do: :advisory, else: kind),
       name: Map.get(command, :name),
       exit_level: Map.get(command, :exit_level),
       exit_status: Map.get(command, :exit_status),
@@ -105,7 +105,7 @@ defmodule Kogen.Build.GateSummary do
 
   defp command_findings({%{base_red: true}, _findings}), do: []
 
-  defp command_findings({%{exit_level: level, name: name}, findings}) when level > 0 do
+  defp command_findings({%{exit_level: level, name: name}, findings}) when level >= 0 do
     Enum.map(findings, &finding(name, &1))
   end
 

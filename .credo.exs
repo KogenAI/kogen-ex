@@ -112,6 +112,8 @@
            [
              included_paths: ["lib/"],
              codec_modules: [
+               Kogen.Quality.Codec,
+               Kogen.Quality.Request,
                Kogen.Contracts.Yaml,
                Kogen.Contracts.ShapeWarningCodec,
                Kogen.Proc.Request,
@@ -165,8 +167,10 @@
                Kogen.Workspace => [Kogen.Proc],
                Kogen.Provider => [Kogen.Http, Kogen.Proc],
                Kogen.State => [Kogen.Workspace],
-               Kogen.Checks => [Kogen.Proc, Kogen.Workspace, Kogen.Project],
+               Kogen.Quality => [Kogen.Proc, Kogen.Workspace],
+               Kogen.Checks => [Kogen.Quality, Kogen.Proc, Kogen.Workspace, Kogen.Project],
                Kogen.Harness => [
+                 Kogen.Quality,
                  Kogen.Checks,
                  Kogen.Proc,
                  Kogen.Provider,

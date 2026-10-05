@@ -1,6 +1,6 @@
 SHELL := /bin/sh
 .SHELLFLAGS := -eu -c
-MAKEFLAGS += -j
+# Respect the caller's parallelism, including -j1 for full verification.
 M := mise exec --
 KOGEN_PLT_DIR ?= $(HOME)/.kogen/plt
 KOGEN_INSTALL_HOME ?= $(HOME)

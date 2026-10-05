@@ -39,8 +39,9 @@ defmodule Mix.Tasks.Kogen.Guard do
     script_issues = Enum.flat_map(files, &script_issues(&1, root))
     source_issues = Enum.flat_map(files, &source_issues(&1, root))
     make_issues = make_issues(root)
+    reach_issues = Enum.flat_map(files, &reach_issues(&1, root))
 
-    name_issues ++ script_issues ++ source_issues ++ make_issues
+    name_issues ++ script_issues ++ source_issues ++ make_issues ++ reach_issues
   end
 
   defp project_files(root), do: walk(root)
@@ -82,6 +83,25 @@ defmodule Mix.Tasks.Kogen.Guard do
     if source_path?(path, root) and regular_file?(path) do
       markers = Enum.map(@source_markers, &Enum.join/1)
       marker_issues(path, root, markers, "forbidden source marker")
+    else
+      []
+    end
+  end
+
+  defp reach_issues(path, root) do
+    if source_path?(path, root) and regular_file?(path) do
+      marker = "# " <> "reach:" <> "disable"
+
+      case Code.string_to_quoted_with_comments(File.read!(path)) do
+        {:ok, _, comments} ->
+          for %{text: text, line: line} <- comments,
+              String.starts_with?(text, marker),
+              not Regex.match?(~r/\s+--\s*\S/, text),
+              do: issue(path, root, line, "Reach suppression needs a reason on the same line")
+
+        _invalid ->
+          []
+      end
     else
       []
     end

@@ -5,6 +5,7 @@ defmodule Kogen.Harness.Gate do
   alias Kogen.Contracts.CheckBaseline
   alias Kogen.Contracts.CheckSpec
   alias Kogen.Contracts.ProcResult
+  alias Kogen.Harness.Gate.Arguments
   alias Kogen.Harness.Gate.CommandRunner
   alias Kogen.Harness.Gate.TestCount
   alias Kogen.Harness.GateCommand
@@ -20,6 +21,7 @@ defmodule Kogen.Harness.Gate do
     with :ok <- before_gate(opts.before_gate),
          {:ok, fixes, _fix_flakes} <- run_specs(opts, opts.project.fix, deadline, :fix),
          {:ok, checks, flake_excused} <- run_specs(opts, opts.project.checks, deadline, :check) do
+      checks = checks ++ quality_commands(opts, deadline)
       active_checks = Enum.reject(checks, & &1.base_red?)
       commands = fixes ++ active_checks
       exit_level = Feedback.overall_exit_level(commands)
@@ -31,14 +33,11 @@ defmodule Kogen.Harness.Gate do
           _level -> :fail
         end
 
-      failures =
-        case status do
-          :pass -> []
-          :environment -> [Feedback.render_environment_detail(commands)]
-          :fail -> [Feedback.render_model_feedback(commands)]
-        end
+      failures = failures(status, commands)
 
-      warnings = Enum.flat_map(checks, &CheckBaseline.warning/1)
+      warnings =
+        Enum.flat_map(checks, &CheckBaseline.warning/1) ++
+          Enum.flat_map(checks, &Map.get(&1, :warnings, []))
 
       {:ok,
        %GateResult{
@@ -51,6 +50,20 @@ defmodule Kogen.Harness.Gate do
          failed_test_count: TestCount.failed_test_count(checks, opts.project.checks)
        }}
     end
+  end
+
+  defp failures(:pass, _commands), do: []
+  defp failures(:environment, commands), do: [Feedback.render_environment_detail(commands)]
+  defp failures(:fail, commands), do: [Feedback.render_model_feedback(commands)]
+
+  defp quality_commands(opts, deadline) do
+    Kogen.Quality.commands(
+      Kogen.Quality.Request.new(opts.workdir, opts.run_dir, opts.env, %{
+        base: opts.base,
+        sandbox: opts.sandbox,
+        deadline: deadline
+      })
+    )
   end
 
   defp before_gate(nil), do: :ok
@@ -82,7 +95,7 @@ defmodule Kogen.Harness.Gate do
 
   defp run_spec(opts, %CheckSpec{} = spec, deadline, :check) do
     if mix_test?(spec.argv) do
-      {argv, seed} = seeded_argv(spec.argv)
+      {argv, seed} = Arguments.seeded_argv(spec.argv)
       command = run_command(opts, spec, argv, deadline, :check, "")
 
       case {seed, Feedback.failed_test_ids(command.output, opts.workdir), command} do
@@ -122,7 +135,7 @@ defmodule Kogen.Harness.Gate do
     %{command: original, argv: argv, deadline: deadline, seed: seed, test_ids: test_ids} =
       classification
 
-    retry_argv = retry_argv(argv, test_ids, seed)
+    retry_argv = Arguments.retry_argv(argv, test_ids, seed)
     retry = run_command(opts, spec, retry_argv, deadline, :check, "-retry")
 
     if command_passed?(retry) do
@@ -302,51 +315,6 @@ defmodule Kogen.Harness.Gate do
 
   defp mix_test?([executable, "test" | _args]), do: Path.basename(executable) == "mix"
   defp mix_test?(_argv), do: false
-
-  defp seeded_argv(argv) do
-    case seed_in_args(Enum.drop(argv, 2)) do
-      {:ok, seed} ->
-        {argv, seed}
-
-      :missing ->
-        seed = System.unique_integer([:positive, :monotonic])
-        {argv ++ ["--seed", Integer.to_string(seed)], seed}
-
-      :invalid ->
-        {argv, nil}
-    end
-  end
-
-  defp seed_in_args(["--seed", value | _rest]), do: parse_seed(value)
-  defp seed_in_args(["--seed=" <> value | _rest]), do: parse_seed(value)
-  defp seed_in_args([_arg | rest]), do: seed_in_args(rest)
-  defp seed_in_args([]), do: :missing
-
-  defp parse_seed(value) do
-    case Integer.parse(value) do
-      {seed, ""} when seed >= 0 -> {:ok, seed}
-      _other -> :invalid
-    end
-  end
-
-  defp retry_argv(argv, test_ids, seed) do
-    [executable, "test" | args] = argv
-
-    options =
-      args
-      |> drop_seed_option()
-      |> Enum.reject(&test_selector?/1)
-
-    [executable, "test" | test_ids ++ options ++ ["--seed", Integer.to_string(seed)]]
-  end
-
-  defp drop_seed_option(["--seed", _value | rest]), do: drop_seed_option(rest)
-  defp drop_seed_option(["--seed=" <> _value | rest]), do: drop_seed_option(rest)
-  defp drop_seed_option([arg | rest]), do: [arg | drop_seed_option(rest)]
-  defp drop_seed_option([]), do: []
-
-  defp test_selector?(arg),
-    do: String.ends_with?(arg, ".exs") or Regex.match?(~r/\.exs:\d+\z/, arg)
 
   defp run_command(opts, spec, argv, deadline, kind, suffix) do
     remaining_ms = max(deadline - System.monotonic_time(:millisecond), 0)

@@ -22,7 +22,11 @@ defmodule Kogen.Engine.Build.CheckStage do
              session.run_dir,
              session.process_env,
              session.git_env,
-             %{sandbox: session.sandbox, check_baseline: session.approval.check_baseline}
+             %{
+               sandbox: session.sandbox,
+               base: session.base_sha,
+               check_baseline: session.approval.check_baseline
+             }
            ),
          {:ok, acceptance} <- acceptance(session),
          :ok <- record(session, checks, acceptance) do

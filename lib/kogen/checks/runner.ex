@@ -56,7 +56,9 @@ defmodule Kogen.Checks.Runner do
            }}
           | {:error, Failure.t()}
   def run_all(workdir, %Project{} = project, run_dir, env, git_env, options) do
-    run_all_with_project(workdir, project, run_dir, env, git_env, options(options))
+    workdir
+    |> run_all_with_project(project, run_dir, env, git_env, options(options))
+    |> Kogen.Quality.augment(workdir, run_dir, Map.merge(env, git_env), options)
   end
 
   defp run_all_with_project(workdir, %Project{} = project, run_dir, env, git_env, options) do
