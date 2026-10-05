@@ -330,6 +330,9 @@ defmodule Kogen.Engine.Build.GateSupport do
   end
 
   # A ladder's whole-Build budget also bounds each stage.
+  defp wall_ms(%Session{landing_deadline: deadline}) when is_integer(deadline),
+    do: max(deadline - System.monotonic_time(:millisecond), 1)
+
   defp wall_ms(session) do
     [session.budget_deadline, session.landing_deadline]
     |> Enum.reject(&is_nil/1)

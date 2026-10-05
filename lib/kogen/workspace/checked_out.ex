@@ -39,6 +39,7 @@ defmodule Kogen.Workspace.CheckedOut do
   defp update_one(path, old_sha, new_sha, git_env) do
     with true <- File.dir?(path) || {:error, :missing_checkout},
          :ok <- index_matches(path, old_sha, git_env),
+         :ok <- files_clean(path, git_env),
          {:ok, 0, _output} <-
            Git.run(path, ["read-tree", "-u", "-m", old_sha, new_sha], git_env) do
       :ok
@@ -53,6 +54,18 @@ defmodule Kogen.Workspace.CheckedOut do
     case Git.run(path, ["diff-index", "--cached", "--quiet", old_sha], git_env) do
       {:ok, 0, _output} -> :ok
       {:ok, _status, _output} -> {:error, :staged_changes}
+      {:error, reason} -> {:error, reason}
+    end
+  end
+
+  # Compare files with the index, which still describes old_sha after the branch CAS.
+  # A status against HEAD would mistake every newly landed change for a local edit.
+  defp files_clean(path, git_env) do
+    with {:ok, 0, _output} <- Git.run(path, ["diff-files", "--quiet"], git_env),
+         {:ok, 0, ""} <- Git.run(path, ["ls-files", "--others", "--exclude-standard"], git_env) do
+      :ok
+    else
+      {:ok, _status, _output} -> {:error, :local_changes}
       {:error, reason} -> {:error, reason}
     end
   end

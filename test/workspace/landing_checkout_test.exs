@@ -17,16 +17,16 @@ defmodule Kogen.Workspace.LandingCheckoutTest do
     assert Git.git!(source, ["status", "--porcelain"]) == ""
   end
 
-  test "keeps unrelated local edits while updating the checkout", %{tmp_dir: tmp_dir} do
+  test "leaves a checkout with unrelated local edits entirely untouched", %{tmp_dir: tmp_dir} do
     %{source: source, base_sha: base_sha} = fixture(tmp_dir)
     {candidate, _sha} = candidate!(source, tmp_dir, base_sha, "unrelated")
     File.write!(Path.join(source, "notes.txt"), "my edit\n")
     File.write!(Path.join(source, "scratch.txt"), "untracked\n")
 
-    assert {:ok, []} =
+    assert {:ok, [_warning]} =
              Workspace.land(candidate, source, "main", base_sha, "run-unrelated", @git_env)
 
-    assert File.read!(Path.join(source, "README.md")) == "landed\n"
+    assert File.read!(Path.join(source, "README.md")) == "fixture\n"
     assert File.read!(Path.join(source, "notes.txt")) == "my edit\n"
     assert File.read!(Path.join(source, "scratch.txt")) == "untracked\n"
   end

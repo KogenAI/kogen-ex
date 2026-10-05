@@ -151,6 +151,16 @@ defmodule Kogen.E2e.LandingRepairTest do
 
     assert result.build.status == :landed
     assert Enum.count(result.events, &(&1.event == "check_result")) == 3
+
+    assert Enum.map(Enum.filter(result.events, &(&1.event == "landing_retry")), & &1.wall_ms) == [
+             1_000,
+             2_000,
+             4_000,
+             1_000,
+             2_000,
+             4_000
+           ]
+
     assert result.claim_released
     assert_landed_tree(result)
 

@@ -81,6 +81,7 @@ defmodule Kogen.Queue.Report do
       {"model_stages", model_stages(events)},
       {"phase_timings", phase_timings(events)},
       {"findings", findings(events)},
+      {"landing_retries", landing_retries(events)},
       {"failures", failures(events)},
       {"last_gate", last_gate(events)},
       {"stop", stop(events)}
@@ -197,6 +198,12 @@ defmodule Kogen.Queue.Report do
         {"reason", event.reason},
         {"detail", event.detail}
       ])
+    end
+  end
+
+  defp landing_retries(events) do
+    for %Event{event: "landing_retry"} = event <- events do
+      json_object([{"retry", event.name}, {"reason", event.reason}, {"delay_ms", event.wall_ms}])
     end
   end
 

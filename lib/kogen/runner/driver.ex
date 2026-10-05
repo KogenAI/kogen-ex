@@ -74,6 +74,9 @@ defmodule Kogen.Runner.Driver do
 
         apply_effect_event(updated, {:stage_failed, stage, failure}, rest, mode)
 
+      {:parked, updated, reason} ->
+        apply_effect_event(updated, {:park, reason}, rest, mode)
+
       {:base_moved, updated} ->
         apply_effect_event(updated, {:base_moved}, rest, mode)
     end

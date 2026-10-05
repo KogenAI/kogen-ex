@@ -9,12 +9,12 @@ defmodule Kogen.Engine.Build.Commit do
   alias Kogen.State
   alias Kogen.Workspace
 
-  @spec run(Session.t()) ::
+  @spec run(Session.t(), boolean()) ::
           {:ok, Session.t(), [term()]}
           | {:error, Session.t(), Failure.t()}
           | {:base_moved, Session.t()}
-  def run(%Session{} = session) do
-    PhaseTiming.measure(session, "build", "commit", fn -> do_run(session) end)
+  def run(%Session{} = session, force_check \\ false) do
+    PhaseTiming.measure(session, "build", "commit", fn -> do_run(session, force_check) end)
   end
 
   @spec land(map(), Session.t()) :: {:ok, [map()]} | {:error, term()}
@@ -34,12 +34,12 @@ defmodule Kogen.Engine.Build.Commit do
   @spec tree_hash(Session.t()) :: {:ok, String.t()} | {:error, term()}
   def tree_hash(session), do: Guard.tree_hash(session.workdir, session.git_env)
 
-  defp do_run(session) do
+  defp do_run(session, force_check) do
     with :ok <- guard(session),
          :ok <- tag(:squash, squash_to_base(session)),
          {:ok, _commit} <- tag(:candidate_commit, commit_tree(session, nil)),
          {:ok, base} <- tag(:base_tip, current_base(session)) do
-      case prepare_candidate(session, base) do
+      case prepare_candidate(session, base, force_check) do
         {:ok, updated} -> finish_commit(updated)
         {:error, updated, failure} -> fail(updated, :commit, failure)
       end
@@ -105,9 +105,12 @@ defmodule Kogen.Engine.Build.Commit do
   end
 
   # The :check stage already verified this unchanged base/tree pair.
-  defp prepare_candidate(session, base) when base == session.base_sha, do: {:ok, session}
+  defp prepare_candidate(session, base, false) when base == session.base_sha, do: {:ok, session}
 
-  defp prepare_candidate(session, base) do
+  defp prepare_candidate(session, base, true) when base == session.base_sha,
+    do: verify_rebased(session)
+
+  defp prepare_candidate(session, base, _force_check) do
     with {:ok, manifest, drift} <-
            Workspace.refresh_manifest(
              session.request.origin,

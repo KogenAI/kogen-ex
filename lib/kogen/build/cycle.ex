@@ -114,9 +114,8 @@ defmodule Kogen.Build.Cycle do
     finish(state, :landed, sha)
   end
 
-  def step(state, {:base_moved}) do
-    finish(state, :parked, :base_moved)
-  end
+  def step(state, {:base_moved}), do: step(state, {:park, :base_moved})
+  def step(state, {:park, reason}), do: finish(state, :parked, reason)
 
   def step(state, :budget_exhausted), do: finish(state, :failed, :budget_exhausted)
 
