@@ -16,12 +16,14 @@ defmodule Kogen.Build.Recipe do
   @typedoc """
   One ladder rung: a fresh Candidate built by `builder` (`:builder` is the configured builder
   role). `:plan` rungs receive the planner's plan; `:raw_request` rungs receive only the
-  verbatim Request and the acceptance tests.
+  verbatim Request and the acceptance tests, plus the Intent's Acceptance items when
+  `acceptance_items` is set.
   """
   @type rung :: %{
           required(:name) => String.t(),
           required(:builder) => :builder | {String.t(), String.t()},
           required(:input) => :plan | :raw_request,
+          optional(:acceptance_items) => boolean(),
           optional(:experimental) => boolean()
         }
 
@@ -54,7 +56,7 @@ defmodule Kogen.Build.Recipe do
           required(:on) => [atom()]
         }
 
-  @ladder_names ["ladder", "ladder-luna", "ladder-sol-medium"]
+  @ladder_names ["ladder", "ladder-diverse", "ladder-luna", "ladder-sol-medium"]
   @names [
            "staged",
            "plan-shell",
@@ -131,7 +133,7 @@ defmodule Kogen.Build.Recipe do
 
   defp roles_for("plan-shell", builder), do: %{planner: {"gpt-6.1-sol", "high"}, builder: builder}
 
-  defp roles_for("ladder", builder),
+  defp roles_for(name, builder) when name in ["ladder", "ladder-diverse"],
     do: %{planner: @sol_high, builder: builder, auditor: @sol_high}
 
   defp roles_for("ladder-luna", _builder), do: single_model_roles(@luna_max)
@@ -150,6 +152,18 @@ defmodule Kogen.Build.Recipe do
       %{name: "sol-high", builder: @sol_high, input: :plan},
       %{name: "raw-request", builder: @sol_high, input: :raw_request, experimental: true}
     ]
+  end
+
+  # `ladder` with a diverse second rung: Sol medium builds from the Request and the Intent's
+  # Acceptance section without the plan, so a hard plan's two parallel Candidates fail
+  # differently.
+  defp ladder_rungs("ladder-diverse") do
+    List.replace_at(ladder_rungs("ladder"), 1, %{
+      name: "sol-medium-raw",
+      builder: @sol_medium,
+      input: :raw_request,
+      acceptance_items: true
+    })
   end
 
   defp ladder_rungs("ladder-luna"), do: @luna_rungs

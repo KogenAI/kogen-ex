@@ -33,6 +33,21 @@ defmodule Kogen.Build.LadderCycleTest do
              "plan-shell"
   end
 
+  test "ladder-diverse swaps the second rung for a planless Sol medium rung" do
+    recipe = Recipe.for_build("ladder-diverse", "gpt-6-luna", "max")
+    %{rungs: rungs, parallel_on_hard: 2} = Recipe.ladder(recipe)
+
+    assert Enum.map(rungs, &{&1.name, Recipe.rung_builder(recipe, &1), &1.input}) == [
+             {"builder", {"gpt-6-luna", "max"}, :plan},
+             {"sol-medium-raw", {"gpt-6.1-sol", "medium"}, :raw_request},
+             {"sol-high", {"gpt-6.1-sol", "high"}, :plan},
+             {"raw-request", {"gpt-6.1-sol", "high"}, :raw_request}
+           ]
+
+    assert Recipe.role_settings(recipe) == Recipe.role_settings(@recipe)
+    assert Recipe.stages(recipe) == Recipe.stages(@recipe)
+  end
+
   test "single-model ladder variants keep every model call on one model" do
     for {name, model} <- [
           {"ladder-luna", {"gpt-6-luna", "max"}},

@@ -16,8 +16,8 @@ script_dir=$(cd "$(dirname "$script_path")" && pwd -P)
 format_check_script="$script_dir/kogen-format-check"
 recipe=${KOGEN_BENCH_RECIPE:-ladder}
 case "$recipe" in
-  ladder|ladder-luna|ladder-sol-medium|staged|plan-shell|direct|direct-shell|direct-escalate|escalate-shell) ;;
-  *) echo "KOGEN_BENCH_RECIPE must be ladder, ladder-luna, ladder-sol-medium, staged, plan-shell, direct, direct-shell, direct-escalate, or escalate-shell" >&2; exit 2 ;;
+  ladder|ladder-diverse|ladder-luna|ladder-sol-medium|staged|plan-shell|direct|direct-shell|direct-escalate|escalate-shell) ;;
+  *) echo "KOGEN_BENCH_RECIPE must be ladder, ladder-diverse, ladder-luna, ladder-sol-medium, staged, plan-shell, direct, direct-shell, direct-escalate, or escalate-shell" >&2; exit 2 ;;
 esac
 format_scope=${KOGEN_BENCH_FORMAT_SCOPE:-changed}
 case "$format_scope" in

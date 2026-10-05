@@ -80,17 +80,17 @@ defmodule Kogen.Engine.Build.GateSupport do
 
   @doc """
   The Developer's task text: the approved Intent, or for a raw-request rung only the verbatim
-  Request and the acceptance tests it must pass.
+  Request, optionally the Intent's Acceptance items, and the acceptance tests it must pass.
   """
   @spec builder_text(Session.t()) :: String.t()
-  def builder_text(%Session{rung: %{input: :raw_request}} = session) do
+  def builder_text(%Session{rung: %{input: :raw_request} = rung} = session) do
     slug = session.approval.slug
     source = Map.get(session.approval.acceptance_files, ".kogen/acceptance/#{slug}_test.exs", "")
 
     String.trim("""
     ## Request
     #{session.intent.request || session.intent_text}
-
+    #{acceptance_items(rung, session.intent.acceptance)}
     ## Acceptance tests
     These read-only tests are installed at test/acceptance/#{slug}_test.exs and must pass.
 
@@ -101,6 +101,11 @@ defmodule Kogen.Engine.Build.GateSupport do
   end
 
   def builder_text(%Session{} = session), do: session.intent_text
+
+  defp acceptance_items(%{acceptance_items: true}, [_ | _] = items),
+    do: "\n## Acceptance\n" <> Enum.map_join(items, "\n", &"- #{&1.id}: #{&1.text}") <> "\n"
+
+  defp acceptance_items(_rung, _items), do: ""
 
   defp rung_name(%Session{rung: %{name: name}}), do: name
   defp rung_name(%Session{}), do: nil

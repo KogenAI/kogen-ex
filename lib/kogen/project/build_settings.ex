@@ -3,7 +3,7 @@ defmodule Kogen.Project.BuildSettings do
 
   alias Kogen.Contracts.Yaml
 
-  @recipes ~w(ladder ladder-luna ladder-sol-medium staged plan-shell direct) ++
+  @recipes ~w(ladder ladder-diverse ladder-luna ladder-sol-medium staged plan-shell direct) ++
              ~w(direct-shell direct-escalate escalate-shell)
   @roles %{
     "builder" => :builder,

@@ -88,6 +88,13 @@ defmodule Kogen.E2e.KogenBenchTest do
              "grading its best candidate kogen/task"
   end
 
+  test "accepts the ladder-diverse recipe and records it", %{tmp_dir: tmp_dir} do
+    {_status, output, paths} = run_bench!(tmp_dir, %{"KOGEN_BENCH_RECIPE" => "ladder-diverse"})
+
+    usage = paths.out_dir |> Path.join("usage.json") |> File.read!() |> :json.decode()
+    assert usage["recipe"] == "ladder-diverse", output
+  end
+
   defp run_bench!(tmp_dir, extra_env) do
     task_dir = Path.join(tmp_dir, "task")
     out_dir = Path.join(tmp_dir, "out")

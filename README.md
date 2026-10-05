@@ -34,7 +34,7 @@ Build settings belong in `.kogen/project.yaml`:
 ```yaml
 base: main
 build:
-  recipe: ladder        # the default; also ladder-luna, ladder-sol-medium, plan-shell, ...
+  recipe: ladder        # the default; also ladder-diverse, ladder-luna, ladder-sol-medium, plan-shell, ...
   wall_minutes: 60      # a ladder's whole-Build budget
   roles:
     builder:

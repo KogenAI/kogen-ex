@@ -119,6 +119,44 @@ defmodule Kogen.E2e.LadderTest do
     assert [%{attempt: "builder", reason: "not_selected"}] = events(result, "candidate_diff")
   end
 
+  test "ladder-diverse runs a planless Sol medium rung beside the planned builder", context do
+    luna = [write("builder", :wrong), done(), done()]
+    sol = [write("sol-medium-raw", :ready), done()]
+
+    script =
+      [ScriptedProvider.answer(:plan, @hard_plan)] ++
+        ScriptedProvider.for_model(luna, "gpt-6-luna") ++
+        ScriptedProvider.for_model(sol, "gpt-6.1-sol", "medium") ++
+        [
+          ScriptedProvider.for_model(
+            ScriptedProvider.answer(:audit, @upheld),
+            "gpt-6.1-sol",
+            "high"
+          )
+        ]
+
+    result = run!(context, "diverse", script, "ladder-diverse")
+
+    assert %Result{build: %{status: :landed, landed_sha: sha}} = result
+    assert source_at(result, sha) =~ "# revision: sol-medium-raw"
+    assert [%{attempts: ["builder", "sol-medium-raw"]}] = events(result, "parallel_started")
+    assert [%{recipe: "ladder-diverse"}] = events(result, "started")
+
+    [planned | _] = Enum.filter(result.provider_requests, &(&1.model == "gpt-6-luna"))
+    assert user_text(planned) =~ "<plan>\n#{@hard_plan}\n</plan>"
+
+    raw =
+      result.provider_requests
+      |> Enum.find(&(&1.effort == "medium" and &1.tools != []))
+      |> user_text()
+
+    assert raw =~ "## Request\nPreserve this fixture wording verbatim as source context."
+    assert raw =~ "## Acceptance\n- A1: TinyApp.value/0 returns :ready."
+    assert raw =~ "## Acceptance tests"
+    refute raw =~ "<plan>"
+    refute raw =~ "Difficulty: hard"
+  end
+
   test "with no green rung the best Candidate is pushed to kogen/<slug>", context do
     script = [
       ScriptedProvider.answer(:plan, @plan),
