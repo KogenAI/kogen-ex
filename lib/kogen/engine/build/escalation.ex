@@ -2,6 +2,7 @@ defmodule Kogen.Engine.Build.Escalation do
   @moduledoc false
 
   alias Kogen.Contracts.Failure
+  alias Kogen.Engine.Build.CandidateSnapshot
   alias Kogen.Engine.Build.Session
   alias Kogen.Engine.Build.Setup
   alias Kogen.Engine.Runtime
@@ -10,7 +11,22 @@ defmodule Kogen.Engine.Build.Escalation do
   alias Kogen.Workspace
 
   @spec reset_candidate(Session.t()) :: {:ok, Session.t()} | {:error, Session.t(), Failure.t()}
-  def reset_candidate(%Session{} = session) do
+  def reset_candidate(%Session{} = session), do: reset_candidate(session, nil)
+
+  @spec reset_candidate(Session.t(), term()) ::
+          {:ok, Session.t()} | {:error, Session.t(), Failure.t()}
+  def reset_candidate(%Session{} = session, reason) do
+    case CandidateSnapshot.before_escalation(session, reason) do
+      :ok ->
+        reset_candidate_from_base(session)
+
+      {:error, detail} ->
+        {:error, session,
+         %Failure{class: :controller, reason: :candidate_snapshot_failed, detail: inspect(detail)}}
+    end
+  end
+
+  defp reset_candidate_from_base(%Session{} = session) do
     build_id = session.run.id <> "-escalation"
 
     case Workspace.create(

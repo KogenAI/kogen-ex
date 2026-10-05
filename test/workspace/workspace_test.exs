@@ -52,6 +52,18 @@ defmodule Kogen.Workspace.WorkspaceTest do
     assert diff =~ "README.md"
     assert diff =~ "edited"
     assert diff =~ "frozen_test.exs"
+
+    assert {:ok, implementation_diff} =
+             Workspace.diff_excluding(
+               candidate,
+               base_sha,
+               ["test/acceptance/frozen_test.exs"],
+               @git_env
+             )
+
+    assert implementation_diff =~ "README.md"
+    refute implementation_diff =~ "frozen_test.exs"
+    refute implementation_diff =~ "binary"
     assert :ok = git!(candidate, ["diff", "--cached", "--quiet"])
 
     assert {:error, :invalid_files} = Workspace.insert_files(candidate, %{"../escape" => "no"})

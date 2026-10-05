@@ -3,6 +3,7 @@ defmodule Kogen.Workspace do
   use Boundary, deps: [Kogen.Contracts, Kogen.Proc], exports: []
 
   alias Kogen.Workspace.Checkout
+  alias Kogen.Workspace.Diff
   alias Kogen.Workspace.Landing
   alias Kogen.Workspace.Rebase
   alias Kogen.Workspace.Refs
@@ -28,7 +29,12 @@ defmodule Kogen.Workspace do
     do: Kogen.Workspace.Copy.copy_on_write(source, destination)
 
   @spec diff(Path.t(), String.t(), git_env()) :: {:ok, binary()} | {:error, term()}
-  def diff(path, base_sha, git_env), do: Kogen.Workspace.Diff.diff(path, base_sha, git_env)
+  def diff(path, base_sha, git_env), do: Diff.diff(path, base_sha, git_env)
+
+  @spec diff_excluding(Path.t(), String.t(), [String.t()], git_env()) ::
+          {:ok, binary()} | {:error, term()}
+  def diff_excluding(path, base_sha, excluded_paths, git_env),
+    do: Diff.diff_excluding(path, base_sha, excluded_paths, git_env)
 
   @spec changed_paths(Path.t(), String.t(), git_env()) ::
           {:ok, [String.t()]} | {:error, term()}

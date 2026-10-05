@@ -93,6 +93,8 @@ bench_started_ns=$(python3 -c 'import time; print(time.monotonic_ns())')
 mkdir -p "$out_dir"
 : > "$log_file"
 : > "$out_dir/final.diff"
+rm -f "$out_dir/candidate.diff" "$out_dir"/candidate-*.diff
+rm -f "$out_dir/report.json" "$out_dir/shape.json"
 : > "$timings_file"
 : > "$events_file"
 printf 'shape\n' > "$phase_file"
@@ -141,6 +143,7 @@ with open(path, "w", encoding="utf-8") as output:
         "status": "not_started",
         "stages": [],
         "attempts": [],
+        "candidate_diffs": [],
         "total": {
             "tokens": {"input": 0, "cached_input": 0, "output": 0, "reasoning": 0},
             "wall_ms": 0,
@@ -389,6 +392,32 @@ copy_bench_setup_log() {
   [ ! -f "$setup_log_path" ] || cp "$setup_log_path" "$out_dir/task-setup.log"
 }
 
+copy_candidate_diffs() {
+  [ -f "$out_dir/report.json" ] || return 0
+  python3 - "$out_dir/report.json" "$out_dir" <<'PY'
+import json
+import os
+import re
+import shutil
+import sys
+
+report_path, output_dir = sys.argv[1:]
+with open(report_path, encoding="utf-8") as source:
+    report = json.load(source)
+
+for candidate in report.get("candidate_diffs", []):
+    if not isinstance(candidate, dict):
+        continue
+    filename = candidate.get("file")
+    source_path = candidate.get("source_path")
+    if not isinstance(filename, str) or not re.fullmatch(r"candidate(?:-[A-Za-z0-9._-]+)?\.diff", filename):
+        continue
+    if not isinstance(source_path, str) or not os.path.isfile(source_path):
+        continue
+    shutil.copyfile(source_path, os.path.join(output_dir, filename))
+PY
+}
+
 write_failed_usage() {
   failed_stage=$1
   failed_model=$2
@@ -577,6 +606,19 @@ result = {
     "shape": {"model": shape_model, "effort": shape_effort, "wall_ms": int(shape_wall_ms)},
     "stages": stages,
     "attempts": report.get("attempts", []),
+    "candidate_diffs": [
+        {
+            "attempt": candidate.get("attempt"),
+            "file": candidate.get("file"),
+            "protected_paths_changed": candidate.get("protected_paths_changed", []),
+            "red_checks": candidate.get("red_checks", []),
+            "acceptance_items": candidate.get("acceptance_items", []),
+        }
+        for candidate in report.get("candidate_diffs", [])
+        if isinstance(candidate, dict)
+        and isinstance(candidate.get("file"), str)
+        and os.path.isfile(os.path.join(os.path.dirname(output_path), candidate["file"]))
+    ],
     "escalations": report.get("escalations", []),
     "last_gate": report.get("last_gate"),
     "stop": report.get("stop"),
@@ -634,6 +676,7 @@ else
     --project "$project_dir" --origin "$origin" --base main --json; then
     :
   fi
+  copy_candidate_diffs
   write_failed_usage build "$builder_model" "$builder_effort" "$stage_status" "$build_wall_ms"
   exit "$stage_status"
 fi
@@ -646,6 +689,7 @@ else
   write_failed_usage report "" "" "$stage_status" "$CAPTURE_WALL_MS"
   exit "$stage_status"
 fi
+copy_candidate_diffs
 
 git --git-dir="$origin" diff --binary "$base_sha" refs/heads/main > "$out_dir/final.diff"
 git -C "$work_dir" apply --check "$out_dir/final.diff"
@@ -665,6 +709,7 @@ python3 - "$out_dir/shape.json" "$out_dir/report.json" "$out_dir/usage.json" \
   "$recipe" "$timings_file" "$events_file" "$bench_started_ns" "$bench_finished_ns" \
   "$builder_model" "$builder_effort" "$shape_model" "$shape_effort" "$shape_wall_ms" <<'PY'
 import json
+import os
 import sys
 
 shape_path, report_path, output_path, recipe, timing_input, events_output, started_ns, finished_ns, builder_model, builder_effort, shape_model, shape_effort, shape_wall_ms = sys.argv[1:]
@@ -780,6 +825,19 @@ result = {
     "builder": {"model": builder_model, "effort": builder_effort},
     "shape": {"model": shape_model, "effort": shape_effort, "wall_ms": shape_wall_ms},
     "attempts": report.get("attempts", []),
+    "candidate_diffs": [
+        {
+            "attempt": candidate.get("attempt"),
+            "file": candidate.get("file"),
+            "protected_paths_changed": candidate.get("protected_paths_changed", []),
+            "red_checks": candidate.get("red_checks", []),
+            "acceptance_items": candidate.get("acceptance_items", []),
+        }
+        for candidate in report.get("candidate_diffs", [])
+        if isinstance(candidate, dict)
+        and isinstance(candidate.get("file"), str)
+        and os.path.isfile(os.path.join(os.path.dirname(output_path), candidate["file"]))
+    ],
     "escalations": report.get("escalations", []),
     "last_gate": report.get("last_gate"),
     "stop": report.get("stop"),

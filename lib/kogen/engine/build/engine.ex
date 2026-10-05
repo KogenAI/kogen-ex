@@ -314,8 +314,8 @@ defmodule Kogen.Engine.Build.Engine do
     end
   end
 
-  defp run_effects(session, [{:escalate, _args} | rest]) do
-    case Escalation.reset_candidate(session) do
+  defp run_effects(session, [{:escalate, args} | rest]) do
+    case Escalation.reset_candidate(session, Map.get(args, :trigger)) do
       {:ok, updated} -> run_effects(updated, rest)
       {:error, updated, failure} -> escalate_setup_failed(updated, failure, rest)
     end

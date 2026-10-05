@@ -30,6 +30,12 @@ defmodule Kogen.E2e.DirectEscalationTest do
 
     assert result.build.status == :failed
     assert result.build.reason == :unchanged
+    candidate_diff = Path.join(result.build.run_dir, "candidate.diff")
+    assert File.regular?(candidate_diff)
+    diff = File.read!(candidate_diff)
+    assert diff =~ "lib/tiny_app.ex"
+    assert diff =~ "revision: luna"
+    refute diff =~ "test/acceptance/build-engine_test.exs"
     assert {:ok, report} = Build.report(result)
 
     decoded = :json.decode(report)
@@ -39,6 +45,19 @@ defmodule Kogen.E2e.DirectEscalationTest do
            } = decoded
 
     assert Enum.any?(checks, &(&1["name"] == "tests" and &1["exit_level"] == 1))
+
+    assert %{
+             "candidate_diffs" => [snapshot],
+             "red_checks" => red_checks,
+             "acceptance_items" => acceptance_items
+           } = decoded
+
+    assert snapshot["attempt"] == "builder"
+    assert snapshot["file"] == "candidate.diff"
+    assert Path.basename(snapshot["source_path"]) == "candidate.diff"
+    assert File.read!(snapshot["source_path"]) == diff
+    assert Enum.any?(red_checks, &(&1["name"] == "tests" and &1["exit_level"] == 1))
+    assert Enum.any?(acceptance_items, &(&1["id"] == "A1" and &1["text"] =~ "returns :ready"))
 
     assert Enum.any?(findings, fn finding ->
              is_binary(finding["path"]) and String.ends_with?(finding["path"], "_test.exs") and
@@ -60,6 +79,49 @@ defmodule Kogen.E2e.DirectEscalationTest do
                "failed_check_count" => 1
              }
            } = decoded
+  end
+
+  test "failed escalation preserves a separate red candidate diff for each attempt", context do
+    seed_project =
+      Build.prepare_seed!(Path.join(context.tmp_dir, "failed-escalation-seed"),
+        project_config: gate_project()
+      )
+
+    parent = Path.join(context.tmp_dir, "failed-escalation")
+    File.mkdir_p!(parent)
+
+    script = [
+      ScriptedProvider.write(:develop, "lib/tiny_app.ex", source("luna", :wrong)),
+      ScriptedProvider.answer(:develop, "Done."),
+      ScriptedProvider.answer(:develop, "Done."),
+      ScriptedProvider.write(:develop, "lib/tiny_app.ex", source("sol", :still_wrong)),
+      ScriptedProvider.answer(:develop, "Done."),
+      ScriptedProvider.answer(:develop, "Done.")
+    ]
+
+    result =
+      Build.run!(parent, script, %Options{
+        seed_project: seed_project,
+        recipe: "direct-escalate"
+      })
+
+    assert result.build.status == :failed
+    assert result.build.reason == :unchanged
+
+    builder_diff = Path.join(result.build.run_dir, "candidate.diff")
+    escalation_diff = Path.join(result.build.run_dir, "candidate-escalation.diff")
+    assert File.read!(builder_diff) =~ "revision: luna"
+    assert File.read!(escalation_diff) =~ "revision: sol"
+    refute File.read!(escalation_diff) =~ "revision: luna"
+
+    assert {:ok, report} = Build.report(result)
+    assert %{"candidate_diffs" => [builder, escalation]} = :json.decode(report)
+    assert builder["attempt"] == "builder"
+    assert builder["file"] == "candidate.diff"
+    assert escalation["attempt"] == "escalation"
+    assert escalation["file"] == "candidate-escalation.diff"
+    assert escalation["red_checks"] != []
+    assert escalation["acceptance_items"] != []
   end
 
   test "retries a red Luna candidate from a fresh base tree", context do

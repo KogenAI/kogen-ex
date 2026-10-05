@@ -2,6 +2,7 @@ defmodule Kogen.Engine.Build.Finish do
   @moduledoc false
 
   alias Kogen.Contracts.Failure
+  alias Kogen.Engine.Build.CandidateSnapshot
   alias Kogen.Engine.Build.GateSummary
   alias Kogen.Engine.Build.Guard
   alias Kogen.Engine.Build.Request
@@ -13,6 +14,23 @@ defmodule Kogen.Engine.Build.Finish do
 
   @spec run(Session.t(), :landed | :failed | :parked, term()) :: {:ok, Result.t()}
   def run(%Session{} = session, status, reason) do
+    case CandidateSnapshot.before_finish(session, status, reason) do
+      :ok ->
+        finish(session, status, reason)
+
+      {:error, detail} ->
+        terminal_failure(
+          session,
+          %Failure{
+            class: :controller,
+            reason: :candidate_snapshot_failed,
+            detail: inspect(detail)
+          }
+        )
+    end
+  end
+
+  defp finish(%Session{} = session, status, reason) do
     preserve = preserve_candidate(session, status)
     release = release_claim(session)
     lifecycle = cleanup_result(preserve, release)

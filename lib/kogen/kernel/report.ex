@@ -52,6 +52,9 @@ defmodule Kogen.Kernel.Report do
         {"acceptance_results", event_payload(events, "acceptance_result", :ledger, [])},
         {"check_receipts", event_payload(events, "check_result", :receipts, [])},
         {"excused_flakes", excused_flakes(events)},
+        {"candidate_diffs", candidate_diffs(run, events)},
+        {"red_checks", latest_candidate_value(events, :red_checks, [])},
+        {"acceptance_items", latest_candidate_value(events, :acceptance_items, [])},
         {"model_stages", model_stages(events)},
         {"phase_timings", phase_timings(events)},
         {"findings", findings(events)},
@@ -194,6 +197,32 @@ defmodule Kogen.Kernel.Report do
       _event -> nil
     end
   end
+
+  defp candidate_diffs(%Run{} = run, events) do
+    for %Event{event: "candidate_diff"} = event <- events do
+      json_object([
+        {"attempt", nullable(event.attempt)},
+        {"reason", nullable(event.reason)},
+        {"file", nullable(event.candidate_diff)},
+        {"source_path", candidate_source(run, event.candidate_diff)},
+        {"protected_paths_changed", event.excluded_paths || []},
+        {"red_checks", event.red_checks || []},
+        {"acceptance_items", event.acceptance_items || []}
+      ])
+    end
+  end
+
+  defp latest_candidate_value(events, key, default) do
+    events
+    |> Enum.reverse()
+    |> Enum.find_value(default, fn
+      %Event{event: "candidate_diff"} = event -> Map.get(event, key)
+      _other -> nil
+    end)
+  end
+
+  defp candidate_source(_run, nil), do: :null
+  defp candidate_source(%Run{dir: dir}, filename), do: Path.join(dir, filename)
 
   defp stop(events) do
     case finished_event(events) do
