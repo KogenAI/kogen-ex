@@ -33,7 +33,8 @@ defmodule KogenChecks.CapabilityGuard do
       global_mutation?(target, function) ->
         "#{inspect(target)}.#{function}/#{arity} mutates process-global state"
 
-      ambient_discovery?(target, function) and not kernel_module?(caller) ->
+      ambient_discovery?(target, function) and not kernel_module?(caller) and
+          not sandbox_nesting_probe?(caller, target, function) ->
         "#{inspect(target)}.#{function}/#{arity} is ambient discovery; only Kogen.Kernel.* may call it"
 
       true ->
@@ -75,6 +76,11 @@ defmodule KogenChecks.CapabilityGuard do
 
   defp ambient_discovery?(File, function), do: function in [:cwd, :cwd!]
   defp ambient_discovery?(_target, _function), do: false
+
+  # Seatbelt cannot nest, so the sandbox wrapper itself must read the KOGEN_SANDBOXED marker
+  # from the OS environment at wrap time; no caller can be trusted to pass it down.
+  defp sandbox_nesting_probe?(Kogen.Proc.Sandbox, System, :get_env), do: true
+  defp sandbox_nesting_probe?(_caller, _target, _function), do: false
 
   defp kernel_module?(nil), do: false
 

@@ -73,7 +73,7 @@ defmodule Kogen.Proc.Runner do
     with {:ok, artifacts} <- prepare_artifacts(request) do
       result =
         with {:ok, port} <- open_port(request, artifacts),
-             :ok <- send_environment(port, request.env) do
+             :ok <- send_environment(port, Map.merge(request.env, Sandbox.child_env())) do
           collect(request, artifacts, port, owner_monitor, started_at)
         end
 

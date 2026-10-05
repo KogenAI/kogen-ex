@@ -55,6 +55,24 @@ defmodule KogenChecks.CapabilityGuardTest do
     assert :ok
   end
 
+  test "lets only the sandbox wrapper read the nesting marker" do
+    event = {:remote_function, [line: 1], System, :get_env, 1}
+    sandbox_env = %{__ENV__ | module: Kogen.Proc.Sandbox}
+
+    assert KogenChecks.CapabilityGuard.trace(event, sandbox_env) == :ok
+
+    assert_raise CompileError, ~r/only Kogen.Kernel/, fn ->
+      KogenChecks.CapabilityGuard.trace(event, %{__ENV__ | module: Kogen.Proc.Runner})
+    end
+
+    assert_raise CompileError, ~r/only Kogen.Kernel/, fn ->
+      KogenChecks.CapabilityGuard.trace(
+        {:remote_function, [line: 1], System, :user_home, 0},
+        sandbox_env
+      )
+    end
+  end
+
   defp assert_compile_failure(call, message) do
     error =
       assert_raise CompileError, fn ->

@@ -5,6 +5,8 @@ defmodule Kogen.Proc.Sandbox do
   macOS uses `sandbox-exec`. Linux remains unrestricted until a bubblewrap policy is designed.
   """
 
+  @marker "KOGEN_SANDBOXED"
+
   @enforce_keys [:enabled, :home, :project_root, :origin, :workspace, :run_dir, :tmp_dir]
   defstruct @enforce_keys ++ [workspace_is_project: false]
 
@@ -21,17 +23,27 @@ defmodule Kogen.Proc.Sandbox do
 
   @spec command([String.t()], t() | nil) ::
           {:ok, [String.t()]} | {:error, term()}
-  def command(argv, nil), do: {:ok, argv}
+  # macOS cannot nest Seatbelt profiles: inside Kogen's own sandbox (KOGEN_SANDBOXED=1 in the
+  # OS environment) applying another fails with `sandbox_apply: Operation not permitted`, and
+  # the outer sandbox already confines this process and everything it spawns. So wrapping is
+  # a no-op there.
+  def command(argv, sandbox) do
+    if nested?(), do: {:ok, argv}, else: confine(argv, sandbox)
+  end
 
-  def command(argv, %__MODULE__{enabled: true} = sandbox) do
+  @doc """
+  Environment every child must carry: callers build explicit child environments that would
+  otherwise drop the marker and let a nested Kogen try to wrap again.
+  """
+  @spec child_env() :: %{optional(String.t()) => String.t()}
+  def child_env, do: if(nested?(), do: Map.new([{@marker, "1"}]), else: %{})
+
+  defp nested?, do: System.get_env(@marker) == "1"
+
+  defp confine(argv, %__MODULE__{enabled: true} = sandbox) do
     case :os.type() do
       {:unix, :darwin} ->
-        with {:ok, generated_profile} <- profile(sandbox) do
-          # Mark children so a nested Kogen skips its own sandbox: macOS forbids nesting.
-          {:ok,
-           ["/usr/bin/sandbox-exec", "-p", generated_profile, "/usr/bin/env", "KOGEN_SANDBOXED=1"] ++
-             argv}
-        end
+        wrap(argv, sandbox)
 
       # TODO(linux): implement equivalent confinement with bubblewrap.
       _other ->
@@ -39,7 +51,16 @@ defmodule Kogen.Proc.Sandbox do
     end
   end
 
-  def command(argv, %__MODULE__{enabled: false}), do: {:ok, argv}
+  defp confine(argv, _disabled_or_missing), do: {:ok, argv}
+
+  defp wrap(argv, sandbox) do
+    with {:ok, generated_profile} <- profile(sandbox) do
+      # Mark children so a nested Kogen skips its own sandbox: macOS forbids nesting.
+      {:ok,
+       ["/usr/bin/sandbox-exec", "-p", generated_profile, "/usr/bin/env", "KOGEN_SANDBOXED=1"] ++
+         argv}
+    end
+  end
 
   @spec profile(t()) :: {:ok, String.t()} | {:error, term()}
   def profile(%__MODULE__{} = sandbox) do

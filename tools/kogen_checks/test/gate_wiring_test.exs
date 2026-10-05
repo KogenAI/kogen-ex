@@ -138,7 +138,11 @@ defmodule KogenChecks.GateWiringTest do
             {System, :os_time}
           ],
           message: "Pass explicit values; read ambient configuration in Kogen.Kernel.",
-          allow: ["lib/kogen/kernel/", "test/support/testkit/temp.ex"]
+          allow: [
+            "lib/kogen/kernel/",
+            "lib/kogen/proc/sandbox.ex",
+            "test/support/testkit/temp.ex"
+          ]
         }
       ]
     ],
