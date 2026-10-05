@@ -2,79 +2,55 @@ defmodule Kogen.Build.Cycle do
   @moduledoc "Pure transition function for one Build attempt."
 
   alias Kogen.Build.Cycle.Escalation
+  alias Kogen.Build.Cycle.EventData
+  alias Kogen.Build.Cycle.Parallel
   alias Kogen.Build.Cycle.ProviderFailure
+  alias Kogen.Build.Cycle.Repair
+  alias Kogen.Build.Cycle.State
   alias Kogen.Build.Cycle.Stop
   alias Kogen.Build.Recipe
   alias Kogen.Contracts.Failure
 
-  defmodule State do
-    @moduledoc false
-
-    @enforce_keys [
-      :approval,
-      :recipe,
-      :stage,
-      :repairs_left,
-      :repair_cap,
-      :last_failed_test_count,
-      :progress_repair_used?,
-      :provider_retries,
-      :last_tree,
-      :repair_tree,
-      :pending_land,
-      :attempt,
-      :escalation_used?,
-      :last_gate_findings,
-      :last_gate_summary,
-      :result
-    ]
-    defstruct @enforce_keys
-
-    @type t :: %__MODULE__{
-            approval: term(),
-            recipe: Recipe.t(),
-            stage: atom(),
-            repairs_left: non_neg_integer(),
-            repair_cap: non_neg_integer(),
-            last_failed_test_count: non_neg_integer() | nil,
-            progress_repair_used?: boolean(),
-            provider_retries: non_neg_integer(),
-            last_tree: String.t() | nil,
-            repair_tree: String.t() | nil,
-            pending_land: boolean(),
-            attempt: :builder | :escalation,
-            escalation_used?: boolean(),
-            last_gate_findings: [String.t()],
-            last_gate_summary: map() | nil,
-            result: {atom(), term()} | nil
-          }
-  end
-
-  @type terminal :: :landed | :failed | :parked
-  @type run_stage :: :context | :plan | :develop | :fix | :check | :review | :commit | :land
+  @type terminal :: :landed | :failed | :parked | :green
+  @type run_stage ::
+          :context | :plan | :develop | :fix | :check | :review | :audit | :commit | :land
   @type effect ::
           {:run, run_stage(), map()}
           | {:escalate, map()}
+          | {:parallel, map()}
+          | {:adopt, State.attempt()}
           | {:record, map()}
           | {:finish, terminal(), term()}
 
-  @stage_success_events [:context, :plan, :develop, :done_gate, :fix, :check]
+  @stage_success_events [:context, :plan, :develop, :done_gate, :fix, :check, :audit]
 
+  @doc """
+  Options: `approval`, `repairs` (a ladder recipe uses its own cap), `recipe`, and for one
+  parallel ladder member `rung` plus `sub: true`. A sub-cycle starts at develop, never
+  escalates, and finishes `:green` instead of committing.
+  """
   @spec new(%{
           required(:approval) => term(),
           required(:repairs) => non_neg_integer(),
-          required(:recipe) => Recipe.t()
+          required(:recipe) => Recipe.t(),
+          optional(:rung) => non_neg_integer(),
+          optional(:sub) => boolean()
         }) :: State.t()
-  def new(%{approval: approval, repairs: repairs, recipe: recipe})
+  def new(%{approval: approval, repairs: repairs, recipe: recipe} = options)
       when is_integer(repairs) and repairs >= 0 and is_map(recipe) do
     if Recipe.stages(recipe) == [] do
       raise ArgumentError, "cycle recipe requires at least one stage"
     end
 
+    repairs = Repair.cap(recipe, repairs)
+    rung = Map.get(options, :rung, 0)
+
     %State{
       approval: approval,
       recipe: recipe,
       stage: :ready,
+      rung: rung,
+      sub?: Map.get(options, :sub, false),
       repairs_left: repairs,
       repair_cap: repairs,
       last_failed_test_count: nil,
@@ -83,7 +59,7 @@ defmodule Kogen.Build.Cycle do
       last_tree: nil,
       repair_tree: nil,
       pending_land: false,
-      attempt: :builder,
+      attempt: Recipe.rung_attempt(recipe, rung),
       escalation_used?: false,
       last_gate_findings: [],
       last_gate_summary: nil,
@@ -96,6 +72,11 @@ defmodule Kogen.Build.Cycle do
 
   @spec step(State.t(), term()) :: {State.t(), [effect()]}
   def step(%State{result: result} = state, _event) when not is_nil(result), do: {state, []}
+
+  def step(%State{stage: :ready, sub?: true} = state, :start) do
+    next = %{state | stage: :develop}
+    {next, [run(:develop, stage_args(next))]}
+  end
 
   def step(%State{stage: :ready} = state, :start) do
     case List.first(Recipe.stages(state.recipe)) do
@@ -135,6 +116,29 @@ defmodule Kogen.Build.Cycle do
     finish(state, :parked, :base_moved)
   end
 
+  def step(state, :budget_exhausted), do: finish(state, :failed, :budget_exhausted)
+
+  def step(%State{stage: :parallel} = state, {:parallel_done, [_ | _] = outcomes}) do
+    {next, winner, effects} = Parallel.done(state, outcomes)
+
+    case winner.status do
+      :green ->
+        next = %{next | stage: :commit, pending_land: false}
+        {next, effects ++ [run(:commit, stage_args(next, %{findings: []}))]}
+
+      _red ->
+        {after_red, more} = fail_candidate(next, winner.reason, :parallel_red)
+        {after_red, effects ++ more}
+    end
+  end
+
+  def step(%State{stage: :check} = state, {:stage_failed, :check, %Failure{} = failure})
+      when failure.class == :candidate and failure.reason == :acceptance_red do
+    if Recipe.auditor(state.recipe),
+      do: audit(state, :check, nil),
+      else: repair(state, :acceptance_red, %{failed_stage: :check})
+  end
+
   def step(state, {:stage_failed, stage, %Failure{} = failure}) do
     if stage == state.stage and stage != :done_gate do
       handle_failure(state, stage, failure)
@@ -145,13 +149,33 @@ defmodule Kogen.Build.Cycle do
 
   def step(state, _event), do: fail_controller(state, :unexpected_event)
 
-  defp stage_succeeded(state, stage, _data) when stage in [:context, :plan, :fix, :check],
+  defp stage_succeeded(state, :plan, data) do
+    case Parallel.start(state, data) do
+      {:ok, next, effects} -> {next, [stage_success_record(:plan) | effects]}
+      :sequential -> advance_and_run(state, :plan)
+    end
+  end
+
+  defp stage_succeeded(state, stage, _data) when stage in [:context, :fix, :check],
     do: advance_and_run(state, stage)
 
-  defp stage_succeeded(state, :develop, data) do
-    tree = tree_from(data)
+  defp stage_succeeded(state, :audit, data) do
+    source = state.audit_source
+    gate = state.pending_gate
+    state = %{state | pending_gate: nil, audit_source: nil}
 
-    if same_repaired_tree?(state, tree) do
+    cond do
+      Map.get(data, :remaining) != 0 and source == :done_gate -> red_gate(state, gate)
+      Map.get(data, :remaining) != 0 -> repair(state, :acceptance_red, %{failed_stage: :check})
+      source == :done_gate -> advance_and_run(state, :done_gate)
+      true -> {%{state | stage: :check}, [run(:check, stage_args(state))]}
+    end
+  end
+
+  defp stage_succeeded(state, :develop, data) do
+    tree = EventData.tree(data)
+
+    if EventData.same_repaired_tree?(state.repair_tree, tree) do
       fail_candidate(state, :unchanged, :unchanged)
     else
       case next_recipe_stage(state, :develop) do
@@ -177,9 +201,11 @@ defmodule Kogen.Build.Cycle do
         advance_and_run(state, :done_gate)
 
       :gate_red ->
-        {next, progress} = update_test_progress(state, data)
-        next = %{next | last_gate_findings: Escalation.findings(data)}
-        repair(next, :done_gate_red, %{outcome: :gate_red, test_progress: progress})
+        state = %{state | last_gate_findings: Escalation.findings(data)}
+
+        if Recipe.auditor(state.recipe) && Map.get(data, :acceptance_only) == true,
+          do: audit(state, :done_gate, data),
+          else: red_gate(state, data)
 
       reason when reason in [:turn_cap, :wall_cap] ->
         fail_candidate(state, reason, reason)
@@ -189,29 +215,15 @@ defmodule Kogen.Build.Cycle do
     end
   end
 
-  defp update_test_progress(state, %{failed_test_count: count})
-       when is_integer(count) and count >= 0 do
-    previous = state.last_failed_test_count
-
-    grant? =
-      not state.progress_repair_used? and is_integer(previous) and count < previous
-
-    next = %{
-      state
-      | last_failed_test_count: count,
-        progress_repair_used?: state.progress_repair_used? or grant?,
-        repairs_left: state.repairs_left + if(grant?, do: 1, else: 0)
-    }
-
-    {next,
-     %{
-       previous_failed_test_count: previous,
-       failed_test_count: count,
-       progress_repair_granted: grant?
-     }}
+  defp audit(state, source, gate) do
+    next = %{state | stage: :audit, audit_source: source, pending_gate: gate}
+    {next, [run(:audit, stage_args(next, %{source: source}))]}
   end
 
-  defp update_test_progress(state, _data), do: {%{state | last_failed_test_count: nil}, nil}
+  defp red_gate(state, data) do
+    {next, detail} = Repair.red_gate(state, data)
+    repair(next, :done_gate_red, detail)
+  end
 
   defp review_result(state, :accept, findings) do
     case next_recipe_stage(state, :review) do
@@ -236,7 +248,7 @@ defmodule Kogen.Build.Cycle do
   defp commit_succeeded(state, data) do
     case next_recipe_stage(state, :commit) do
       :land ->
-        case landing_identity(data) do
+        case EventData.landing_identity(data) do
           {:ok, identity} ->
             next = %{state | stage: :land, pending_land: true}
 
@@ -257,6 +269,9 @@ defmodule Kogen.Build.Cycle do
 
   defp advance_and_run(state, completed_stage) do
     case next_recipe_stage(state, completed_stage) do
+      :commit when state.sub? ->
+        finish(state, :green, :green)
+
       next_stage when next_stage in [:plan, :develop, :fix, :check, :review, :commit] ->
         next = %{state | stage: next_stage}
         args = if next_stage == :commit, do: %{findings: []}, else: %{}
@@ -278,16 +293,6 @@ defmodule Kogen.Build.Cycle do
     end
   end
 
-  defp landing_identity(data) do
-    keys = [:approval_commit, :run_id, :expected_parent, :final_tree, :candidate_commit]
-
-    if Enum.all?(keys, &is_binary(Map.get(data, &1))) do
-      {:ok, Map.new(keys, &{&1, Map.fetch!(data, &1)})}
-    else
-      :error
-    end
-  end
-
   defp handle_failure(state, stage, %Failure{class: :candidate, reason: reason}) do
     repair(state, reason, %{failed_stage: stage})
   end
@@ -299,7 +304,7 @@ defmodule Kogen.Build.Cycle do
   defp handle_failure(state, stage, %Failure{class: :provider, reason: reason}) do
     case ProviderFailure.retry(state, stage, reason) do
       {:retry, next, effects} -> {next, effects}
-      {:stop, result} -> finish(state, :failed, result)
+      {:stop, result} -> fail_candidate(state, result, :provider_failed)
     end
   end
 
@@ -311,23 +316,18 @@ defmodule Kogen.Build.Cycle do
     do: finish(state, :failed, {:controller, :unknown_failure_class})
 
   defp repair(state, reason, detail) do
-    if state.repairs_left == 0 do
-      trigger = if reason == :done_gate_red, do: :gate_red, else: :repair_cap
-      fail_candidate(state, :repair_cap, trigger)
-    else
-      next = %{
-        state
-        | stage: :develop,
-          repairs_left: state.repairs_left - 1,
-          repair_tree: state.last_tree,
-          pending_land: false
-      }
+    case Repair.decide(state, reason, detail) do
+      {:stop, stop_reason, trigger} ->
+        fail_candidate(state, stop_reason, trigger)
 
-      {next,
-       [
-         record(:repair, %{reason: reason, repairs_left: next.repairs_left, detail: detail}),
-         run(:develop, stage_args(next, %{repair: detail, reason: reason}))
-       ]}
+      {:repair, next, detail} ->
+        next = %{next | stage: :develop, repair_tree: state.last_tree, pending_land: false}
+
+        {next,
+         [
+           record(:repair, %{reason: reason, repairs_left: next.repairs_left, detail: detail}),
+           run(:develop, stage_args(next, %{repair: detail, reason: reason}))
+         ]}
     end
   end
 
@@ -350,6 +350,11 @@ defmodule Kogen.Build.Cycle do
     finish(state, :failed, {:controller, reason})
   end
 
+  defp finish(%State{sub?: true} = state, status, reason) do
+    {%{state | stage: status, result: {status, reason}, pending_land: false},
+     [{:finish, status, reason}]}
+  end
+
   defp finish(state, status, reason) do
     next = %{state | stage: status, result: {status, reason}, pending_land: false}
 
@@ -364,14 +369,6 @@ defmodule Kogen.Build.Cycle do
        }),
        {:finish, status, reason}
      ]}
-  end
-
-  defp same_repaired_tree?(%State{repair_tree: nil}, _tree), do: false
-  defp same_repaired_tree?(%State{repair_tree: tree}, tree) when is_binary(tree), do: true
-  defp same_repaired_tree?(_state, _tree), do: false
-
-  defp tree_from(data) do
-    Map.get(data, :tree) || Map.get(data, :candidate_tree)
   end
 
   defp stage_args(state, extra \\ %{}) do

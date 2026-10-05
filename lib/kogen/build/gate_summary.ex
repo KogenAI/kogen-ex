@@ -34,6 +34,53 @@ defmodule Kogen.Build.GateSummary do
     }
   end
 
+  @doc """
+  Selector inputs from one raw gate. `acceptance_only` means every red command failed only
+  on tests in `acceptance_path`; `checks_green` adds a fully green gate. `failure_count` is
+  the progress measure for repairs: failing tests (or findings) plus red commands without any.
+  """
+  @spec metrics(map() | nil, String.t()) :: map()
+  def metrics(nil, _acceptance_path) do
+    %{
+      checks_green: false,
+      acceptance_only: false,
+      failing_acceptance: nil,
+      failing_tests: nil,
+      failure_count: nil
+    }
+  end
+
+  def metrics(gate, acceptance_path) when is_map(gate) do
+    red =
+      Enum.filter(
+        Map.get(gate, :fixes, []) ++ Map.get(gate, :checks, []),
+        &(red?(&1) and not Map.get(&1, :base_red?, false))
+      )
+
+    findings = red |> Enum.flat_map(&Map.get(&1, :findings, [])) |> Enum.uniq_by(&identity/1)
+    acceptance = Enum.filter(findings, &(Map.get(&1, :path) == acceptance_path))
+    silent = Enum.count(red, &(Map.get(&1, :findings, []) == []))
+
+    only =
+      red != [] and silent == 0 and Enum.all?(red, &(Map.get(&1, :tool) == "exunit")) and
+        length(acceptance) == length(findings)
+
+    tests = Map.get(gate, :failed_test_count) || length(findings)
+
+    %{
+      checks_green: red == [] or only,
+      acceptance_only: only,
+      failing_acceptance: length(acceptance),
+      failing_tests: tests,
+      failure_count: tests + silent
+    }
+  end
+
+  defp red?(command), do: is_integer(Map.get(command, :exit_level)) and command.exit_level > 0
+
+  defp identity(finding),
+    do: Map.get(finding, :symbol) || {Map.get(finding, :path), Map.get(finding, :line)}
+
   defp command(command, kind) do
     summary = %{
       kind: kind,
