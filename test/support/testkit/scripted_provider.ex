@@ -11,7 +11,7 @@ defmodule Kogen.E2e.ScriptedProvider.Step do
   @moduledoc false
 
   @enforce_keys [:stage, :text, :calls]
-  defstruct @enforce_keys ++ [model: nil, effort: nil, error: nil]
+  defstruct @enforce_keys ++ [model: nil, effort: nil, error: nil, usage: nil]
 
   @type stage :: :context | :plan | :develop | :review | :audit | :shape
   @type t :: %__MODULE__{
@@ -20,7 +20,8 @@ defmodule Kogen.E2e.ScriptedProvider.Step do
           calls: [Kogen.E2e.ScriptedProvider.Call.t()],
           model: String.t() | nil,
           effort: String.t() | nil,
-          error: Kogen.Contracts.ProviderError.class() | nil
+          error: Kogen.Contracts.ProviderError.class() | nil,
+          usage: map() | nil
         }
 end
 
@@ -91,6 +92,11 @@ defmodule Kogen.E2e.ScriptedProvider do
   @spec call(Step.stage(), String.t(), map()) :: Step.t()
   def call(stage, name, arguments) when stage in @known_stages and is_map(arguments),
     do: tool_step(stage, name, arguments)
+
+  @doc "Reports `usage` (`:input`, `:cached_input`, `:output`, `:reasoning` counts) for the step's response."
+  @spec with_usage(Step.t(), map()) :: Step.t()
+  def with_usage(%Step{} = step, usage) when is_map(usage),
+    do: %{step | usage: Map.merge(@zero_usage, usage)}
 
   @doc """
   Answers only requests for `model` (and `effort`, when given). Parallel ladder members
@@ -250,7 +256,7 @@ defmodule Kogen.E2e.ScriptedProvider do
       id: "scripted-response-#{sequence}",
       text: step.text,
       tool_calls: calls,
-      usage: @zero_usage,
+      usage: step.usage || @zero_usage,
       raw_items: raw_items(step, calls)
     }
   end

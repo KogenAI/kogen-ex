@@ -28,6 +28,7 @@ defmodule Kogen.Harness.Opts do
     models: %{builder: {"gpt-6-luna", "max"}, strong: {"gpt-6.1-sol", "high"}},
     limits: %{max_turns: 60, wall_ms: 1_800_000},
     resilience: %Policy{},
+    request_tags: %{},
     repairs_left: 2,
     protected: []
   ]
@@ -64,6 +65,7 @@ defmodule Kogen.Harness.Opts do
           },
           limits: %{max_turns: pos_integer(), wall_ms: pos_integer() | :infinity},
           resilience: Policy.t(),
+          request_tags: %{optional(:attempt) => term(), optional(:rung) => String.t() | nil},
           repairs_left: non_neg_integer(),
           protected: [String.t()]
         }

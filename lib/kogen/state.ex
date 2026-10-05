@@ -9,6 +9,7 @@ defmodule Kogen.State do
   alias Kogen.State.Event
   alias Kogen.State.Json
   alias Kogen.State.Operations
+  alias Kogen.State.RequestUsage
   alias Kogen.State.Run
   alias Kogen.State.Usage
 
@@ -48,6 +49,10 @@ defmodule Kogen.State do
   @spec attempt_usage(Run.t(), term()) ::
           {:ok, %{tokens: map(), model_wall_ms: non_neg_integer()}} | {:error, term()}
   defdelegate attempt_usage(run, attempt), to: Usage, as: :attempt
+
+  @doc "Usage the request journal saw that no finished stage recorded, as `model_stage` events."
+  @spec unfinished_usage(Run.t(), [Event.t()]) :: {:ok, [Event.t()]} | {:error, term()}
+  defdelegate unfinished_usage(run, events), to: RequestUsage, as: :unfinished
 
   @spec put_landing(Run.t(), map()) :: :ok | {:error, term()}
   defdelegate put_landing(run, identity), to: Operations

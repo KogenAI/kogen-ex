@@ -58,6 +58,25 @@ defmodule Kogen.Harness.Codec do
 
   def parse_review(_text), do: :error
 
+  @doc "Size of a request's history: items, JSON bytes and the bytes of tool outputs in it."
+  @spec history_size([map()]) :: %{
+          items: non_neg_integer(),
+          bytes: non_neg_integer(),
+          tool_output_bytes: non_neg_integer()
+        }
+  def history_size(items) when is_list(items) do
+    outputs =
+      for %{"type" => "function_call_output", "output" => out} <- items,
+          is_binary(out),
+          do: byte_size(out)
+
+    %{
+      items: length(items),
+      bytes: :erlang.iolist_size(:json.encode(items)),
+      tool_output_bytes: Enum.sum(outputs)
+    }
+  end
+
   @spec usage(Usage.t(), map()) :: Usage.t()
   def usage(%Usage{} = total, response_usage) when is_map(response_usage) do
     Usage.add(total, provider_usage(response_usage))

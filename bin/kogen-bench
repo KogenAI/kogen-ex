@@ -100,7 +100,56 @@ PY
 )
 mkdir -p "$bench_tmpdir"
 scratch=$(mktemp -d "${bench_tmpdir%/}/kogen-bench.XXXXXX")
-trap 'rm -rf "$scratch"' EXIT
+bench_started_at=$(python3 -c 'import time; print(time.time())')
+# Every run, however it ends, leaves its model-request journal beside usage.json.
+copy_requests() {
+  python3 - "$out_dir" "${slug:-}" "${shaper_root:-}" "${HOME:-}" "$bench_started_at" <<'PY' || :
+import glob
+import json
+import os
+import sys
+
+out_dir, slug, shaper_root, home, started_at = sys.argv[1:]
+started_at = float(started_at) - 1.0
+
+
+def fresh(path):
+    return os.path.isfile(path) and os.path.getmtime(path) >= started_at
+
+
+def read_json(path):
+    try:
+        with open(path, encoding="utf-8") as source:
+            return json.load(source)
+    except (OSError, ValueError):
+        return {}
+
+
+sources = []
+if shaper_root:
+    shaped = [path for path in glob.glob(os.path.join(shaper_root, "*", "requests.jsonl")) if fresh(path)]
+    sources += sorted(shaped, key=os.path.getmtime)
+
+journal = read_json(os.path.join(out_dir, "report.json")).get("journal")
+if isinstance(journal, str) and os.path.isfile(os.path.join(journal, "requests.jsonl")):
+    sources.append(os.path.join(journal, "requests.jsonl"))
+elif slug and home:
+    pattern = os.path.join(home, ".kogen", "workspaces", "*", "runs", "*", "requests.jsonl")
+    runs = [
+        path for path in glob.glob(pattern)
+        if fresh(path) and read_json(os.path.join(os.path.dirname(path), "run.json")).get("slug") == slug
+    ]
+    sources += sorted(runs, key=os.path.getmtime)
+
+with open(os.path.join(out_dir, "requests.jsonl"), "w", encoding="utf-8") as target:
+    for source_path in sources:
+        with open(source_path, encoding="utf-8", errors="replace") as source:
+            for line in source:
+                if line.strip():
+                    target.write(line.rstrip("\n") + "\n")
+PY
+}
+trap 'copy_requests; rm -rf "$scratch"' EXIT
 project_dir="$scratch/project"
 origin="$scratch/origin.git"
 events_file="$out_dir/events.jsonl"
@@ -112,7 +161,7 @@ mkdir -p "$out_dir"
 : > "$log_file"
 : > "$out_dir/final.diff"
 rm -f "$out_dir/candidate.diff" "$out_dir"/candidate-*.diff
-rm -f "$out_dir/report.json" "$out_dir/shape.json"
+rm -f "$out_dir/report.json" "$out_dir/shape.json" "$out_dir/requests.jsonl"
 : > "$timings_file"
 : > "$events_file"
 printf 'shape\n' > "$phase_file"
@@ -586,6 +635,7 @@ for stage in report.get("model_stages", []):
         "tokens": stage_tokens,
         "wall_ms": int(stage.get("wall_ms", 0) or 0),
         "usage_available": True,
+        "partial": stage.get("partial") is True,
     })
 
 if failed_model and failed_stage != "shape":
@@ -978,6 +1028,7 @@ for stage in report.get("model_stages", []):
         "tokens": tokens,
         "wall_ms": int(stage.get("wall_ms", 0) or 0),
         "usage_available": True,
+        "partial": stage.get("partial") is True,
     })
 
 with open(timing_input, encoding="utf-8") as source:

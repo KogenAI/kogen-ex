@@ -13,7 +13,7 @@ defmodule Kogen.Http.Transport do
 
   defmodule State do
     @moduledoc false
-    defstruct status: nil, chunks: [], size: 0, total_deadline: :infinity
+    defstruct status: nil, chunks: [], size: 0, total_deadline: :infinity, on_first_byte: nil
   end
 
   @max_response_bytes 16_000_000
@@ -68,7 +68,10 @@ defmodule Kogen.Http.Transport do
           ref,
           now + min(Keyword.get(opts, :first_byte_ms, timeout_ms), timeout_ms),
           timeout_ms,
-          %State{total_deadline: total_deadline(now, Keyword.get(opts, :total_ms))},
+          %State{
+            total_deadline: total_deadline(now, Keyword.get(opts, :total_ms)),
+            on_first_byte: Keyword.get(opts, :on_first_byte)
+          },
           profile
         )
 
@@ -165,12 +168,14 @@ defmodule Kogen.Http.Transport do
           receive_response(ref, deadline, idle_timeout_ms, %{state | status: 200}, profile)
 
         {:http, {^ref, :stream, chunk}} when is_binary(chunk) ->
+          first_byte(state)
           append_chunk(ref, idle_timeout_ms, state, chunk, profile)
 
         {:http, {^ref, :stream_end, _headers}} ->
           finish_stream(state)
 
         {:http, {^ref, {{_version, status, _reason}, _headers, body}}} ->
+          first_byte(state)
           full_response(status, body)
 
         {:http, {^ref, {:error, reason}}} ->
@@ -182,6 +187,12 @@ defmodule Kogen.Http.Transport do
       end
     end
   end
+
+  # Tells the caller once, on the first body byte, so a stalled request shows when it stalled.
+  defp first_byte(%State{chunks: [], on_first_byte: callback}) when is_function(callback, 0),
+    do: callback.()
+
+  defp first_byte(%State{}), do: :ok
 
   defp append_chunk(ref, idle_timeout_ms, state, chunk, profile) do
     size = state.size + byte_size(chunk)

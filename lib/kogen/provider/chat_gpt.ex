@@ -192,7 +192,8 @@ defmodule Kogen.Provider.ChatGPT do
              config.timeout_ms,
              proxy_env: config.proxy_env,
              first_byte_ms: config.first_byte_timeout_ms,
-             total_ms: config.total_timeout_ms
+             total_ms: config.total_timeout_ms,
+             on_first_byte: request.on_first_byte
            ) do
       handle_response(response)
     else

@@ -56,6 +56,7 @@ defmodule Kogen.Engine.Build.Reviewer do
       stage: :review,
       model: model,
       effort: effort,
+      attempt: session.attempt,
       tokens: usage,
       wall_ms: wall_ms
     })

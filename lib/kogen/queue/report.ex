@@ -13,6 +13,7 @@ defmodule Kogen.Queue.Report do
     with {:ok, runs} <- StateView.runs(state_root, slug),
          {:ok, %Run{} = run} <- StateView.latest(runs),
          {:ok, events} <- StateView.events(run),
+         {:ok, unfinished} <- State.unfinished_usage(run, events),
          {:ok, interrupted?} <- StateView.interrupted?(run, events),
          status =
            (if interrupted? do
@@ -21,7 +22,7 @@ defmodule Kogen.Queue.Report do
               State.status(origin, state_root, slug, base, git_env)
             end),
          {:ok, landed_sha} <- landed_sha(status, origin, base, slug, git_env) do
-      encode(run, events, status, landed_sha)
+      encode(run, events ++ unfinished, status, landed_sha)
     else
       {:ok, nil} -> {:error, :missing_run}
       error -> error
@@ -156,7 +157,8 @@ defmodule Kogen.Queue.Report do
         {"model", event.model},
         {"effort", event.effort},
         {"tokens", event.tokens},
-        {"wall_ms", event.wall_ms}
+        {"wall_ms", event.wall_ms},
+        {"partial", event.partial == true}
       ])
     end
   end

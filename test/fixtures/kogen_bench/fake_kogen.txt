@@ -13,6 +13,10 @@ case "$1 ${2:-}" in
         shift
       fi
     done
+    shape_dir="${TMPDIR:-/tmp}/kogen-shaper/$slug/fake-shape"
+    mkdir -p "$shape_dir"
+    printf '%s\n' '{"stage":"shape","outcome":"ok","retries":0}' > "$shape_dir/requests.jsonl"
+    [ -z "${FAKE_KOGEN_SHAPE_EXIT:-}" ] || exit "$FAKE_KOGEN_SHAPE_EXIT"
     mkdir -p "$project/.kogen/intents/$slug"
     printf '%s\n' 'shaped Intent' > "$project/.kogen/intents/$slug/intent.md"
     printf '%s\n' '{"slug":"task","usage":[]}'
@@ -56,12 +60,14 @@ case "$1 ${2:-}" in
     run_dir="$project/.kogen/test-run"
     mkdir -p "$run_dir"
     printf '%s\n' 'candidate implementation' > "$run_dir/candidate.diff"
-    python3 - "$run_dir/candidate.diff" <<'PY'
+    printf '%s\n' '{"stage":"develop","outcome":"ok","retries":0}' \
+      '{"stage":"develop","outcome":"timeout","retries":0}' > "$run_dir/requests.jsonl"
+    python3 - "$run_dir/candidate.diff" "$run_dir" <<'PY'
 import json
 import os
 import sys
 
-source_path = sys.argv[1]
+source_path, journal = sys.argv[1:]
 best = None
 if os.environ.get("FAKE_KOGEN_BEST"):
     best = {
@@ -71,6 +77,7 @@ if os.environ.get("FAKE_KOGEN_BEST"):
     }
 print(json.dumps({
     "status": "failed",
+    "journal": journal,
     "best_candidate": best,
     "candidate_diffs": [{
         "attempt": "builder",
@@ -82,7 +89,15 @@ print(json.dumps({
     }],
     "attempts": [],
     "escalations": [],
-    "model_stages": [],
+    "model_stages": [{
+        "stage": "develop",
+        "attempt": "builder",
+        "model": "gpt-6-luna",
+        "effort": "max",
+        "tokens": {"input": 300, "output": 30},
+        "wall_ms": 0,
+        "partial": True,
+    }],
     "phase_timings": [],
 }))
 PY

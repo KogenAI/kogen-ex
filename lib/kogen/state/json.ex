@@ -89,6 +89,23 @@ defmodule Kogen.State.Json do
     ArgumentError -> {:error, :invalid_event}
   end
 
+  @doc "A request-journal line of a successful request as a `model_stage` event; any other line is not usage."
+  @spec decode_request(binary()) :: {:ok, Event.t()} | :skip
+  def decode_request(binary) when is_binary(binary) do
+    case decode_object(binary) do
+      {:ok, %{"outcome" => "ok", "tokens" => %{}} = json} ->
+        case event_from_json(Map.put(json, "event", "model_stage")) do
+          {:ok, event} -> {:ok, event}
+          {:error, :invalid_event} -> :skip
+        end
+
+      _not_usage ->
+        :skip
+    end
+  rescue
+    ArgumentError -> :skip
+  end
+
   @spec approval_message(Approval.t()) :: String.t()
   def approval_message(%Approval{} = approval) do
     trailers = [

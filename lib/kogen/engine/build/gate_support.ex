@@ -38,6 +38,7 @@ defmodule Kogen.Engine.Build.GateSupport do
     opts
     |> Map.put(:phase_recorder, opts.phase_recorder || phase_recorder(session))
     |> Map.put(:event_recorder, opts.event_recorder || event_recorder(session))
+    |> Map.put(:request_tags, %{attempt: session.attempt, rung: rung_name(session)})
     |> Map.put(:protected_restorer, opts.protected_restorer || protected_restorer(session))
     |> Map.put(:changed?, opts.changed? || changed_detector(session))
     |> Map.put(:protected, Enum.uniq(opts.protected ++ protected))
@@ -100,6 +101,9 @@ defmodule Kogen.Engine.Build.GateSupport do
   end
 
   def builder_text(%Session{} = session), do: session.intent_text
+
+  defp rung_name(%Session{rung: %{name: name}}), do: name
+  defp rung_name(%Session{}), do: nil
 
   defp phase_recorder(session) do
     fn phase, name, wall_ms, started_at, finished_at ->

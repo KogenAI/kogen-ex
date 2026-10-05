@@ -37,7 +37,9 @@ defmodule Kogen.Harness.Exchange do
   alias Kogen.Harness.PromptCacheKey
   alias Kogen.Harness.Recording
   alias Kogen.Resilience.Policy
+  alias Kogen.Resilience.RequestLog
   alias Kogen.Resilience.Retry
+  alias Kogen.Tooling.Error
 
   @spec respond(Opts.t(), Request.t()) :: {:ok, ModelResponse.t()} | {:error, term()}
   def respond(%Opts{} = opts, %Request{} = exchange_request) do
@@ -65,17 +67,48 @@ defmodule Kogen.Harness.Exchange do
   # One provider call, capped per attempt and by the wall budget. Retryable failures back off
   # with jitter and retry inside that budget; after an overload streak the next model is used.
   defp attempt(opts, exchange_request, request, deadline, retry) do
-    result = provider_call(opts, request, attempt_budget(opts, deadline))
+    probe = RequestLog.start()
+    result = provider_call(opts, request, attempt_budget(opts, deadline), probe)
 
-    case result do
-      {:error, %ProviderError{class: class} = error} ->
-        decision = Retry.next(opts.resilience, retry, class, remaining_ms(deadline))
-        after_failure(opts, {exchange_request, request, deadline}, {error, retry, decision})
+    with :ok <- log_request(opts, exchange_request, retry, probe, result) do
+      case result do
+        {:error, %ProviderError{class: class} = error} ->
+          decision = Retry.next(opts.resilience, retry, class, remaining_ms(deadline))
+          after_failure(opts, {exchange_request, request, deadline}, {error, retry, decision})
 
-      _result ->
-        record_response(opts, exchange_request, result)
+        _result ->
+          record_response(opts, exchange_request, result)
+      end
     end
   end
+
+  # Every provider call leaves one request record in the run journal, whatever its outcome.
+  defp log_request(opts, exchange_request, retry, probe, result) do
+    meta =
+      exchange_request
+      |> Map.take([:stage, :turn, :model, :effort])
+      |> Map.merge(%{
+        retries: retry.attempt - 1,
+        history: Codec.history_size(exchange_request.items),
+        tags: opts.request_tags
+      })
+
+    with {:ok, transcript_path} <- Recording.path(opts) do
+      case RequestLog.append(
+             Path.dirname(transcript_path),
+             RequestLog.record(probe, meta, result)
+           ) do
+        :ok -> :ok
+        {:error, reason} -> {:error, request_log_error(reason)}
+      end
+    end
+  end
+
+  defp request_log_error(reason),
+    do: %Error{
+      reason: :request_log_failed,
+      detail: "Cannot append request record: #{inspect(reason)}"
+    }
 
   defp after_failure(opts, {exchange_request, _request, _deadline}, {error, _retry, :stop}),
     do: record_response(opts, exchange_request, {:error, error})
@@ -202,12 +235,13 @@ defmodule Kogen.Harness.Exchange do
     }
   end
 
-  defp provider_call(_opts, _request, remaining_ms)
+  defp provider_call(_opts, _request, remaining_ms, _probe)
        when is_integer(remaining_ms) and remaining_ms <= 0, do: timeout_error()
 
-  defp provider_call(opts, %ModelRequest{} = request, remaining_ms) do
+  defp provider_call(opts, %ModelRequest{} = request, remaining_ms, probe) do
     caller = self()
     result_ref = make_ref()
+    request = %{request | on_first_byte: RequestLog.first_byte_marker(probe)}
 
     {worker, monitor} =
       spawn_monitor(fn ->

@@ -30,6 +30,44 @@ defmodule Kogen.E2e.KogenBenchTest do
              usage["candidate_diffs"]
   end
 
+  test "copies the shape and Build request journals and keeps partial usage of a failed run", %{
+    tmp_dir: tmp_dir
+  } do
+    {status, output, paths} = run_bench!(tmp_dir, %{})
+    assert status == 1, output
+
+    assert paths.out_dir
+           |> Path.join("requests.jsonl")
+           |> File.read!()
+           |> String.split("\n", trim: true) ==
+             [
+               ~s({"stage":"shape","outcome":"ok","retries":0}),
+               ~s({"stage":"develop","outcome":"ok","retries":0}),
+               ~s({"stage":"develop","outcome":"timeout","retries":0})
+             ]
+
+    usage = paths.out_dir |> Path.join("usage.json") |> File.read!() |> :json.decode()
+
+    assert usage["total"]["tokens"] == %{
+             "input" => 300,
+             "cached_input" => 0,
+             "output" => 30,
+             "reasoning" => 0
+           }
+
+    assert %{"partial" => true} = Enum.find(usage["stages"], &(&1["stage"] == "develop"))
+  end
+
+  test "writes a request journal even when the benchmark stops before the Build", %{
+    tmp_dir: tmp_dir
+  } do
+    {status, output, paths} = run_bench!(tmp_dir, %{"FAKE_KOGEN_SHAPE_EXIT" => "9"})
+    assert status == 9, output
+
+    assert File.read!(Path.join(paths.out_dir, "requests.jsonl")) ==
+             ~s({"stage":"shape","outcome":"ok","retries":0}\n)
+  end
+
   test "grades a Build's best candidate branch as the final diff when it did not land", %{
     tmp_dir: tmp_dir
   } do

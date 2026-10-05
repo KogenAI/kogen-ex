@@ -3,16 +3,27 @@ defmodule Kogen.State.Usage do
 
   alias Kogen.State.Event
   alias Kogen.State.Json
+  alias Kogen.State.RequestUsage
   alias Kogen.State.Run
 
   @token_names ["input", "cached_input", "output", "reasoning"]
 
-  @doc "Summed model tokens and model wall time of one Build attempt, from its journal."
+  @doc """
+  Summed model tokens and model wall time of one Build attempt, from its journal. Usage of
+  requests whose stage failed or was cut off counts too (see `Kogen.State.RequestUsage`).
+  """
   @spec attempt(Run.t(), term()) ::
           {:ok, %{tokens: map(), model_wall_ms: non_neg_integer()}} | {:error, term()}
-  def attempt(%Run{dir: dir}, attempt) do
-    with {:ok, contents} <- File.read(Path.join(dir, "events.jsonl")) do
-      totals(model_rows(contents, to_string(attempt)))
+  def attempt(%Run{dir: dir} = run, attempt) do
+    with {:ok, contents} <- File.read(Path.join(dir, "events.jsonl")),
+         rows = model_rows(contents),
+         {:ok, unfinished} <- RequestUsage.unfinished(run, rows) do
+      name = to_string(attempt)
+
+      totals(
+        Enum.filter(rows, &((&1.attempt || "builder") == name)) ++
+          Enum.filter(unfinished, &(&1.attempt == name))
+      )
     end
   end
 
@@ -25,16 +36,13 @@ defmodule Kogen.State.Usage do
     {:ok, %{tokens: tokens, model_wall_ms: Enum.reduce(rows, 0, &((&1.wall_ms || 0) + &2))}}
   end
 
-  defp model_rows(contents, name) do
+  defp model_rows(contents) do
     contents
     |> String.split("\n", trim: true)
     |> Enum.flat_map(fn line ->
       case Json.decode_event(line) do
-        {:ok, %Event{event: "model_stage"} = event} ->
-          if (event.attempt || "builder") == name, do: [event], else: []
-
-        _other ->
-          []
+        {:ok, %Event{event: "model_stage"} = event} -> [event]
+        _other -> []
       end
     end)
   end
