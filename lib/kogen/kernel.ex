@@ -93,7 +93,7 @@ defmodule Kogen.Kernel do
   def approval_preview(slug, project_root, origin, base, by) do
     with {:ok, runtime} <- runtime(),
          {:ok, project} <- Kogen.Project.load(project_root),
-         {:ok, process_env} <- project_environment(project_root, runtime),
+         {:ok, process_env} <- candidate_environment(project_root, runtime, project),
          {:ok, origin, base} <-
            ProjectContext.resolve(
              project_root,

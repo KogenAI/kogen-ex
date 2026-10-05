@@ -5,6 +5,7 @@ defmodule Kogen.Workspace do
   alias Kogen.Workspace.ApprovalManifest
   alias Kogen.Workspace.Checkout
   alias Kogen.Workspace.Diff
+  alias Kogen.Workspace.Guard
   alias Kogen.Workspace.Identity
   alias Kogen.Workspace.Index
   alias Kogen.Workspace.IntentFiles
@@ -97,6 +98,22 @@ defmodule Kogen.Workspace do
 
   @spec destroy(Path.t()) :: :ok | {:error, term()}
   def destroy(path), do: Checkout.destroy(path)
+
+  @spec protected_violations(Path.t(), String.t(), %{String.t() => String.t()}, git_env()) ::
+          {:ok, [String.t()]} | {:error, term()}
+  def protected_violations(workdir, base_sha, manifest, git_env),
+    do: Guard.protected_violations(workdir, base_sha, manifest, git_env)
+
+  @spec scope_violations(
+          Path.t(),
+          String.t(),
+          Kogen.Contracts.Intent.t(),
+          Kogen.Contracts.Project.t(),
+          [String.t()],
+          git_env()
+        ) :: {:ok, [String.t()]} | {:error, term()}
+  def scope_violations(workdir, base_sha, intent, project, allowed_extra, git_env),
+    do: Guard.scope_violations(workdir, base_sha, intent, project, allowed_extra, git_env)
 
   @spec remote_url(Path.t(), String.t(), git_env()) :: {:ok, String.t()} | {:error, term()}
   def remote_url(repo, remote, git_env), do: Refs.remote_url(repo, remote, git_env)

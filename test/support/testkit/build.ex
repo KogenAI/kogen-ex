@@ -175,9 +175,20 @@ defmodule Kogen.E2e.Build do
     Git.bare!(origin)
     initialize_project!(project, origin)
     {:ok, _base_sha} = Workspace.ref_read(origin, "refs/heads/main", Git.env())
+    home = Path.join(Path.dirname(project), "approval-home")
+    runtime = Environment.runtime!(project, home)
+    {:ok, project_config} = Kogen.Project.load(project)
+    {:ok, env} = Kogen.Kernel.candidate_environment(project, runtime, project_config)
 
     {:ok, preview} =
-      Kogen.Kernel.Approval.prepare(@slug, project, origin, "main", "Kogen Test", Git.env())
+      Kogen.Kernel.Approval.prepare(
+        @slug,
+        project,
+        origin,
+        "main",
+        "Kogen Test",
+        Map.merge(env, Git.env())
+      )
 
     {:ok, _approval_commit} = Kogen.Kernel.approve(%ApprovalPreview{} = preview)
     :ok
@@ -240,7 +251,7 @@ defmodule Kogen.E2e.Build do
   defp write_seed!(seed, options) do
     files = %{
       ".mise.toml" => ~s([tools]\nelixir = "1.20.4-otp-29"\nerlang = "29.1.1"\n),
-      ".gitignore" => "_build/\ndeps/\n",
+      ".gitignore" => "_build/\ndeps/\n.test-bin/\n",
       "mix.exs" => mix_project(),
       ".kogen/project.yaml" => Keyword.get(options, :project_config, project_config()),
       "lib/tiny_app.ex" =>

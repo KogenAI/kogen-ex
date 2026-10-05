@@ -19,21 +19,16 @@ end
 defmodule Kogen.Kernel.Approval do
   @moduledoc false
 
-  alias Kogen.Contracts.CommandExit
-  alias Kogen.Contracts.Failure
+  alias Kogen.Contracts.CheckBaseline
   alias Kogen.Contracts.Intent, as: IntentData
-  alias Kogen.Contracts.ProcResult
   alias Kogen.Contracts.Project, as: ProjectData
   alias Kogen.Contracts.ShapeWarning
   alias Kogen.Contracts.ShapeWarningCodec
-  alias Kogen.Engine.Build.Setup
   alias Kogen.Engine.Runtime
   alias Kogen.Intent
   alias Kogen.Kernel.Approval.Request
+  alias Kogen.Kernel.ApprovalChecks
   alias Kogen.Kernel.Types.ApprovalPreview
-  alias Kogen.Kernel.Workspaces
-  alias Kogen.Proc
-  alias Kogen.Proc.Sandbox
   alias Kogen.Project
   alias Kogen.State
   alias Kogen.State.Approval, as: ApprovalRecord
@@ -77,9 +72,10 @@ defmodule Kogen.Kernel.Approval do
          :ok <- clean_intent(intent),
          {:ok, warnings} <- read_shape_warnings(request.project_root, request.slug, bytes),
          {:ok, acceptance_files} <- acceptance_files(request.project_root, request.slug),
-         :ok <- acceptance_checks(request, project, acceptance_files),
          {:ok, base_sha} <-
            Workspace.ref_read(request.origin, "refs/heads/#{request.base}", git_env),
+         {:ok, check_baseline} <-
+           ApprovalChecks.run(request, project, base_sha, acceptance_files),
          {:ok, protected_manifest} <-
            protected_manifest(
              request.project_root,
@@ -97,6 +93,7 @@ defmodule Kogen.Kernel.Approval do
         domains: intent.domains,
         acceptance_files: acceptance_files,
         protected_manifest: protected_manifest,
+        check_baseline: check_baseline,
         by: request.by,
         at: DateTime.utc_now()
       }
@@ -110,17 +107,19 @@ defmodule Kogen.Kernel.Approval do
     State.approve(preview.origin, preview.approval, preview.git_env)
   end
 
-  @spec warnings_text([ShapeWarning.t()]) :: String.t()
-  def warnings_text([]), do: ""
-
-  def warnings_text(warnings) do
+  @spec warnings_text([ShapeWarning.t()], [map()]) :: String.t()
+  def warnings_text(warnings, check_baseline \\ []) do
     lines =
       Enum.map_join(warnings, "", fn warning ->
         items = Enum.join(warning.item_ids, ", ")
         "  - #{warning.code}: #{items} — #{warning.message}\n"
       end)
 
-    "Warnings\n" <> lines
+    check_warning = CheckBaseline.approval_warning(check_baseline)
+
+    if lines == "" and check_warning == "",
+      do: "",
+      else: "Warnings\n" <> lines <> check_warning
   end
 
   defp valid_request(slug, project_root, origin, base, by) do
@@ -175,130 +174,6 @@ defmodule Kogen.Kernel.Approval do
     case File.read(Path.join(project_root, relative)) do
       {:ok, bytes} -> {:ok, %{relative => bytes}}
       {:error, reason} -> {:error, {:acceptance_unavailable, reason}}
-    end
-  end
-
-  defp acceptance_checks(%Request{} = _request, %ProjectData{acceptance_checks: []}, _files),
-    do: :ok
-
-  defp acceptance_checks(%Request{} = request, %ProjectData{} = project, files) do
-    relative = candidate_acceptance_path(request.slug)
-    bytes = Map.fetch!(files, acceptance_source_path(request.slug))
-    env = Map.merge(request.env, project.env)
-    run_dir = approval_run_dir(env, request.slug)
-    sandbox = approval_sandbox(request, project, run_dir, env)
-    root = request.project_root
-    git_env = Runtime.git_environment(env)
-
-    with {:ok, created?} <- stage_candidate(root, relative, bytes) do
-      result =
-        with {:ok, setup_result} <-
-               Project.run_setup(
-                 project,
-                 root,
-                 setup_cache_root(root, request.home),
-                 base_tree_sha(root, git_env),
-                 env,
-                 fn -> Setup.run(project.setup, root, run_dir, env, Proc, sandbox) end
-               ),
-             :ok <- Project.record_setup_reuse(run_dir, setup_result) do
-          run_acceptance_checks(project.acceptance_checks, root, relative, env)
-        end
-
-      if created?, do: cleanup_candidate(root, relative, result), else: result
-    end
-  end
-
-  defp approval_sandbox(%Request{runtime: nil}, _project, _run_dir, _env), do: nil
-
-  defp approval_sandbox(%Request{} = request, project, run_dir, env) do
-    %Sandbox{
-      enabled:
-        project.sandbox and not Runtime.sandboxed?(env) and
-          not Runtime.sandboxed?(request.runtime),
-      home: request.home,
-      project_root: request.project_root,
-      origin: request.origin,
-      workspace: request.project_root,
-      run_dir: run_dir,
-      tmp_dir: Runtime.temporary_directory(env),
-      workspace_is_project: true
-    }
-  end
-
-  defp approval_run_dir(env, slug) do
-    run_id =
-      "#{System.monotonic_time(:microsecond)}-#{System.unique_integer([:positive, :monotonic])}"
-
-    Path.join([Runtime.temporary_directory(env), "kogen-approval", slug, run_id])
-  end
-
-  defp setup_cache_root(_project_root, nil), do: nil
-
-  defp setup_cache_root(project_root, home),
-    do: Path.join(Workspaces.root(project_root, home), "setup-cache")
-
-  defp base_tree_sha(project_root, git_env) do
-    case Workspace.rev_parse(project_root, "HEAD^{tree}", git_env) do
-      {:ok, sha} -> sha
-      {:error, _reason} -> nil
-    end
-  end
-
-  defp stage_candidate(root, relative, bytes) do
-    path = Path.join(root, relative)
-
-    case File.read(path) do
-      {:ok, ^bytes} -> {:ok, false}
-      {:ok, _existing} -> {:error, {:acceptance_check_path_conflict, relative}}
-      {:error, :enoent} -> create_candidate(root, path, relative, bytes)
-      {:error, reason} -> {:error, {:acceptance_check_path_unavailable, relative, reason}}
-    end
-  end
-
-  defp create_candidate(root, path, relative, bytes) do
-    with :ok <- File.mkdir_p(Path.dirname(path)),
-         :ok <- File.write(path, bytes, [:binary, :exclusive]) do
-      {:ok, true}
-    else
-      {:error, :eexist} -> stage_candidate(root, relative, bytes)
-      {:error, reason} -> {:error, {:acceptance_check_path_unavailable, relative, reason}}
-    end
-  end
-
-  defp run_acceptance_checks(specs, root, relative, env) do
-    Enum.reduce_while(specs, :ok, fn spec, :ok ->
-      argv = Enum.map(spec.argv, &if(&1 == "{path}", do: relative, else: &1))
-
-      case Proc.run(argv, cd: root, env: env, timeout_ms: spec.timeout_ms) do
-        {:ok, %ProcResult{exit_status: 0, timed_out: false}} ->
-          {:cont, :ok}
-
-        {:ok, %ProcResult{} = result} ->
-          if CommandExit.tool_missing?(result.exit_status) do
-            {:halt,
-             {:error,
-              %Failure{
-                class: :environment,
-                reason: :tool_missing,
-                detail:
-                  "Acceptance check #{spec.name} could not run (exit status #{result.exit_status}); a required tool is unavailable."
-              }}}
-          else
-            {:halt, {:error, {:acceptance_check_failed, spec.name, {:ok, result}}}}
-          end
-
-        result ->
-          {:halt, {:error, {:acceptance_check_failed, spec.name, result}}}
-      end
-    end)
-  end
-
-  defp cleanup_candidate(root, relative, result) do
-    case File.rm(Path.join(root, relative)) do
-      :ok -> result
-      {:error, :enoent} -> result
-      {:error, reason} -> {:error, {:acceptance_check_cleanup_failed, relative, reason}}
     end
   end
 

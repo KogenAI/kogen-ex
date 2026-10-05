@@ -1,6 +1,7 @@
 defmodule Kogen.Harness.GateTest do
   use Kogen.Testkit.Case, async: true
 
+  alias Kogen.Contracts.CheckBaseline
   alias Kogen.Contracts.CheckSpec
   alias Kogen.Contracts.ProcResult
   alias Kogen.Contracts.Project
@@ -188,6 +189,81 @@ defmodule Kogen.Harness.GateTest do
     assert File.read!(test_path) == approved
   end
 
+  test "a new format finding fails when the base already had another one", %{tmp_dir: tmp_dir} do
+    format_check = %CheckSpec{
+      name: "format",
+      argv: ["mix", "format", "--check-formatted"],
+      timeout_ms: 5_000
+    }
+
+    old_finding = %{
+      tool: "format",
+      rule: "unformatted",
+      severity: :error,
+      path: "lib/old.ex",
+      line: 1,
+      col: 1,
+      symbol: nil,
+      message: "run mix format <path>"
+    }
+
+    baseline =
+      CheckBaseline.from_assessments([
+        %{name: "format", exit_level: 1, findings: [old_finding]}
+      ])
+
+    Process.put(:gate_script_results, [{1, format_output(["lib/old.ex", "lib/new.ex"])}])
+    opts = options(tmp_dir, nil, nil)
+    opts = %{opts | project: %{opts.project | checks: [format_check]}, check_baseline: baseline}
+
+    assert {:ok, result} = Gate.run(opts, deadline())
+    assert result.status == :fail
+    assert [%{base_red?: false}] = result.checks
+    assert [failure] = result.failures
+    assert failure =~ "lib/new.ex"
+  end
+
+  test "a subset of base format findings is warned and excluded from the verdict", %{
+    tmp_dir: tmp_dir
+  } do
+    format_check = %CheckSpec{
+      name: "format",
+      argv: ["mix", "format", "--check-formatted"],
+      timeout_ms: 5_000
+    }
+
+    old_finding = %{
+      tool: "format",
+      rule: "unformatted",
+      severity: :error,
+      path: "lib/old.ex",
+      line: 1,
+      col: 1,
+      symbol: nil,
+      message: "run mix format <path>"
+    }
+
+    baseline =
+      CheckBaseline.from_assessments([
+        %{
+          name: "format",
+          exit_level: 1,
+          findings: [old_finding, %{old_finding | path: "lib/older.ex"}]
+        }
+      ])
+
+    Process.put(:gate_script_results, [{1, format_output(["lib/old.ex"])}])
+    opts = options(tmp_dir, nil, nil)
+    opts = %{opts | project: %{opts.project | checks: [format_check]}, check_baseline: baseline}
+
+    assert {:ok, result} = Gate.run(opts, deadline())
+    assert result.status == :pass
+    assert result.failures == []
+    assert [%{base_red?: true}] = result.checks
+    assert [warning] = result.warnings
+    assert warning =~ "lib/old.ex"
+  end
+
   defp options(tmp_dir, base_test, changed_paths) do
     workdir = Path.join(tmp_dir, "project")
     File.mkdir_p!(workdir)
@@ -252,6 +328,12 @@ defmodule Kogen.Harness.GateTest do
          test/other_test.exs:21
          ** (RuntimeError) second
     """
+  end
+
+  defp format_output(paths) do
+    "** (Mix) mix format failed due to --check-formatted.\n" <>
+      "The following files are not formatted:\n" <>
+      Enum.map_join(paths, "\n", &("  " <> &1)) <> "\n"
   end
 
   defp process_result(argv, status, output) do

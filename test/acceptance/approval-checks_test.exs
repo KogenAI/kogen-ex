@@ -66,6 +66,40 @@ defmodule Kogen.Acceptance.ApprovalChecksTest do
     assert File.read!(seen) == "test/acceptance/probe_test.exs"
   end
 
+  @tag intent: "approval-checks/A4"
+  test "a red project check is recorded and warned about at approval", %{tmp_dir: tmp_dir} do
+    repo = project!(tmp_dir, "allowed")
+    write!(repo, "lib/old.ex", "defmodule Old do\n def value,do: :old\nend\n")
+    write!(repo, ".kogen/format-check.sh", format_check_script())
+
+    write!(repo, ".kogen/project.yaml", """
+    name: probe
+    checks:
+      - name: format
+        argv: [sh, .kogen/format-check.sh]
+        timeout_ms: 10000
+    acceptance_checks:
+      - name: acceptance-source-present
+        argv: [test, -s, "{path}"]
+        timeout_ms: 10000
+    domains:
+      app: [lib, test]
+    """)
+
+    commit!(repo)
+    {output, status} = approve(repo)
+
+    assert status == 0, output
+    assert output =~ "Warning: configured checks are already red on the base"
+    assert output =~ "format"
+    assert output =~ "lib/old.ex"
+    assert output =~ "fix the base first, or scope the check"
+    assert approval_ref(repo) != ""
+
+    assert {:ok, approval} = Kogen.State.approval(repo, "probe", Map.new(@git_env))
+    assert [%{name: "format", status: :red}] = approval.check_baseline
+  end
+
   test "runs project setup before acceptance checks and saves setup logs", %{tmp_dir: tmp_dir} do
     repo = project!(tmp_dir, "allowed")
     write!(repo, ".gitignore", ".kogen/setup-ready\n")
@@ -214,6 +248,14 @@ defmodule Kogen.Acceptance.ApprovalChecksTest do
     Path.wildcard(
       Path.join([tmp_dir, "approval-tmp", "kogen-approval", "probe", "*", "logs", "setup-*.log"])
     )
+  end
+
+  defp format_check_script do
+    """
+    #!/bin/sh
+    printf '** (Mix) mix format failed due to --check-formatted.\\nThe following files are not formatted:\\n  lib/old.ex\\n'
+    exit 1
+    """
   end
 
   defp git(repo, args) do

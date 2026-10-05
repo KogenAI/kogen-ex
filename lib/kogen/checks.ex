@@ -60,7 +60,9 @@ defmodule Kogen.Checks do
              receipts: [Kogen.Contracts.Receipt.t()],
              status: :pass | {:fail, [String.t()]},
              feedback: String.t(),
-             exit_levels: [{String.t(), 0..3}]
+             exit_levels: [{String.t(), 0..3}],
+             checks: [map()],
+             warnings: [String.t()]
            }}
           | {:error, Failure.t()}
 
@@ -102,10 +104,10 @@ defmodule Kogen.Checks do
           Path.t(),
           %{String.t() => String.t()},
           %{String.t() => String.t()},
-          Sandbox.t() | nil
+          Sandbox.t() | map() | nil
         ) :: run_result()
-  def run_all(workdir, project, run_dir, env, git_env, sandbox),
-    do: Runner.run_all(workdir, project, run_dir, env, git_env, sandbox)
+  def run_all(workdir, project, run_dir, env, git_env, options),
+    do: Runner.run_all(workdir, project, run_dir, env, git_env, options)
 
   @spec acceptance(Path.t(), Intent.t(), Path.t()) ::
           {:ok, %{status: :pass | {:fail, [String.t()]}, ledger: [LedgerRow.t()]}}
@@ -177,7 +179,7 @@ defmodule Kogen.Checks do
           %{String.t() => String.t()}
         ) :: {:ok, [String.t()]} | {:error, term()}
   def protected_violations(workdir, base_sha, manifest, git_env),
-    do: Runner.protected_violations(workdir, base_sha, manifest, git_env)
+    do: Kogen.Workspace.protected_violations(workdir, base_sha, manifest, git_env)
 
   @spec scope_violations(
           Path.t(),
@@ -188,5 +190,6 @@ defmodule Kogen.Checks do
           %{String.t() => String.t()}
         ) :: {:ok, [String.t()]} | {:error, term()}
   def scope_violations(workdir, base_sha, intent, project, allowed_extra, git_env),
-    do: Runner.scope_violations(workdir, base_sha, intent, project, allowed_extra, git_env)
+    do:
+      Kogen.Workspace.scope_violations(workdir, base_sha, intent, project, allowed_extra, git_env)
 end

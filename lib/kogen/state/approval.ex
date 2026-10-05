@@ -13,7 +13,7 @@ defmodule Kogen.State.Approval do
     :by,
     :at
   ]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [check_baseline: []]
 
   @type t :: %__MODULE__{
           slug: String.t(),
@@ -24,6 +24,7 @@ defmodule Kogen.State.Approval do
           domains: [String.t()],
           acceptance_files: %{required(String.t()) => binary()},
           protected_manifest: %{optional(String.t()) => String.t()},
+          check_baseline: [map()],
           by: String.t(),
           at: DateTime.t()
         }

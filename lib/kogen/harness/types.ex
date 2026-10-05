@@ -20,6 +20,7 @@ defmodule Kogen.Harness.Opts do
     changed?: nil,
     env: %{},
     before_gate: nil,
+    check_baseline: [],
     flake_excused_test_ids: [],
     models: %{builder: {"gpt-6-luna", "max"}, strong: {"gpt-6.1-sol", "high"}},
     limits: %{max_turns: 60, wall_ms: 1_800_000},
@@ -37,6 +38,7 @@ defmodule Kogen.Harness.Opts do
           provider_config: term(),
           proc_mod: module(),
           base_test: function() | nil,
+          check_baseline: [map()],
           changed_paths: function() | nil,
           phase_recorder: function() | nil,
           event_recorder: (map() -> :ok | {:error, term()}) | nil,
@@ -180,6 +182,7 @@ defmodule Kogen.Harness.GateCommand do
   defstruct @enforce_keys ++
               [
                 :log_path,
+                base_red?: false,
                 reason: nil,
                 tool: "check",
                 exit_level: 3,
@@ -193,6 +196,7 @@ defmodule Kogen.Harness.GateCommand do
           timed_out: boolean(),
           output: String.t(),
           log_path: Path.t() | nil,
+          base_red?: boolean(),
           reason: String.t() | nil,
           tool: String.t(),
           exit_level: 0..3,
@@ -207,13 +211,14 @@ defmodule Kogen.Harness.GateResult do
   alias Kogen.Harness.GateCommand
 
   @enforce_keys [:status, :fixes, :checks, :failures, :flake_excused, :failed_test_count]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [warnings: []]
 
   @type t :: %__MODULE__{
           status: :pass | :fail | :environment,
           fixes: [GateCommand.t()],
           checks: [GateCommand.t()],
           failures: [String.t()],
+          warnings: [String.t()],
           flake_excused: [%{test_ids: [String.t()], seed: non_neg_integer()}],
           failed_test_count: non_neg_integer() | nil
         }

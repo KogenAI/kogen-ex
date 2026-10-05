@@ -244,7 +244,7 @@ defmodule Kogen.Kernel.CLI.Runner do
   defp approval_screen(preview) do
     intent = preview.intent
     criteria = Enum.map_join(intent.acceptance, "", &acceptance_line/1)
-    warnings = Approval.warnings_text(preview.warnings)
+    warnings = Approval.warnings_text(preview.warnings, preview.approval.check_baseline)
 
     """
     Intent: #{intent.slug} — #{intent.title}

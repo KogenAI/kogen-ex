@@ -3,6 +3,7 @@ defmodule Kogen.State.Json do
 
   alias Kogen.Contracts.JSON
   alias Kogen.State.Approval
+  alias Kogen.State.ApprovalBaselineCodec
   alias Kogen.State.Event
   alias Kogen.State.Run
   alias Kogen.State.Run.Landing
@@ -71,6 +72,7 @@ defmodule Kogen.State.Json do
       domains: approval.domains,
       acceptance_paths: approval.acceptance_files |> Map.keys() |> Enum.sort(),
       protected_manifest: approval.protected_manifest,
+      check_baseline: ApprovalBaselineCodec.encode(approval.check_baseline),
       by: approval.by,
       at: DateTime.to_iso8601(approval.at)
     })
@@ -167,6 +169,8 @@ defmodule Kogen.State.Json do
          domains when is_list(domains) <- Map.get(json, "domains"),
          paths when is_list(paths) <- Map.get(json, "acceptance_paths"),
          manifest when is_map(manifest) <- Map.get(json, "protected_manifest"),
+         {:ok, check_baseline} <-
+           ApprovalBaselineCodec.decode(Map.get(json, "check_baseline", [])),
          by when is_binary(by) <- Map.get(json, "by"),
          at_text when is_binary(at_text) <- Map.get(json, "at"),
          {:ok, at, _offset} <- DateTime.from_iso8601(at_text),
@@ -183,6 +187,7 @@ defmodule Kogen.State.Json do
         domains: domains,
         acceptance_files: %{},
         protected_manifest: manifest,
+        check_baseline: check_baseline,
         by: by,
         at: at
       }

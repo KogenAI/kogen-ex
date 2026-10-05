@@ -244,7 +244,7 @@ defmodule Kogen.Engine.Build.StageRunner do
              session.run_dir,
              session.process_env,
              session.git_env,
-             session.sandbox
+             %{sandbox: session.sandbox, check_baseline: session.approval.check_baseline}
            ) do
       finish_checks(session, check_result)
     else

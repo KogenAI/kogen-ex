@@ -17,6 +17,7 @@ defmodule Kogen.Engine.Build.GateSummary do
     %{
       status: Map.get(gate, :status),
       failed_test_count: Map.get(gate, :failed_test_count),
+      warnings: Map.get(gate, :warnings, []),
       checks: Enum.map(commands, &elem(&1, 0)),
       finding_count: length(findings),
       findings: Enum.take(findings, @max_findings)
@@ -39,11 +40,14 @@ defmodule Kogen.Engine.Build.GateSummary do
       name: Map.get(command, :name),
       exit_level: Map.get(command, :exit_level),
       exit_status: Map.get(command, :exit_status),
-      timed_out: Map.get(command, :timed_out)
+      timed_out: Map.get(command, :timed_out),
+      base_red: Map.get(command, :base_red?, false)
     }
 
     {summary, Map.get(command, :findings, [])}
   end
+
+  defp command_findings({%{base_red: true}, _findings}), do: []
 
   defp command_findings({%{exit_level: level, name: name}, findings}) when level > 0 do
     Enum.map(findings, &finding(name, &1))

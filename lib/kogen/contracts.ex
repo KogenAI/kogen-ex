@@ -5,6 +5,7 @@ defmodule Kogen.Contracts do
     exports: [
       AcceptanceItem,
       CheckSpec,
+      CheckBaseline,
       CommandExit,
       Failure,
       Intent,

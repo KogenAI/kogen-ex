@@ -129,6 +129,7 @@
                Kogen.Harness.Codec,
                Kogen.Tooling.Codec,
                Kogen.Checks.Ledger,
+               Kogen.State.ApprovalBaselineCodec,
                Kogen.State.Json,
                Kogen.Kernel.CLI.ShapeJson
              ]

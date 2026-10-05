@@ -42,7 +42,9 @@ defmodule Kogen.State.ApprovalStore do
     with :ok <- validate_intent(approval),
          :ok <- validate_fields(approval),
          :ok <- validate_acceptance_files(approval) do
-      validate_manifest(approval.protected_manifest)
+      with :ok <- validate_manifest(approval.protected_manifest) do
+        validate_check_baseline(approval.check_baseline)
+      end
     end
   end
 
@@ -82,6 +84,30 @@ defmodule Kogen.State.ApprovalStore do
   end
 
   defp validate_manifest(_manifest), do: {:error, :invalid_protected_manifest}
+
+  defp validate_check_baseline(rows) when is_list(rows) do
+    valid =
+      Enum.all?(rows, fn
+        %{name: name, status: status, findings: findings}
+        when is_binary(name) and name != "" and status in [:green, :red] and is_list(findings) ->
+          (status == :red or findings == []) and Enum.all?(findings, &valid_check_finding?/1)
+
+        _row ->
+          false
+      end)
+
+    require_valid(valid, :invalid_check_baseline)
+  end
+
+  defp validate_check_baseline(_rows), do: {:error, :invalid_check_baseline}
+
+  defp valid_check_finding?(%{path: path, kind: kind, id: id, tool: tool, message: message}) do
+    (is_nil(path) or safe_repo_path?(path)) and kind in [:rule, :test] and
+      valid_single_line?(id) and valid_single_line?(tool) and is_binary(message) and
+      not String.contains?(message, ["\n", "\r"])
+  end
+
+  defp valid_check_finding?(_finding), do: false
 
   defp require_valid(true, _reason), do: :ok
   defp require_valid(false, reason), do: {:error, reason}

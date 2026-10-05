@@ -2,9 +2,11 @@ defmodule Kogen.Harness.Gate do
   @moduledoc false
 
   alias Kogen.Checks.Feedback
+  alias Kogen.Contracts.CheckBaseline
   alias Kogen.Contracts.CheckSpec
   alias Kogen.Contracts.ProcResult
   alias Kogen.Harness.Gate.CommandRunner
+  alias Kogen.Harness.Gate.TestCount
   alias Kogen.Harness.GateCommand
   alias Kogen.Harness.GateResult
   alias Kogen.Harness.Opts
@@ -18,7 +20,8 @@ defmodule Kogen.Harness.Gate do
     with :ok <- before_gate(opts.before_gate),
          {:ok, fixes, _fix_flakes} <- run_specs(opts, opts.project.fix, deadline, :fix),
          {:ok, checks, flake_excused} <- run_specs(opts, opts.project.checks, deadline, :check) do
-      commands = fixes ++ checks
+      active_checks = Enum.reject(checks, & &1.base_red?)
+      commands = fixes ++ active_checks
       exit_level = Feedback.overall_exit_level(commands)
 
       status =
@@ -35,44 +38,23 @@ defmodule Kogen.Harness.Gate do
           :fail -> [Feedback.render_model_feedback(commands)]
         end
 
+      warnings = Enum.flat_map(checks, &CheckBaseline.warning/1)
+
       {:ok,
        %GateResult{
          status: status,
          fixes: fixes,
          checks: checks,
          failures: failures,
+         warnings: warnings,
          flake_excused: flake_excused,
-         failed_test_count: failed_test_count(checks, opts.project.checks)
+         failed_test_count: TestCount.failed_test_count(checks, opts.project.checks)
        }}
     end
   end
 
   defp before_gate(nil), do: :ok
   defp before_gate(guard) when is_function(guard, 0), do: guard.()
-
-  defp failed_test_count(commands, specs) do
-    test_names = specs |> Enum.filter(&mix_test?(&1.argv)) |> MapSet.new(& &1.name)
-    test_commands = Enum.filter(commands, &MapSet.member?(test_names, &1.name))
-
-    if test_commands != [] and Enum.all?(test_commands, &test_count_known?/1) do
-      test_commands
-      |> Enum.flat_map(fn
-        %{exit_level: 1, findings: findings} -> findings
-        _passed -> []
-      end)
-      |> Enum.filter(&(&1.tool == "exunit" and is_binary(&1.symbol)))
-      |> Enum.map(& &1.symbol)
-      |> Enum.uniq()
-      |> length()
-    end
-  end
-
-  defp test_count_known?(%{tool: "exunit", exit_level: 0}), do: true
-
-  defp test_count_known?(%{tool: "exunit", exit_level: 1, findings: findings}),
-    do: Enum.any?(findings, &(&1.tool == "exunit" and is_binary(&1.symbol)))
-
-  defp test_count_known?(_command), do: false
 
   defp run_specs(opts, specs, deadline, kind) do
     specs
@@ -84,6 +66,11 @@ defmodule Kogen.Harness.Gate do
         run_spec(%{opts | flake_excused_test_ids: current_flakes}, spec, deadline, kind)
 
       result = assess_result(result, spec, opts.workdir)
+
+      result =
+        if kind == :check,
+          do: CheckBaseline.annotate(result, opts.check_baseline),
+          else: result
 
       {:cont, {:ok, [result | results], excused ++ flakes}}
     end)
@@ -101,13 +88,17 @@ defmodule Kogen.Harness.Gate do
       case {seed, Feedback.failed_test_ids(command.output, opts.workdir), command} do
         {seed, test_ids, %GateCommand{exit_status: status, timed_out: false}}
         when is_integer(seed) and status != 0 and test_ids != [] ->
-          classify_test_failure(opts, spec, %{
-            command: command,
-            argv: spec.argv,
-            deadline: deadline,
-            seed: seed,
-            test_ids: test_ids
-          })
+          if base_red_command?(opts, spec, command) do
+            {command, []}
+          else
+            classify_test_failure(opts, spec, %{
+              command: command,
+              argv: spec.argv,
+              deadline: deadline,
+              seed: seed,
+              test_ids: test_ids
+            })
+          end
 
         _other ->
           {command, []}
@@ -119,6 +110,13 @@ defmodule Kogen.Harness.Gate do
 
   defp run_spec(opts, %CheckSpec{} = spec, deadline, kind),
     do: {run_command(opts, spec, spec.argv, deadline, kind, ""), []}
+
+  defp base_red_command?(opts, spec, command) do
+    command
+    |> assess_result(spec, opts.workdir)
+    |> CheckBaseline.annotate(opts.check_baseline)
+    |> Map.get(:base_red?, false)
+  end
 
   defp classify_test_failure(opts, spec, classification) do
     %{command: original, argv: argv, deadline: deadline, seed: seed, test_ids: test_ids} =

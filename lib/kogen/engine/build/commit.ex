@@ -144,7 +144,7 @@ defmodule Kogen.Engine.Build.Commit do
              session.run_dir,
              session.process_env,
              session.git_env,
-             session.sandbox
+             %{sandbox: session.sandbox, check_baseline: session.approval.check_baseline}
            ),
          {:ok, acceptance} <-
            Kogen.Checks.acceptance(

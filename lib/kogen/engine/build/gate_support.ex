@@ -42,6 +42,7 @@ defmodule Kogen.Engine.Build.GateSupport do
     |> Map.put(:protected_restorer, opts.protected_restorer || protected_restorer(session))
     |> Map.put(:changed?, opts.changed? || changed_detector(session))
     |> Map.put(:protected, Enum.uniq(opts.protected ++ protected))
+    |> Map.put(:check_baseline, session.approval.check_baseline)
     |> Map.put(:base_test, base_test)
     |> Map.put(:changed_paths, changed_paths)
     |> Map.put(:flake_excused_test_ids, previously_excused)

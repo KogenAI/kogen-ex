@@ -46,7 +46,7 @@ defmodule Kogen.E2e.OriginStatusTest do
                origin,
                "main",
                "Kogen Test",
-               Git.env()
+               env
              )
 
     assert preview.origin == origin

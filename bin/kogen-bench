@@ -19,6 +19,11 @@ case "$recipe" in
   staged|plan-shell|direct|direct-shell|direct-escalate|escalate-shell) ;;
   *) echo "KOGEN_BENCH_RECIPE must be staged, plan-shell, direct, direct-shell, direct-escalate, or escalate-shell" >&2; exit 2 ;;
 esac
+format_scope=${KOGEN_BENCH_FORMAT_SCOPE:-changed}
+case "$format_scope" in
+  changed|all) ;;
+  *) echo "KOGEN_BENCH_FORMAT_SCOPE must be changed or all" >&2; exit 2 ;;
+esac
 builder_model=${KOGEN_BENCH_MODEL:-gpt-6-luna}
 builder_effort=${KOGEN_BENCH_EFFORT:-max}
 shape_model=${KOGEN_BENCH_SHAPE_MODEL:-gpt-6-luna}
@@ -156,7 +161,7 @@ git clone --quiet "$work_dir" "$project_dir"
 git -C "$project_dir" checkout --quiet -B main "$work_base"
 mkdir -p "$project_dir/.kogen"
 python3 - "$task_json" "$project_dir/.kogen/project.yaml" "$scratch/project_tmpdir" \
-  "$timer_script" "$phase_file" "$timings_file" "$format_check_script" \
+  "$timer_script" "$phase_file" "$timings_file" "$format_check_script" "$format_scope" \
   "$recipe" "$builder_model" "$builder_effort" "$shape_model" "$shape_effort" <<'PY'
 import json
 import os
@@ -166,7 +171,7 @@ import sys
 
 (
     source_path, target_path, tmpdir_path, timer_path, phase_path, event_path,
-    format_check_script, recipe, builder_model, builder_effort, shape_model, shape_effort,
+    format_check_script, format_scope, recipe, builder_model, builder_effort, shape_model, shape_effort,
 ) = sys.argv[1:]
 with open(source_path, encoding="utf-8") as source:
     document = json.load(source)
@@ -220,7 +225,10 @@ quote = lambda value: json.dumps(str(value), ensure_ascii=False)
 array = lambda values: "[" + ", ".join(quote(value) for value in values) + "]"
 timer_prefix = [sys.executable, timer_path, phase_path, event_path]
 timed = lambda name, argv: timer_prefix + [name, "--"] + argv
-format_argv = [sys.executable, format_check_script] + prefix + ["mix", "format"]
+if format_scope == "all":
+    format_argv = prefix + ["mix", "format"]
+else:
+    format_argv = [sys.executable, format_check_script] + prefix + ["mix", "format"]
 
 lines = [
     "name: kogen-bench",

@@ -370,10 +370,10 @@ defmodule Kogen.E2e.BuildTest do
     defmodule TinyApp.FlakyTest do
       use ExUnit.Case, async: true
 
-      test "candidate run flakes once while base remains red" do
-        if TinyApp.value() == :ready do
-          marker = System.fetch_env!("KOGEN_FLAKE_MARKER")
+      test "candidate run flakes once before the base rerun fails" do
+        marker = System.fetch_env!("KOGEN_FLAKE_MARKER")
 
+        if TinyApp.value() == :ready do
           if File.exists?(marker) do
             assert true
           else
@@ -381,7 +381,8 @@ defmodule Kogen.E2e.BuildTest do
             flunk("injected one-time Candidate test flake")
           end
         else
-          assert TinyApp.value() == :ready
+          if File.exists?(marker), do: flunk("injected base failure after Candidate retry")
+          assert TinyApp.value() == :base
         end
       end
     end
