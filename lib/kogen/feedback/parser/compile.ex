@@ -1,6 +1,6 @@
-defmodule Kogen.Checks.Feedback.Parser.Compile do
+defmodule Kogen.Feedback.Parser.Compile do
   @moduledoc false
-  import Kogen.Checks.Feedback.Parser.Common,
+  import Kogen.Feedback.Parser.Common,
     only: [
       location: 1,
       normalize_path: 2,

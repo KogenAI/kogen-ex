@@ -50,9 +50,10 @@ defmodule Kogen.Checks.ChecksTest do
     marker = Path.join(repo, "generated.txt")
     project = project([check("write", ["/usr/bin/touch", marker])])
 
-    assert {:error, %Failure{class: :candidate, reason: :tree_mutated}} =
+    assert {:ok, %{status: {:fail, ["write"]}, feedback: feedback}} =
              Checks.run_all(repo, project, Path.join(tmp_dir, "run"), @git_env)
 
+    assert feedback =~ "generated.txt"
     assert File.exists?(marker)
   end
 

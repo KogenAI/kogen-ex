@@ -57,7 +57,7 @@ defmodule Kogen.Harness.GateTest do
   end
 
   @tag :seatbelt
-  test "persistent failures on the clean base are reported as sandbox environment", %{
+  test "persistent failures on the clean base are excused", %{
     tmp_dir: tmp_dir
   } do
     write_test_source!(tmp_dir)
@@ -72,9 +72,9 @@ defmodule Kogen.Harness.GateTest do
     opts = options(tmp_dir, base_test, fn -> {:ok, ["lib/tiny_app/component.ex"]} end)
 
     assert {:ok, result} = Gate.run(opts, deadline())
-    assert result.status == :environment
+    assert result.status == :pass
     assert result.flake_excused == []
-    assert [%{exit_status: 3, exit_level: 3, findings: [], output: detail}] = result.checks
+    assert [%{base_red?: true, output: detail}] = result.checks
     assert detail =~ "base-red"
     assert detail =~ "configured sandbox"
     assert detail =~ "test/sample_test.exs:12"
@@ -135,18 +135,17 @@ defmodule Kogen.Harness.GateTest do
     assert result.flake_excused == []
   end
 
-  test "an unavailable check is an environment result without model feedback", %{
+  test "an unavailable check returns model repair feedback", %{
     tmp_dir: tmp_dir
   } do
     Process.put(:gate_script_results, [{1, "mix: command not found\n"}])
     opts = options(tmp_dir, fn _argv, _timeout -> {:ok, process_result([], 0, "")} end, nil)
 
     assert {:ok, result} = Gate.run(opts, deadline())
-    assert result.status == :environment
-    assert [%{exit_level: 3, reason: reason}] = result.checks
-    assert reason == "a required tool or file was unavailable"
+    assert result.status == :fail
+    assert [%{exit_level: 1}] = result.checks
     assert [detail] = result.failures
-    assert detail =~ "exit 3"
+    assert detail =~ "mix is not available, but it ran on the base"
     refute detail =~ "[exunit/"
   end
 
@@ -262,6 +261,18 @@ defmodule Kogen.Harness.GateTest do
     assert [%{base_red?: true}] = result.checks
     assert [warning] = result.warnings
     assert warning =~ "lib/old.ex"
+  end
+
+  test "a failed fix is repair feedback even when the check passes", %{tmp_dir: tmp_dir} do
+    Process.put(:gate_script_results, [{7, "formatter tail"}, {0, "1 test, 0 failures"}])
+    opts = options(tmp_dir, nil, nil)
+    fix = %CheckSpec{name: "formatter", argv: ["formatter"], timeout_ms: 5_000}
+    opts = %{opts | project: %{opts.project | fix: [fix]}}
+    assert {:ok, result} = Gate.run(opts, deadline())
+    assert result.status == :fail
+    assert [detail] = result.failures
+    assert detail =~ "fix/formatter exited 7"
+    assert detail =~ "formatter tail"
   end
 
   defp options(tmp_dir, base_test, changed_paths) do

@@ -1,4 +1,4 @@
-defmodule Kogen.Checks.Feedback.Parser.Common do
+defmodule Kogen.Feedback.Parser.Common do
   @moduledoc false
   @message_chars 200
   @location ~r{(?<path>(?:\$WORKDIR/|/)?[A-Za-z0-9_.$-]+(?:/[A-Za-z0-9_.$-]+)*\.exs?):(?<line>\d+)(?::(?<col>\d+))?(?::(?<tail>.*))?}

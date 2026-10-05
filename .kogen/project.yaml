@@ -37,6 +37,7 @@ domains:
   proc: [lib/kogen/proc.ex, lib/kogen/proc, test/proc]
   workspace: [lib/kogen/workspace.ex, lib/kogen/workspace, test/workspace]
   state: [lib/kogen/state.ex, lib/kogen/state, test/state]
+  feedback: [lib/kogen/feedback.ex, lib/kogen/feedback, test/feedback]
   checks: [lib/kogen/checks.ex, lib/kogen/checks, test/checks]
   harness: [lib/kogen/harness.ex, lib/kogen/harness, test/harness]
   tooling: [lib/kogen/tooling.ex, lib/kogen/tooling, test/tooling]

@@ -22,21 +22,12 @@ defmodule Kogen.Harness.Gate do
          {:ok, fixes, _fix_flakes} <- run_specs(opts, opts.project.fix, deadline, :fix),
          {:ok, checks, flake_excused} <- run_specs(opts, opts.project.checks, deadline, :check) do
       checks = checks ++ quality_commands(opts, deadline)
-      active_checks = Enum.reject(checks, & &1.base_red?)
-      commands = fixes ++ active_checks
-      exit_level = Feedback.overall_exit_level(commands)
-
-      status =
-        case exit_level do
-          0 -> :pass
-          3 -> :environment
-          _level -> :fail
-        end
-
-      failures = failures(status, commands)
+      commands = Enum.reject(fixes ++ checks, & &1.base_red?)
+      status = if Feedback.overall_exit_level(commands) == 0, do: :pass, else: :fail
+      failures = if status == :pass, do: [], else: [Feedback.render_model_feedback(commands)]
 
       warnings =
-        Enum.flat_map(checks, &CheckBaseline.warning/1) ++
+        Enum.flat_map(fixes ++ checks, &CheckBaseline.warning/1) ++
           Enum.flat_map(checks, &Map.get(&1, :warnings, []))
 
       {:ok,
@@ -51,10 +42,6 @@ defmodule Kogen.Harness.Gate do
        }}
     end
   end
-
-  defp failures(:pass, _commands), do: []
-  defp failures(:environment, commands), do: [Feedback.render_environment_detail(commands)]
-  defp failures(:fail, commands), do: [Feedback.render_model_feedback(commands)]
 
   defp quality_commands(opts, deadline) do
     Kogen.Quality.commands(
@@ -75,17 +62,22 @@ defmodule Kogen.Harness.Gate do
       current_flakes =
         Enum.uniq(opts.flake_excused_test_ids ++ Enum.flat_map(flakes, & &1.test_ids))
 
-      {result, excused} =
-        run_spec(%{opts | flake_excused_test_ids: current_flakes}, spec, deadline, kind)
+      spec = if kind == :fix, do: %{spec | name: "fix/#{spec.name}"}, else: spec
 
-      result = assess_result(result, spec, opts.workdir)
+      run = fn ->
+        {command, excused} =
+          run_spec(%{opts | flake_excused_test_ids: current_flakes}, spec, deadline, kind)
 
-      result =
-        if kind == :check,
-          do: CheckBaseline.annotate(result, opts.check_baseline),
-          else: result
+        {assess_result(command, spec, opts.workdir), excused}
+      end
 
-      {:cont, {:ok, [result | results], excused ++ flakes}}
+      case Kogen.Checks.verify_command(opts.workdir, opts.env, spec, opts.check_baseline, run) do
+        {:ok, {result, excused}} ->
+          {:cont, {:ok, [result | results], excused ++ flakes}}
+
+        {:error, reason} ->
+          {:halt, {:error, reason}}
+      end
     end)
     |> case do
       {:ok, results, flakes} -> {:ok, Enum.reverse(results), Enum.reverse(flakes)}
@@ -154,7 +146,7 @@ defmodule Kogen.Harness.Gate do
             "base under the configured sandbox; skipped Developer repair for " <>
             "#{inspect(test_ids)}."
 
-        {%{original | exit_status: 3, timed_out: false, output: detail}, []}
+        {%{original | base_red?: true, output: original.output <> "\n" <> detail}, []}
       else
         detail =
           "\nSame-seed rerun still failed: #{inspect(test_ids)} (seed #{seed}).\n#{retry.output}"

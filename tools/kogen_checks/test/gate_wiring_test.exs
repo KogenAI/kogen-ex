@@ -39,7 +39,14 @@ defmodule KogenChecks.GateWiringTest do
         Kogen.Provider => [Kogen.Http, Kogen.Proc],
         Kogen.State => [Kogen.Workspace],
         Kogen.Quality => [Kogen.Proc, Kogen.Workspace],
-        Kogen.Checks => [Kogen.Quality, Kogen.Proc, Kogen.Workspace, Kogen.Project],
+        Kogen.Feedback => [],
+        Kogen.Checks => [
+          Kogen.Quality,
+          Kogen.Feedback,
+          Kogen.Proc,
+          Kogen.Workspace,
+          Kogen.Project
+        ],
         Kogen.Harness => [
           Kogen.Quality,
           Kogen.Checks,

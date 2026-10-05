@@ -237,7 +237,8 @@ defmodule Kogen.Engine.Build.StageRunner do
              session.project,
              session.run_dir,
              session.process_env,
-             session.sandbox
+             session.sandbox,
+             session.approval.check_baseline
            ),
          :ok <- record(session, %{event: :fix_result, result: :pass}) do
       {:ok, %{session | failure: nil, failure_text: nil}, [{:stage_ok, :fix, %{}}]}

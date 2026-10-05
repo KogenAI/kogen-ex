@@ -63,6 +63,11 @@ defmodule Kogen.Workspace do
   @spec tree_hash(Path.t(), git_env()) :: {:ok, String.t()} | {:error, term()}
   def tree_hash(path, git_env), do: Checkout.tree_hash(path, git_env)
 
+  @spec restore_check_tree(Path.t(), String.t(), [String.t()], git_env()) ::
+          :ok | {:error, term()}
+  def restore_check_tree(path, tree, paths, env),
+    do: Kogen.Workspace.CheckTree.restore(path, tree, paths, env)
+
   @spec copy_on_write(Path.t(), Path.t()) :: :ok | {:error, term()}
   def copy_on_write(source, destination),
     do: Kogen.Workspace.Copy.copy_on_write(source, destination)

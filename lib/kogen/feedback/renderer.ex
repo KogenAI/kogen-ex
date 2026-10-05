@@ -1,7 +1,7 @@
-defmodule Kogen.Checks.Feedback.Renderer do
+defmodule Kogen.Feedback.Renderer do
   @moduledoc false
 
-  alias Kogen.Checks.Feedback
+  alias Kogen.Feedback
 
   @max_findings_per_tool 10
   @max_findings 20

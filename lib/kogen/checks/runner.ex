@@ -6,7 +6,6 @@ defmodule Kogen.Checks.Runner do
   alias Kogen.Checks.RunState
   alias Kogen.Contracts.CheckBaseline
   alias Kogen.Contracts.CheckSpec
-  alias Kogen.Contracts.CommandExit
   alias Kogen.Contracts.Failure
   alias Kogen.Contracts.ProcResult
   alias Kogen.Contracts.Project
@@ -69,12 +68,14 @@ defmodule Kogen.Checks.Runner do
         run_dir: run_dir,
         env: env,
         tree: before_tree,
+        git_env: git_env,
+        baseline: options.check_baseline,
         sandbox: options.sandbox,
         baseline_run?: options.baseline_run?
       }
 
       finish_run(
-        run_specs(project.checks, state),
+        run_specs(specs(project, options), state),
         before_tree,
         workdir,
         git_env,
@@ -87,8 +88,7 @@ defmodule Kogen.Checks.Runner do
   end
 
   defp finish_run(results, before_tree, workdir, git_env, baseline) do
-    with {:ok, after_tree} <- Workspace.tree_hash(workdir, git_env),
-         :ok <- same_tree(before_tree, after_tree),
+    with {:ok, _after_tree} <- Workspace.tree_hash(workdir, git_env),
          {:ok, receipts, failures, feedbacks} <- results do
       checks = Enum.map(feedbacks, &CheckBaseline.annotate(&1, baseline))
       base_red = Enum.filter(checks, & &1.base_red?)
@@ -141,67 +141,62 @@ defmodule Kogen.Checks.Runner do
     end
   end
 
+  defp specs(project, %{baseline_run?: true}) do
+    Enum.map(project.fix, &%{&1 | name: "fix/#{&1.name}"}) ++ project.checks
+  end
+
+  defp specs(project, _options), do: project.checks
+
   defp run_spec(%CheckSpec{} = spec, %RunState{} = state) do
     log_path = check_log(state.run_dir, state.index, spec.name)
-    options = [cd: state.workdir, env: state.env, timeout_ms: spec.timeout_ms, log_path: log_path]
-    options = Keyword.put(options, :sandbox, state.sandbox)
-    update_from_process(Proc.run(spec.argv, options), spec, log_path, state)
-  end
 
-  defp update_from_process({:ok, %ProcResult{timed_out: true} = result}, spec, log_path, state) do
-    assessment = analyze_result(spec, result, log_path, state.workdir)
+    options = [
+      cd: state.workdir,
+      env: state.env,
+      timeout_ms: spec.timeout_ms,
+      log_path: log_path,
+      sandbox: state.sandbox
+    ]
 
-    {:error,
-     failure(
-       :environment,
-       :check_unavailable,
-       Feedback.render_environment_detail(prior_assessments(state, assessment))
-     )}
-  end
+    run = fn ->
+      result = process_result(Proc.run(spec.argv, options), spec, log_path)
+      {analyze_result(spec, result, log_path, state.workdir), result}
+    end
 
-  defp update_from_process(
-         {:ok, %ProcResult{exit_status: status} = result},
-         spec,
-         log_path,
-         state
-       )
-       when is_integer(status) do
-    assessment = analyze_result(spec, result, log_path, state.workdir)
-
-    if assessment.exit_level == 3 and not state.baseline_run? do
-      reason =
-        if CommandExit.tool_missing?(result.exit_status),
-          do: :tool_missing,
-          else: :check_unavailable
-
-      {:error,
-       failure(
-         :environment,
-         reason,
-         Feedback.render_environment_detail(prior_assessments(state, assessment))
-       )}
+    with {:ok, {assessment, result}} <-
+           Kogen.Checks.Verification.verify_command(
+             state.workdir,
+             state.git_env,
+             spec,
+             if(state.baseline_run?, do: :record, else: state.baseline),
+             run
+           ),
+         {:ok, receipt} <-
+           ReceiptBuilder.build(state.tree, spec, result.exit_status || 1, log_path) do
+      record_result(state, spec, assessment, receipt)
     else
-      case ReceiptBuilder.build(state.tree, spec, status, log_path) do
-        {:ok, receipt} ->
-          record_result(state, spec, assessment, receipt)
-
-        {:error, reason} ->
-          {:error, failure(:environment, reason, "check log unavailable for #{spec.name}")}
-      end
+      {:error, reason} -> {:error, failure(:controller, :check_record_failed, inspect(reason))}
     end
   end
 
-  defp update_from_process({:ok, %ProcResult{exit_status: nil}}, spec, _log, _state) do
-    {:error,
-     failure(:environment, :missing_exit_status, "check #{spec.name} returned no exit status")}
-  end
+  defp process_result({:ok, result}, _spec, _log_path), do: result
 
-  defp update_from_process({:error, :enoent}, spec, _log, _state) do
-    {:error, failure(:environment, :tool_missing, "check tool missing for #{spec.name}")}
-  end
+  defp process_result({:error, reason}, spec, log_path) do
+    output =
+      if reason == :enoent,
+        do: "Command was not found on the explicit PATH.",
+        else: "Process could not run: #{inspect(reason)}"
 
-  defp update_from_process({:error, reason}, spec, _log, _state) do
-    {:error, failure(:environment, :process_failed, "check #{spec.name}: #{inspect(reason)}")}
+    File.write!(log_path, output)
+
+    %ProcResult{
+      argv: spec.argv,
+      exit_status: nil,
+      timed_out: false,
+      output_tail: output,
+      log_path: log_path,
+      duration_ms: 0
+    }
   end
 
   defp record_result(state, spec, assessment, receipt) do
@@ -230,8 +225,6 @@ defmodule Kogen.Checks.Runner do
     })
   end
 
-  defp prior_assessments(state, assessment), do: Enum.reverse([assessment | state.feedbacks])
-
   defp prepare_logs(run_dir) do
     if Path.type(run_dir) == :absolute do
       case File.mkdir_p(Path.join(run_dir, "logs")) do
@@ -247,11 +240,6 @@ defmodule Kogen.Checks.Runner do
     safe_name = Regex.replace(~r/[^A-Za-z0-9_.-]/, name, "_")
     Path.join([run_dir, "logs", "check-#{index}-#{safe_name}.log"])
   end
-
-  defp same_tree(tree, tree), do: :ok
-
-  defp same_tree(_before, _after),
-    do: {:error, failure(:candidate, :tree_mutated, "a check changed the candidate tree")}
 
   defp failure(class, reason, detail), do: %Failure{class: class, reason: reason, detail: detail}
 end

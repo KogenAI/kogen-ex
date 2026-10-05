@@ -36,7 +36,14 @@ end
 defmodule Kogen.Checks do
   @moduledoc "Runs deterministic project verification and records its results."
   use Boundary,
-    deps: [Kogen.Quality, Kogen.Contracts, Kogen.Proc, Kogen.Workspace, Kogen.Project],
+    deps: [
+      Kogen.Quality,
+      Kogen.Contracts,
+      Kogen.Feedback,
+      Kogen.Proc,
+      Kogen.Workspace,
+      Kogen.Project
+    ],
     exports: [Feedback, LedgerRow, ShapeValidation, ShapeFormatRequest]
 
   alias Kogen.Checks.Fixer
@@ -83,6 +90,11 @@ defmodule Kogen.Checks do
           {:ok, [ProcResult.t()]} | {:error, Failure.t()}
   def fix(workdir, project, run_dir, env, sandbox),
     do: Fixer.run(workdir, project, run_dir, env, sandbox)
+
+  def fix(workdir, project, run_dir, env, sandbox, baseline),
+    do: Fixer.run(workdir, project, run_dir, env, sandbox, baseline)
+
+  defdelegate verify_command(workdir, env, spec, baseline, run), to: Kogen.Checks.Verification
 
   @spec run_all(Path.t(), Project.t(), Path.t(), %{String.t() => String.t()}) :: run_result()
   def run_all(workdir, project, run_dir, git_env),

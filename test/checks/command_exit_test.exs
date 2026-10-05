@@ -31,17 +31,19 @@ defmodule Kogen.Checks.CommandExitTest do
         domains: %{}
       }
 
-      assert {:error, %Failure{class: :environment, reason: :tool_missing}} =
+      assert {:ok, %{status: {:fail, ["unavailable"]}, feedback: feedback}} =
                Checks.run_all(
                  repo,
                  project,
                  Path.join(tmp_dir, "check-run-#{status}"),
                  Git.env()
                )
+
+      assert feedback =~ "is not available"
     end
   end
 
-  test "safe formatter exit statuses 126 and 127 are environment tool failures", %{
+  test "safe formatter exit statuses 126 and 127 return candidate repair feedback", %{
     tmp_dir: tmp_dir
   } do
     for status <- [126, 127] do
@@ -64,13 +66,15 @@ defmodule Kogen.Checks.CommandExitTest do
         domains: %{}
       }
 
-      assert {:error, %Failure{class: :environment, reason: :tool_missing}} =
+      assert {:error, %Failure{class: :candidate, reason: :fix_failed, detail: detail}} =
                Kogen.Checks.Fixer.run(
                  repo,
                  project,
                  Path.join(tmp_dir, "fix-run-#{status}"),
                  Git.env()
                )
+
+      assert detail =~ "fix/formatter"
     end
   end
 

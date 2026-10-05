@@ -1,6 +1,6 @@
-defmodule Kogen.Checks.Feedback.Parser do
+defmodule Kogen.Feedback.Parser do
   @moduledoc false
-  import Kogen.Checks.Feedback.Parser.Common,
+  import Kogen.Feedback.Parser.Common,
     only: [
       location: 1,
       normalize_path: 2,
@@ -15,7 +15,7 @@ defmodule Kogen.Checks.Feedback.Parser do
       environment_text?: 1
     ]
 
-  alias Kogen.Checks.Feedback.Parser.Compile
+  alias Kogen.Feedback.Parser.Compile
 
   @file_path ~r{((?:\$WORKDIR/|/)?[A-Za-z0-9_.$-]+(?:/[A-Za-z0-9_.$-]+)*\.exs?)\s*$}
   @credo_head ~r/^\[([FWCRD])\]\s*(?:[↗↘→]+\s*)?(.*)$/u
