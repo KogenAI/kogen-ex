@@ -80,7 +80,38 @@ defmodule Kogen.Kernel.CLI.ErrorOutput do
   def format({:base_moved, expected, current}),
     do: {3, "environment/base_moved: expected #{expected}, found #{inspect(current)}\n"}
 
+  def format({:lint, issues}) when is_list(issues),
+    do: {1, "intent/lint: the Intent needs changes\n" <> Enum.map_join(issues, &issue_line/1)}
+
+  def format(:detach_needs_installed_kogen),
+    do:
+      {3,
+       "environment/detach_unavailable: --detach needs an installed kogen; " <>
+         "run kogen queue start in the background instead\n"}
+
+  def format({:queue_detach_failed, output}),
+    do:
+      {3,
+       "environment/queue_detach_failed: the background queue did not start\n" <>
+         Runtime.output_tail(output)}
+
+  def format({:invalid_accounts_file, path}),
+    do: {3, "environment/invalid_accounts_file: #{path} is not valid; fix or delete it\n"}
+
+  def format({kind, path, reason})
+      when kind in [:accounts_file_unreadable, :accounts_file_unwritable],
+      do: {3, "environment/#{kind}: #{path}: #{inspect(reason)}\n"}
+
+  def format({kind, reason}) when kind in [:queue_lock_failed, :queue_stop_failed],
+    do: {3, "environment/#{kind}: #{inspect(reason)}\n"}
+
   def format(reason), do: {70, "controller/#{inspect(reason)}\n"}
+
+  defp issue_line(%{rule: rule, message: message, line: line}),
+    do: "  #{rule} at line #{line}: #{message}\n"
+
+  defp issue_line(%{line: line, message: message}), do: "  line #{line}: #{message}\n"
+  defp issue_line(issue), do: "  #{inspect(issue)}\n"
 
   defp failure_code(%Failure{class: :candidate}), do: 1
   defp failure_code(%Failure{class: :environment}), do: 3

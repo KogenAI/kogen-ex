@@ -1,4 +1,4 @@
 defmodule Kogen.Cli do
-  @moduledoc false
-  use Boundary, deps: [], exports: [Args, Arguments, Help]
+  @moduledoc "Command-line parsing and static help. Pure: no I/O and no other domains."
+  use Boundary, deps: [], exports: [Args, Arguments, Help, Version]
 end

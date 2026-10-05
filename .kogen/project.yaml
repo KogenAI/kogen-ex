@@ -1,5 +1,4 @@
 name: kogen
-account: kogen
 checks:
   - name: full
     argv: [make, check-full]
@@ -42,5 +41,6 @@ domains:
   build: [lib/kogen/build.ex, lib/kogen/build, test/build]
   engine: [lib/kogen/engine.ex, lib/kogen/engine, test/engine, test/acceptance, test/e2e]
   kernel: [lib/kogen/kernel.ex, lib/kogen/kernel, test/kernel]
+  queue: [lib/kogen/queue.ex, lib/kogen/queue, test/queue]
   shaper: [lib/kogen/shaper.ex, lib/kogen/shaper, test/shaper]
   docs: [docs, README.md]

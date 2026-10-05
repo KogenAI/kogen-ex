@@ -1,0 +1,11 @@
+Usage: kogen status [<slug>] [options]
+
+Shows the queue, then Intents by state. With <slug>, shows that Intent and its latest Build.
+Builds whose process died are marked crashed first.
+
+Options:
+  --watch               Print again on every change; return when the queue is idle
+  --json                JSON Lines, one object per Intent (with <slug>: the Build report)
+  --project <checkout>  Project checkout (default: current directory)
+  --origin <repo>       Git repository holding Intent state and the target branch
+  --base <branch>       Target branch (project setting, origin HEAD, then current branch)

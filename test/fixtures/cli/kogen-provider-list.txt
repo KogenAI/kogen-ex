@@ -1,0 +1,3 @@
+Usage: kogen provider list
+
+Lists saved accounts, whether each is signed in, and the default.

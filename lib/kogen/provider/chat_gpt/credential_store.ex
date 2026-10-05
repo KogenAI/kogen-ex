@@ -1,38 +1,8 @@
-defmodule Kogen.Provider.ChatGPT.CredentialStore.Profile do
-  @moduledoc false
-
-  @enforce_keys [:label]
-  defstruct [
-    :label,
-    :client_id,
-    :subject,
-    :email,
-    :expires_at,
-    :auth_source,
-    signed_in: false,
-    plan_usage: false,
-    notice_shown: false,
-    remote_revoked: nil
-  ]
-
-  @type t :: %__MODULE__{
-          label: String.t(),
-          client_id: String.t() | nil,
-          subject: String.t() | nil,
-          email: String.t() | nil,
-          expires_at: pos_integer() | nil,
-          auth_source: String.t() | nil,
-          signed_in: boolean(),
-          plan_usage: boolean(),
-          notice_shown: boolean(),
-          remote_revoked: boolean() | nil
-        }
-end
-
 defmodule Kogen.Provider.ChatGPT.CredentialStore do
   @moduledoc false
 
   alias Kogen.Contracts.JSON
+  alias Kogen.Contracts.Yaml
   alias Kogen.Provider.ChatGPT.CredentialStore.Profile
   alias Kogen.Provider.ChatGPT.FileStore
   alias Kogen.Provider.ChatGPT.KeychainStore
@@ -126,6 +96,40 @@ defmodule Kogen.Provider.ChatGPT.CredentialStore do
 
       error ->
         error
+    end
+  end
+
+  @typedoc "The default account and each project's own account (keyed by canonical path)."
+  @type account_choices :: %{default: String.t() | nil, projects: %{Path.t() => String.t()}}
+
+  @doc """
+  Reads `<root>/accounts.yaml`, this machine's account choices. Never committed to a repo:
+  every user has their own logins.
+  """
+  @spec account_choices(Path.t()) :: {:ok, account_choices()} | {:error, term()}
+  def account_choices(root) do
+    path = accounts_path(root)
+
+    case File.read(path) do
+      {:ok, source} -> source |> Yaml.parse() |> decode_choices(path)
+      {:error, :enoent} -> {:ok, %{default: nil, projects: %{}}}
+      {:error, reason} -> {:error, {:accounts_file_unreadable, path, reason}}
+    end
+  end
+
+  @doc "Sets the default account, or one project's; forgets projects that no longer exist."
+  @spec put_account_choice(Path.t(), :default | {:project, Path.t()}, String.t()) ::
+          :ok | {:error, term()}
+  def put_account_choice(root, target, label) do
+    with :ok <- valid_label(label),
+         {:ok, choices} <- account_choices(root) do
+      choices =
+        case target do
+          :default -> %{choices | default: label}
+          {:project, path} -> %{choices | projects: Map.put(choices.projects, path, label)}
+        end
+
+      write_choices(root, choices)
     end
   end
 
@@ -288,6 +292,58 @@ defmodule Kogen.Provider.ChatGPT.CredentialStore do
       _invalid -> {:error, :invalid_credentials}
     end
   end
+
+  defp decode_choices({:ok, %{"chatgpt" => section} = document}, path)
+       when map_size(document) == 1 and is_map(section) do
+    default = Map.get(section, "default")
+    rows = Map.get(section, "projects", [])
+
+    projects =
+      if is_list(rows),
+        do: Enum.map(rows, &{Map.get(&1, "path"), Map.get(&1, "account")}),
+        else: [nil]
+
+    if (is_nil(default) or valid_label?(default)) and
+         Enum.all?(projects, &match?({path, label} when is_binary(path) and is_binary(label), &1)) and
+         Enum.all?(projects, fn {_path, label} -> valid_label?(label) end),
+       do: {:ok, %{default: default, projects: Map.new(projects)}},
+       else: {:error, {:invalid_accounts_file, path}}
+  end
+
+  defp decode_choices(_document, path), do: {:error, {:invalid_accounts_file, path}}
+
+  defp write_choices(root, choices) do
+    default = if choices.default, do: "  default: #{choices.default}\n", else: ""
+
+    rows =
+      choices.projects
+      |> Enum.filter(fn {path, _label} -> File.dir?(path) end)
+      |> Enum.sort()
+      |> Enum.map_join(fn {path, label} ->
+        "    - path: #{yaml_string(path)}\n      account: #{label}\n"
+      end)
+
+    projects = if rows == "", do: "", else: "  projects:\n" <> rows
+
+    contents =
+      "# Kogen accounts on this machine, written by kogen provider use.\nchatgpt:\n" <>
+        default <> projects
+
+    path = accounts_path(root)
+
+    with :ok <- File.mkdir_p(root),
+         :ok <- File.write(path <> ".tmp", contents),
+         :ok <- File.rename(path <> ".tmp", path) do
+      :ok
+    else
+      {:error, reason} -> {:error, {:accounts_file_unwritable, path, reason}}
+    end
+  end
+
+  defp yaml_string(value),
+    do: "\"" <> (value |> String.replace("\\", "\\\\") |> String.replace("\"", "\\\"")) <> "\""
+
+  defp accounts_path(root), do: Path.join(root, "accounts.yaml")
 
   defp read_profiles(root) do
     case File.read(Path.join(root, "profiles.json")) do

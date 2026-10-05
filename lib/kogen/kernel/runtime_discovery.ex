@@ -39,6 +39,13 @@ defmodule Kogen.Kernel.RuntimeDiscovery do
     end
   end
 
+  @doc "The running escript archive with symlinks resolved, or nil outside an installed kogen."
+  @spec script() :: {:ok, Path.t() | nil} | {:error, term()}
+  def script, do: resolve_script_path(escript_path())
+
+  @spec erts_bin() :: Path.t()
+  def erts_bin, do: runtime_path(:bindir)
+
   @spec resolve_script_path(Path.t() | nil) :: {:ok, Path.t() | nil} | {:error, term()}
   def resolve_script_path(nil), do: {:ok, nil}
 

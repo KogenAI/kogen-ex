@@ -1,0 +1,9 @@
+Usage: kogen provider <command> [options]
+
+Commands:
+  list               List saved accounts and the default
+  login chatgpt      Sign in with a ChatGPT account
+  logout chatgpt     Sign out of a ChatGPT account
+  use chatgpt        Choose the default account, or one project's account
+
+Logins belong to this machine, never to a repo.

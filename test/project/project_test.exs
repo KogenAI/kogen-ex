@@ -136,10 +136,10 @@ defmodule Kogen.Project.ProjectTest do
     assert effective.roles.planner == %{model: "machine-planner", effort: "high"}
   end
 
-  test "account defaults to the Kogen default label", %{tmp_dir: root} do
+  test "a project commits no account; the machine chooses it", %{tmp_dir: root} do
     write_config(root, "name: tiny-app\nchecks: []\n")
     assert {:ok, project} = ProjectLoader.load(root)
-    assert project.account == "default"
+    assert project.account == nil
   end
 
   test "sandbox accepts only a boolean project setting", %{tmp_dir: root} do

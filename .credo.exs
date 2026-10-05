@@ -173,6 +173,7 @@
                  Kogen.Tooling
                ],
                Kogen.Tooling => [Kogen.Proc],
+               Kogen.Queue => [Kogen.Proc, Kogen.State, Kogen.Workspace],
                Kogen.Engine => [
                  Kogen.Proc,
                  Kogen.Project,
@@ -195,6 +196,7 @@
                  Kogen.Checks,
                  Kogen.Harness,
                  Kogen.Shaper,
+                 Kogen.Queue,
                  Kogen.Cli
                ],
                Kogen.E2e => [
@@ -202,6 +204,7 @@
                  Kogen.Kernel,
                  Kogen.Proc,
                  Kogen.Project,
+                 Kogen.Queue,
                  Kogen.Shaper,
                  Kogen.State,
                  Kogen.Testkit,

@@ -1,238 +1,196 @@
 defmodule Kogen.Kernel.CLITest do
   use Kogen.Testkit.Case
 
+  import ExUnit.CaptureIO
+
   alias Kogen.Cli.Arguments
+  alias Kogen.Cli.Version
   alias Kogen.Kernel.CLI
   alias Kogen.Testkit.Git
 
   @fixture Path.expand("../../fixtures/hello_app", __DIR__)
+  @golden Path.expand("../fixtures/cli", __DIR__)
 
-  test "version works without a project path" do
-    assert {0, output} = CLI.execute(["version"])
-    ["kogen", version] = String.split(String.trim(output), " ")
-    assert Regex.match?(~r/\A0\.0\.0\+[0-9A-Za-z.-]+\z/, version)
+  @topics [
+    [],
+    ["help"],
+    ["status"],
+    ["intent"],
+    ["intent", "shape"],
+    ["intent", "approve"],
+    ["intent", "remove"],
+    ["queue"],
+    ["queue", "start"],
+    ["queue", "stop"],
+    ["provider"],
+    ["provider", "list"],
+    ["provider", "login"],
+    ["provider", "logout"],
+    ["provider", "use"],
+    ["version"]
+  ]
+
+  test "every help page matches its golden file, by every route" do
+    for topic <- @topics do
+      expected = golden(topic)
+      assert CLI.execute(["help" | topic]) == {0, expected}, "help #{inspect(topic)}"
+      assert CLI.execute(topic ++ ["--help"]) == {0, expected}, "#{inspect(topic)} --help"
+    end
+
+    assert CLI.execute([]) == {0, golden([])}
+    assert CLI.execute(["intent"]) == {0, golden(["intent"])}
+    assert CLI.execute(["queue"]) == {0, golden(["queue"])}
+    assert CLI.execute(["provider"]) == {0, golden(["provider"])}
   end
 
-  test "top-level help is the compact golden command list" do
-    assert CLI.execute([]) == {0, top_level_help()}
-    assert CLI.execute(["help"]) == {0, top_level_help()}
-    assert CLI.execute(["--help"]) == {0, top_level_help()}
+  test "the top level lists commands first and nothing else" do
+    {0, help} = CLI.execute([])
+    assert String.starts_with?(help, "Commands:\n  status ")
+    refute help =~ "--"
   end
 
-  test "command help is a golden subcommand and option list" do
-    assert CLI.execute(["intent", "--help"]) == {0, intent_help()}
-    assert CLI.execute(["help", "intent"]) == {0, intent_help()}
-    assert CLI.execute(["intent", "remove", "--help"]) == {0, remove_help()}
-    assert CLI.execute(["intent", "shape", "--help"]) == {0, shape_help()}
-    assert CLI.execute(["intent", "approve", "--help"]) == {0, approve_help()}
-    assert ["build", "--help"] |> CLI.execute() |> elem(1) =~ "build show <slug>"
-  end
-
-  test "obsolete intent close and incomplete remove errors are golden" do
-    assert CLI.execute(["intent", "close", "greet"]) ==
-             {2, "kogen: moved: use kogen intent remove <slug>\n\n" <> top_level_help()}
-
-    assert CLI.execute(["intent", "remove"]) ==
-             {2, "kogen: intent remove requires <slug>\n\n" <> top_level_help()}
-
-    assert CLI.execute(["intent", "remove", "--force"]) ==
-             {2, "kogen: intent remove requires <slug>\n\n" <> top_level_help()}
-  end
-
-  test "project commands default to cwd and defer base selection" do
-    assert {:ok, args} = Arguments.parse(["status"])
-    assert args.project == nil
-    assert args.origin == nil
-    assert args.base == nil
-
-    assert {:ok, explicit} = Arguments.parse(["status", "--origin", "/tmp/kogen-origin"])
-    assert explicit.origin == "/tmp/kogen-origin"
-  end
-
-  test "build settings are no longer command flags" do
-    assert {:ok, build} = Arguments.parse(["build", "greet"])
-    assert build.command == :build
-
-    assert {:ok, show} = Arguments.parse(["build", "show", "greet"])
-    assert show.command == :build_show
-  end
-
-  test "provider commands keep account labels on login and logout" do
-    assert {:ok, login} = Arguments.parse(["provider", "login", "chatgpt", "--as", "personal"])
-    assert login.command == :provider_login
-    assert login.account_label == "personal"
-    assert login.project == nil
-    assert login.origin == nil
-
-    assert {:ok, logout} = Arguments.parse(["provider", "logout", "chatgpt", "--as", "personal"])
-    assert logout.command == :provider_logout
-    assert logout.account_label == "personal"
-
-    assert {:ok, list} = Arguments.parse(["provider", "list"])
-    assert list.command == :provider_list
-    assert list.project == nil
-  end
-
-  test "approval identity defaults to Git and --by is an explicit override" do
-    assert {:ok, default} = Arguments.parse(["intent", "approve", "greet", "--yes"])
-    assert default.by == nil
-
-    assert {:ok, override} =
-             Arguments.parse(["intent", "approve", "greet", "--by", "agent:codex for almir"])
-
-    assert override.by == "agent:codex for almir"
-  end
-
-  test "old command and flag forms return moved errors" do
+  test "errors name the problem and show only the meant command's help" do
     cases = [
-      {["approve", "greet"], "moved: use kogen intent approve <slug>"},
-      {["report", "greet"], "moved: use kogen build show <slug>"},
-      {["build", "greet", "--model", "m"], "moved: set build.roles.builder.model"},
-      {["build", "greet", "--effort", "high"], "moved: set build.roles.builder.effort"},
-      {["build", "greet", "--recipe", "direct"], "moved: set build.recipe"},
-      {["build", "greet", "--borrow", "codex"], "moved: use kogen provider login chatgpt"},
-      {["build", "greet", "--as", "personal"], "moved: set account"}
+      {["foo"], "kogen: unknown command 'foo'", []},
+      {["intent", "check2"], "kogen intent: unknown command 'check2'", ["intent"]},
+      {["intent", "approve"], "kogen intent approve: missing <slug>", ["intent", "approve"]},
+      {["intent", "shape", "x"], "kogen intent shape: missing <file|->", ["intent", "shape"]},
+      {["intent", "remove", "--force"], "kogen intent remove: missing <slug>",
+       ["intent", "remove"]},
+      {["status", "--bogus"], "kogen status: unknown option '--bogus'", ["status"]},
+      {["status", "a", "b"], "kogen status: unexpected argument 'b'", ["status"]},
+      {["status", "--watch", "--json"], "kogen status: --watch and --json can't be combined",
+       ["status"]},
+      {["status", "--base"], "kogen status: --base needs a value", ["status"]},
+      {["queue", "start", "now"], "kogen queue start: unexpected argument 'now'",
+       ["queue", "start"]},
+      {["provider", "login", "grok"],
+       "kogen provider login: unknown provider 'grok' (supported: chatgpt)",
+       ["provider", "login"]},
+      {["intent", "approve", "greet", "XYZ"],
+       "kogen intent approve: <hash> must be 6 to 64 lowercase hex characters",
+       ["intent", "approve"]},
+      {["help", "nope"], "kogen help: no command 'nope'", []}
     ]
 
-    for {argv, message} <- cases do
-      assert {2, output} = CLI.execute(argv)
-      assert output =~ message
+    for {argv, message, topic} <- cases do
+      assert CLI.execute(argv) == {2, message <> "\n\n" <> golden(topic)}, inspect(argv)
     end
   end
 
-  test "intent check resolves a project-relative path or slug" do
-    assert {0, path_output} =
-             CLI.execute([
-               "intent",
-               "check",
-               ".kogen/intents/greet/intent.md",
-               "--project",
-               @fixture
-             ])
+  test "old forms exit 2 with one moved line" do
+    cases = [
+      {["build", "greet"], "kogen queue start (approved Intents build from the queue)"},
+      {["build", "show", "greet"], "kogen status <slug>"},
+      {["report", "greet"], "kogen status <slug>"},
+      {["approve", "greet"], "kogen intent approve <slug> <hash>"},
+      {["reconcile", "abc"],
+       "kogen status (crash recovery is automatic in status and queue start)"},
+      {["reconcile"], "kogen status (crash recovery is automatic in status and queue start)"},
+      {["intent", "check", "greet"],
+       "kogen intent approve <slug> (prints the review card and check results)"},
+      {["intent", "close", "greet"], "kogen intent remove <slug>"},
+      {["--version"], "kogen version"},
+      {["intent", "shape", "x", "--task-file", "t.md"], "kogen intent shape <slug> <file>"},
+      {["intent", "approve", "x", "--yes"], "kogen intent approve <slug> <hash>"},
+      {["status", "--model", "m"], "build.roles.builder.model in .kogen/project.yaml"},
+      {["status", "--effort", "max"], "build.roles.builder.effort in .kogen/project.yaml"},
+      {["status", "--recipe", "direct"], "build.recipe in .kogen/project.yaml"},
+      {["status", "--borrow", "codex"], "kogen provider login chatgpt for a Kogen-owned login"},
+      {["queue", "start", "--as", "work"],
+       "kogen provider use chatgpt --as <label> --project <checkout>"}
+    ]
 
-    assert path_output =~ "intent greet: valid"
-    assert path_output =~ "sha256"
-
-    assert {0, slug_output} =
-             CLI.execute(["intent", "check", "greet", "--project", @fixture])
-
-    assert slug_output =~ "intent greet: valid"
+    for {argv, message} <- cases do
+      assert CLI.execute(argv) == {2, "kogen: moved: use #{message}\n"}, inspect(argv)
+    end
   end
 
-  test "intent check prints parse issues and uses exit code 2", %{tmp_dir: tmp_dir} do
-    File.write!(Path.join(tmp_dir, "broken.md"), "not an Intent\n")
+  test "version names the source commit and its date" do
+    assert {0, output} = CLI.execute(["version"])
+    assert output =~ ~r/\Akogen [0-9a-f]{8} \(\d{4}-\d{2}-\d{2}(, uncommitted changes)?\)\n\z/
 
-    assert {2, output} = CLI.execute(["intent", "check", "broken.md", "--project", tmp_dir])
-    assert output =~ "parse failed"
-    assert output =~ "frontmatter must start"
+    assert Version.display("0.0.0+6e826320.20261005") == "6e826320 (2026-10-05)"
+
+    assert Version.display("0.0.0+6e826320.20261005.dirty") ==
+             "6e826320 (2026-10-05, uncommitted changes)"
+
+    assert Version.display("0.0.0+unknown") == "unknown build (0.0.0+unknown)"
   end
 
-  test "status emits text and JSON for the selected project branch", %{tmp_dir: tmp_dir} do
+  test "arguments carry positionals, flags and project options" do
+    assert {:ok, approve} =
+             Arguments.parse(["intent", "approve", "greet", "3fa2c1", "--by", "agent for almir"])
+
+    assert {approve.command, approve.positionals, approve.by} ==
+             {:intent_approve, ["greet", "3fa2c1"], "agent for almir"}
+
+    assert {:ok, shape} = Arguments.parse(["intent", "shape", "greet", "-", "--json"])
+    assert {shape.positionals, shape.json} == {["greet", "-"], true}
+
+    assert {:ok, start} = Arguments.parse(["queue", "start", "--detach", "--origin", "/o"])
+    assert {start.command, start.detach, start.origin} == {:queue_start, true, "/o"}
+
+    assert {:ok, status} = Arguments.parse(["status", "greet", "--watch"])
+    assert {status.positionals, status.watch, status.project} == {["greet"], true, nil}
+
+    assert {:ok, use} = Arguments.parse(["provider", "use", "chatgpt", "--as", "work"])
+    assert {use.command, use.account_label, use.project} == {:provider_use, "work", nil}
+  end
+
+  test "status prints readable sections and JSON with build ids", %{tmp_dir: tmp_dir} do
     project = Git.create!(tmp_dir)
-    write_project_config(project)
-    Git.git!(project, ["branch", "-M", "main"])
-    intent_path = Path.join([project, ".kogen", "intents", "greet", "intent.md"])
-    File.mkdir_p!(Path.dirname(intent_path))
-    File.write!(intent_path, "draft Intent\n")
-
-    assert {0, "greet draft run=- landed=-\n"} =
-             CLI.execute(["status", "--project", project, "--base", "main"])
-
-    assert {0, output} = CLI.execute(["status", "--project", project, "--base", "main", "--json"])
-
-    assert :json.decode(output) == [
-             %{
-               "slug" => "greet",
-               "status" => "draft",
-               "run_id" => :null,
-               "landed_sha" => :null
-             }
-           ]
-  end
-
-  defp write_project_config(project) do
     File.mkdir_p!(Path.join(project, ".kogen"))
 
     File.cp!(
       Path.join(@fixture, ".kogen/project.yaml"),
       Path.join(project, ".kogen/project.yaml")
     )
+
+    Git.git!(project, ["branch", "-M", "main"])
+    intent_path = Path.join([project, ".kogen", "intents", "greet", "intent.md"])
+    File.mkdir_p!(Path.dirname(intent_path))
+    File.write!(intent_path, "draft Intent\n")
+
+    assert CLI.execute(["status", "--project", project, "--base", "main"]) ==
+             {0, "Queue: stopped\nDrafts:\n  greet\n"}
+
+    assert CLI.execute(["status", "greet", "--project", project, "--base", "main"]) ==
+             {0, "greet: draft; review it with kogen intent approve greet\n"}
+
+    assert {0, json} = CLI.execute(["status", "--project", project, "--base", "main", "--json"])
+
+    assert json ==
+             ~s({"build_id":null,"landed_sha":null,"slug":"greet","status":"draft"}\n)
+
+    assert {0, one} = CLI.execute(["status", "greet", "--json", "--project", project])
+    assert :json.decode(one)["status"] == "draft"
+
+    assert CLI.execute(["status", "missing", "--project", project]) ==
+             {2, "intent/not_found: Intent does not exist\n"}
+
+    assert capture_io(fn ->
+             assert CLI.execute(["status", "--watch", "--project", project]) == {0, ""}
+           end) == "Queue: stopped\nDrafts:\n  greet\n"
   end
 
-  defp top_level_help do
-    """
-    Commands:
-      status      Show project and Intent state
-      intent      Check, shape, approve, or remove an Intent
-      build       Build an Intent or show a Build report
-      reconcile   Reconcile a Build after a crash
-      provider    Manage Kogen ChatGPT logins
-      version     Show the Kogen version
-      help        Show help for a command
-    """
+  test "queue stop and detach report an idle queue without writing state", %{tmp_dir: tmp_dir} do
+    project = Git.create!(tmp_dir)
+    File.mkdir_p!(Path.join(project, ".kogen"))
+
+    File.cp!(
+      Path.join(@fixture, ".kogen/project.yaml"),
+      Path.join(project, ".kogen/project.yaml")
+    )
+
+    assert CLI.execute(["queue", "stop", "--project", project]) == {0, "queue: not running\n"}
+
+    assert {3, detach} = CLI.execute(["queue", "start", "--detach", "--project", project])
+    assert detach =~ "environment/detach_unavailable"
   end
 
-  defp intent_help do
-    """
-    Usage: kogen intent <command> [arguments] [options]
+  defp golden([]), do: File.read!(Path.join(@golden, "kogen.txt"))
 
-    Commands:
-      check <slug|path>     Parse and lint an Intent
-      shape <slug>          Create an Intent from task text
-      approve <slug>        Review and record an Intent approval
-      remove <slug>         Remove an Intent in one commit
-
-    Options:
-      --project <checkout>  Project checkout (default: current directory)
-      --origin <repo>       Local Git repository used for state and landing
-      --base <branch>       Target branch (project setting, origin HEAD, then current branch)
-    """
-  end
-
-  defp remove_help do
-    """
-    Usage: kogen intent remove <slug> [--force] [options]
-
-    Removes the Intent files and records the removal in one commit. Approved Intents require --force.
-
-    Options:
-      --project <checkout>  Project checkout (default: current directory)
-      --origin <repo>       Local Git repository used for state and landing
-      --base <branch>       Target branch (project setting, origin HEAD, then current branch)
-      --force               Remove an approved or queued Intent
-    """
-  end
-
-  defp shape_help do
-    """
-    Usage: kogen intent shape <slug> [--task-file <path>] [options]
-
-    Reads task text from stdin when --task-file is omitted or set to -.
-    Shaping waits until complete (60-turn limit, no wall timeout).
-    Creates and validates the Intent and its acceptance test. Model and effort come from project build settings.
-
-    Options:
-      --project <checkout>  Project checkout (default: current directory)
-      --origin <repo>       Local Git repository used for state and landing
-      --base <branch>       Target branch (project setting, origin HEAD, then current branch)
-      --task-file <path>    Task statement file (- reads stdin)
-      --json                Emit shaping usage as JSON
-    """
-  end
-
-  defp approve_help do
-    """
-    Usage: kogen intent approve <slug> [--by <name>] [options]
-
-    Records an approval after review. The default approver is Git's author identity.
-    Drivers acting for someone should identify themselves in --by. Without --yes, approval requires a TTY.
-
-    Options:
-      --project <checkout>  Project checkout (default: current directory)
-      --origin <repo>       Local Git repository used for state and landing
-      --base <branch>       Target branch (project setting, origin HEAD, then current branch)
-      --by <name>          Explicit approval provenance override
-      --yes                 Skip the TTY prompt
-    """
-  end
+  defp golden(topic),
+    do: File.read!(Path.join(@golden, Enum.join(["kogen" | topic], "-") <> ".txt"))
 end

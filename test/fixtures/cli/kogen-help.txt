@@ -1,0 +1,3 @@
+Usage: kogen help [<command> [<subcommand>]]
+
+Shows help for a command.

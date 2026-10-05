@@ -18,29 +18,31 @@ defmodule Kogen.Acceptance.ReconcileReportTest do
   @dead_pid 999_999
 
   @tag intent: "reconcile-report/A1"
-  test "reconciling a crashed run reports it", %{tmp_dir: tmp_dir} do
+  test "status reports a crashed run as failed with reason crashed", %{tmp_dir: tmp_dir} do
     {repo, branch, run} = crashed_run(tmp_dir, @dead_pid)
 
-    assert cli(["reconcile", run.id, "--base", branch], repo) =~ "reconcile: crashed"
+    output = cli(["status", "--base", branch], repo)
+
+    assert output =~ ~r/^Failed:\n  probe  crashed \(Build #{binary_part(run.id, 0, 8)}\)$/m
   end
 
   @tag intent: "reconcile-report/A2"
-  test "reconciling a crashed run removes its workspace", %{tmp_dir: tmp_dir} do
+  test "status removes a crashed run's workspace", %{tmp_dir: tmp_dir} do
     {repo, branch, run} = crashed_run(tmp_dir, @dead_pid)
     workspace = workspace!(repo, run)
 
-    cli(["reconcile", run.id, "--base", branch], repo)
+    cli(["status", "--base", branch], repo)
 
     refute File.exists?(workspace)
     assert run_json(run)["status"] == "failed"
   end
 
   @tag intent: "reconcile-report/A3"
-  test "reconciling a live run reports unchanged and keeps its workspace", %{tmp_dir: tmp_dir} do
+  test "status leaves a live run building and keeps its workspace", %{tmp_dir: tmp_dir} do
     {repo, branch, run} = crashed_run(tmp_dir, String.to_integer(System.pid()))
     workspace = workspace!(repo, run)
 
-    assert cli(["reconcile", run.id, "--base", branch], repo) =~ "reconcile: unchanged"
+    assert cli(["status", "--base", branch], repo) =~ ~r/^Building:\n  probe  /m
     assert File.exists?(Path.join(workspace, "marker"))
   end
 
@@ -54,17 +56,17 @@ defmodule Kogen.Acceptance.ReconcileReportTest do
   defp crashed_run(tmp_dir, owner_pid) do
     {repo, branch} = project(tmp_dir)
     approved = approval(repo)
-    {:ok, _approval_commit} = State.approve(repo, approved, @git_env)
+    {:ok, approval_commit} = State.approve(repo, approved, @git_env)
     {:ok, run} = State.start_run(Path.join(repo, ".kogen"), approved)
     :ok = State.claim(repo, run.id, @git_env)
 
     run_json_path = Path.join(run.dir, "run.json")
     decoded = run_json_path |> File.read!() |> :json.decode()
 
-    File.write!(
-      run_json_path,
-      IO.iodata_to_binary(:json.encode(Map.put(decoded, "owner_os_pid", owner_pid)))
-    )
+    decoded =
+      Map.merge(decoded, %{"owner_os_pid" => owner_pid, "approval_commit" => approval_commit})
+
+    File.write!(run_json_path, IO.iodata_to_binary(:json.encode(decoded)))
 
     {repo, branch, run}
   end
@@ -75,6 +77,9 @@ defmodule Kogen.Acceptance.ReconcileReportTest do
     File.mkdir_p!(Path.dirname(project_yaml))
     File.cp!(Path.join(@project_root, ".kogen/project.yaml"), project_yaml)
     branch = repo |> git(["rev-parse", "--abbrev-ref", "HEAD"]) |> String.trim()
+    intent = Path.join(repo, ".kogen/intents/probe/intent.md")
+    File.mkdir_p!(Path.dirname(intent))
+    File.write!(intent, "---\ntitle: Probe\ndomains: [kernel]\nsize: small\n---\nProbe.\n")
     {repo, branch}
   end
 

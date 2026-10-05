@@ -1,124 +1,186 @@
 defmodule Kogen.Cli.Help do
-  @moduledoc false
+  @moduledoc """
+  Static help text. The top level lists commands only; each command lists its own
+  subcommands and options.
+  """
 
   @top_level """
   Commands:
-    status      Show project and Intent state
-    intent      Check, shape, approve, or remove an Intent
-    build       Build an Intent or show a Build report
-    reconcile   Reconcile a Build after a crash
-    provider    Manage Kogen ChatGPT logins
-    version     Show the Kogen version
-    help        Show help for a command
+    status     Show the queue, Builds and Intents
+    intent     Shape, approve or remove an Intent
+    queue      Build approved Intents one at a time
+    provider   Manage Kogen's provider logins
+    version    Show the Kogen version
+    help       Show help for a command
+
+  Run kogen <command> to see its subcommands and options.
   """
 
   @project_options """
-  Options:
     --project <checkout>  Project checkout (default: current directory)
-    --origin <repo>       Local Git repository used for state and landing
+    --origin <repo>       Git repository holding Intent state and the target branch
     --base <branch>       Target branch (project setting, origin HEAD, then current branch)
   """
 
-  @spec render([String.t()]) :: {non_neg_integer(), String.t()}
-  def render([]), do: {0, @top_level}
+  @spec render([String.t()]) :: String.t()
+  def render([]), do: @top_level
 
-  def render(["status"]),
-    do:
-      {0,
-       "Usage: kogen status [options]\n\n#{@project_options}    --json                Emit the status list as JSON\n"}
+  def render(["help"]),
+    do: "Usage: kogen help [<command> [<subcommand>]]\n\nShows help for a command.\n"
 
-  def render(["intent"]) do
-    {0,
-     "Usage: kogen intent <command> [arguments] [options]\n\n" <>
-       "Commands:\n  check <slug|path>     Parse and lint an Intent\n" <>
-       "  shape <slug>          Create an Intent from task text\n" <>
-       "  approve <slug>        Review and record an Intent approval\n" <>
-       "  remove <slug>         Remove an Intent in one commit\n\n" <>
-       @project_options}
+  def render(["status"]) do
+    """
+    Usage: kogen status [<slug>] [options]
+
+    Shows the queue, then Intents by state. With <slug>, shows that Intent and its latest Build.
+    Builds whose process died are marked crashed first.
+
+    Options:
+      --watch               Print again on every change; return when the queue is idle
+      --json                JSON Lines, one object per Intent (with <slug>: the Build report)
+    #{@project_options}\
+    """
   end
 
-  def render(["intent", "check"]) do
-    {0,
-     "Usage: kogen intent check <slug|path> [options]\n\n" <>
-       "Checks one Intent file. A slug resolves under .kogen/intents/<slug>/intent.md.\n\n" <>
-       @project_options}
+  def render(["intent"]) do
+    """
+    Usage: kogen intent <command> <slug> [arguments] [options]
+
+    Commands:
+      shape <slug> <file|->     Shape an Intent from a request file (- reads stdin)
+      approve <slug> [<hash>]   Show the review card, or approve and queue the Intent
+      remove <slug>             Remove an Intent and its approval in one commit
+
+    Run kogen intent <command> --help for its options.
+    """
   end
 
   def render(["intent", "shape"]) do
-    {0,
-     "Usage: kogen intent shape <slug> [--task-file <path>] [options]\n\n" <>
-       "Reads task text from stdin when --task-file is omitted or set to -.\n" <>
-       "Shaping waits until complete (60-turn limit, no wall timeout).\n" <>
-       "Creates and validates the Intent and its acceptance test. Model and effort come from project build settings.\n\n" <>
-       @project_options <>
-       "  --task-file <path>    Task statement file (- reads stdin)\n  --json                Emit shaping usage as JSON\n"}
+    """
+    Usage: kogen intent shape <slug> <file|-> [options]
+
+    Shapes .kogen/intents/<slug>/intent.md and its acceptance test from the request in <file>
+    (- reads stdin). Waits until the shaper finishes, with no time limit. Never approves.
+    Model and effort come from build.roles.shaper in .kogen/project.yaml.
+
+    Options:
+      --json                Print the shape result and model usage as JSON
+    #{@project_options}\
+    """
   end
 
   def render(["intent", "approve"]) do
-    {0,
-     "Usage: kogen intent approve <slug> [--by <name>] [options]\n\n" <>
-       "Records an approval after review. The default approver is Git's author identity.\n" <>
-       "Drivers acting for someone should identify themselves in --by. Without --yes, approval requires a TTY.\n\n" <>
-       @project_options <>
-       "  --by <name>          Explicit approval provenance override\n" <>
-       "  --yes                 Skip the TTY prompt\n"}
+    """
+    Usage: kogen intent approve <slug> [<hash>] [options]
+
+    Without <hash>: runs the approval checks, prints the review card and exits 5.
+    With <hash> (at least 6 characters of the card's SHA-256): records the approval, which
+    queues the Intent. Approving never starts the queue; run kogen queue start.
+
+    Options:
+      --by <name>           Who approves, when not Git's user (e.g. an agent acting for you)
+    #{@project_options}\
+    """
   end
 
   def render(["intent", "remove"]) do
-    {0,
-     "Usage: kogen intent remove <slug> [--force] [options]\n\n" <>
-       "Removes the Intent files and records the removal in one commit. Approved Intents require --force.\n\n" <>
-       @project_options <> "  --force               Remove an approved or queued Intent\n"}
+    """
+    Usage: kogen intent remove <slug> [options]
+
+    Removes the Intent files and its approval in one commit. An Intent in a running Build
+    can't be removed.
+
+    Options:
+      --force               Confirm removing an approved (queued), failed or parked Intent
+    #{@project_options}\
+    """
   end
 
-  def render(["build"]) do
-    {0,
-     "Usage: kogen build <slug> [options]\n       kogen build show <slug> [options]\n\n" <>
-       "Commands:\n  show <slug>           Show the latest Build report as JSON\n\n" <>
-       "Build settings come from .kogen/project.yaml, with ~/.kogen/config.yaml as the machine default.\n\n" <>
-       @project_options}
+  def render(["queue"]) do
+    """
+    Usage: kogen queue <command> [options]
+
+    Commands:
+      start     Build approved Intents one at a time, oldest approval first
+      stop      Stop the running queue after its current Build
+
+    Run kogen queue <command> --help for its options.
+    """
   end
 
-  def render(["build", "show"]) do
-    {0,
-     "Usage: kogen build show <slug> [options]\n\n" <>
-       "Prints the latest Build report as JSON.\n\n" <>
-       @project_options <> "  --json                Accepted for explicit machine output\n"}
+  def render(["queue", "start"]) do
+    """
+    Usage: kogen queue start [options]
+
+    Builds approved Intents one at a time, oldest approval first, until none are left, and
+    prints a line as each Build starts and finishes. If the queue is already running, says so.
+    Exit: 0 all landed; 1 a Build failed (the queue goes on); 3, 4 or 70 stopped on an
+    environment, provider or Kogen error.
+
+    Options:
+      --detach              Run in the background; prints the process id and log path
+    #{@project_options}\
+    """
+  end
+
+  def render(["queue", "stop"]) do
+    """
+    Usage: kogen queue stop [options]
+
+    Asks the running queue to stop after its current Build.
+
+    Options:
+    #{@project_options}\
+    """
   end
 
   def render(["provider"]) do
-    {0,
-     "Usage: kogen provider <command> [arguments] [options]\n\n" <>
-       "Commands:\n  list                  List saved ChatGPT accounts\n" <>
-       "  login chatgpt         Sign in to a Kogen-owned account\n" <>
-       "  logout chatgpt        Sign out of a Kogen-owned account\n"}
+    """
+    Usage: kogen provider <command> [options]
+
+    Commands:
+      list               List saved accounts and the default
+      login chatgpt      Sign in with a ChatGPT account
+      logout chatgpt     Sign out of a ChatGPT account
+      use chatgpt        Choose the default account, or one project's account
+
+    Logins belong to this machine, never to a repo.
+    """
   end
 
-  def render(["provider", command]) when command in ["list", "login", "logout"] do
-    case command do
-      "list" -> {0, "Usage: kogen provider list\n"}
-      "login" -> provider_account_help("login")
-      "logout" -> provider_account_help("logout")
-    end
+  def render(["provider", "use"]) do
+    """
+    Usage: kogen provider use chatgpt --as <label> [--project <checkout>]
+
+    Without --project: makes <label> the default account on this machine.
+    With --project: that project uses <label>; other projects keep the default.
+    Choices live in ~/.kogen/accounts.yaml on this machine, never in a repo.
+
+    Options:
+      --as <label>          Account label (default: default)
+      --project <checkout>  The project that uses this account
+    """
   end
 
-  def render(["reconcile"]) do
-    {0,
-     "Usage: kogen reconcile <run-id> [options]\n\n" <>
-       "Closes the run journal after a crash following a successful landing.\n\n" <>
-       @project_options}
+  def render(["provider", "list"]),
+    do:
+      "Usage: kogen provider list\n\nLists saved accounts, whether each is signed in, " <>
+        "and the default.\n"
+
+  def render(["provider", verb]) when verb in ["login", "logout"] do
+    action =
+      if verb == "login", do: "Signs in with ChatGPT in the browser and saves", else: "Signs out"
+
+    """
+    Usage: kogen provider #{verb} chatgpt [options]
+
+    #{action} the account <label>.
+
+    Options:
+      --as <label>          Account label (default: default)
+    """
   end
 
-  def render(["version"]), do: {0, "Usage: kogen version\n"}
-
-  def render([topic]) when topic in ["help"],
-    do: {0, "Usage: kogen help <command>\n\n#{@top_level}"}
-
-  def render(topic), do: {2, "kogen: no help for #{Enum.join(topic, " ")}\n"}
-
-  defp provider_account_help(verb) do
-    {0,
-     "Usage: kogen provider #{verb} chatgpt [--as <label>]\n\n" <>
-       "    --as <label>  Kogen ChatGPT account label (default: default)\n"}
-  end
+  def render(["version"]),
+    do: "Usage: kogen version\n\nPrints the commit Kogen was built from and its date.\n"
 end

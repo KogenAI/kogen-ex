@@ -1,0 +1,9 @@
+Usage: kogen provider use chatgpt --as <label> [--project <checkout>]
+
+Without --project: makes <label> the default account on this machine.
+With --project: that project uses <label>; other projects keep the default.
+Choices live in ~/.kogen/accounts.yaml on this machine, never in a repo.
+
+Options:
+  --as <label>          Account label (default: default)
+  --project <checkout>  The project that uses this account

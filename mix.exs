@@ -42,15 +42,25 @@ defmodule Kogen.MixProject do
     ]
   end
 
+  # Kogen has no product version yet, so the build identity is the source commit, its
+  # commit date and whether the tree had uncommitted changes: 0.0.0+<sha8>.<yyyymmdd>[.dirty].
   defp version do
-    case System.cmd("git", ["describe", "--always", "--dirty"],
-           cd: __DIR__,
-           stderr_to_stdout: true
-         ) do
-      {description, 0} -> "0.0.0+#{String.trim(description)}"
+    with {:ok, sha} <- git(["rev-parse", "--short=8", "HEAD"]),
+         {:ok, date} <- git(["show", "-s", "--format=%cd", "--date=format:%Y%m%d", "HEAD"]),
+         {:ok, changes} <- git(["status", "--porcelain", "--untracked-files=no"]) do
+      dirty = if changes == "", do: "", else: ".dirty"
+      "0.0.0+#{sha}.#{date}#{dirty}"
+    else
       _unavailable -> "0.0.0+unknown"
     end
   rescue
     _error -> "0.0.0+unknown"
+  end
+
+  defp git(args) do
+    case System.cmd("git", args, cd: __DIR__, stderr_to_stdout: true) do
+      {output, 0} -> {:ok, String.trim(output)}
+      _failed -> :error
+    end
   end
 end

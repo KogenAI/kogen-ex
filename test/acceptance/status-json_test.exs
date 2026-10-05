@@ -38,11 +38,11 @@ defmodule Kogen.Acceptance.StatusJSONTest do
         cd: repo
       )
 
-    assert :json.decode(output) == [
+    assert output |> String.split("\n", trim: true) |> Enum.map(&:json.decode/1) == [
              %{
                "slug" => "status-probe",
                "status" => "draft",
-               "run_id" => :null,
+               "build_id" => :null,
                "landed_sha" => :null
              }
            ]

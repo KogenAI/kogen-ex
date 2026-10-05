@@ -1,0 +1,8 @@
+Usage: kogen intent <command> <slug> [arguments] [options]
+
+Commands:
+  shape <slug> <file|->     Shape an Intent from a request file (- reads stdin)
+  approve <slug> [<hash>]   Show the review card, or approve and queue the Intent
+  remove <slug>             Remove an Intent and its approval in one commit
+
+Run kogen intent <command> --help for its options.

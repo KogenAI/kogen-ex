@@ -60,14 +60,16 @@ defmodule Kogen.Project.Loader do
     end
   end
 
+  # Deprecated (5 Oct 2026): accounts are chosen per machine with `kogen provider use`.
+  # Kernel still honours a committed label for one CLI generation and warns.
   defp account(document) do
     {value, errors} = optional_string(document, "account", "account")
 
     cond do
-      errors != [] -> {"default", errors}
-      is_nil(value) -> {"default", []}
+      errors != [] -> {nil, errors}
+      is_nil(value) -> {nil, []}
       Regex.match?(~r/\A[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}\z/, value) -> {value, []}
-      true -> {"default", [issue("`account` must be a valid ChatGPT account label")]}
+      true -> {nil, [issue("`account` must be a valid ChatGPT account label")]}
     end
   end
 

@@ -14,20 +14,6 @@ defmodule Kogen.Kernel.Types.ApprovalPreview do
         }
 end
 
-defmodule Kogen.Kernel.Types.IntentStatus do
-  @moduledoc false
-
-  @enforce_keys [:slug, :status, :run_id, :landed_sha]
-  defstruct @enforce_keys
-
-  @type t :: %__MODULE__{
-          slug: String.t(),
-          status: Kogen.State.status(),
-          run_id: String.t() | nil,
-          landed_sha: String.t() | nil
-        }
-end
-
 defmodule Kogen.Kernel.Types.BuildOptions do
   @moduledoc false
 
@@ -77,5 +63,20 @@ defmodule Kogen.Kernel.Types.ShapeInputs do
           process_env: %{String.t() => String.t()},
           run_dir: Path.t(),
           home: Path.t()
+        }
+end
+
+defmodule Kogen.Kernel.Types.QueueTarget do
+  @moduledoc "One project's resolved checkout, origin, base branch and run-journal root."
+
+  @enforce_keys [:root, :origin, :base, :git_env, :state_root]
+  defstruct @enforce_keys
+
+  @type t :: %__MODULE__{
+          root: Path.t(),
+          origin: Path.t(),
+          base: String.t(),
+          git_env: %{String.t() => String.t()},
+          state_root: Path.t()
         }
 end

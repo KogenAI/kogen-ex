@@ -45,6 +45,7 @@ defmodule KogenChecks.GateWiringTest do
           Kogen.Tooling
         ],
         Kogen.Tooling => [Kogen.Proc],
+        Kogen.Queue => [Kogen.Proc, Kogen.State, Kogen.Workspace],
         Kogen.Engine => [
           Kogen.Proc,
           Kogen.Project,
@@ -67,6 +68,7 @@ defmodule KogenChecks.GateWiringTest do
           Kogen.Checks,
           Kogen.Harness,
           Kogen.Shaper,
+          Kogen.Queue,
           Kogen.Cli
         ],
         Kogen.E2e => [
@@ -74,6 +76,7 @@ defmodule KogenChecks.GateWiringTest do
           Kogen.Kernel,
           Kogen.Proc,
           Kogen.Project,
+          Kogen.Queue,
           Kogen.Shaper,
           Kogen.State,
           Kogen.Testkit,

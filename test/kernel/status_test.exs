@@ -2,8 +2,8 @@ defmodule Kogen.Kernel.StatusTest do
   use Kogen.Testkit.Case
 
   alias Kogen.Kernel.Origin
-  alias Kogen.Kernel.StateView
-  alias Kogen.Kernel.Status
+  alias Kogen.Queue.StateView
+  alias Kogen.Queue.Status
   alias Kogen.State.Event
   alias Kogen.State.Json
   alias Kogen.State.Run

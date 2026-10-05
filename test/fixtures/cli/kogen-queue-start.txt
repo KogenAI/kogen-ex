@@ -1,0 +1,12 @@
+Usage: kogen queue start [options]
+
+Builds approved Intents one at a time, oldest approval first, until none are left, and
+prints a line as each Build starts and finishes. If the queue is already running, says so.
+Exit: 0 all landed; 1 a Build failed (the queue goes on); 3, 4 or 70 stopped on an
+environment, provider or Kogen error.
+
+Options:
+  --detach              Run in the background; prints the process id and log path
+  --project <checkout>  Project checkout (default: current directory)
+  --origin <repo>       Git repository holding Intent state and the target branch
+  --base <branch>       Target branch (project setting, origin HEAD, then current branch)

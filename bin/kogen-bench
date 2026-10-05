@@ -309,11 +309,6 @@ if env:
     lines.append("env:")
     lines.extend("  " + key + ": " + quote(value) for key, value in sorted(env.items()))
 
-bench_account = os.environ.get("KOGEN_BENCH_ACCOUNT", "").strip()
-if bench_account:
-    if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,63}", bench_account):
-        raise SystemExit("KOGEN_BENCH_ACCOUNT must be a Kogen account label")
-    lines.append("account: " + bench_account)
 lines += ["domains:", "  app: [lib, test]"]
 with open(target_path, "w", encoding="utf-8") as target:
     target.write("\n".join(lines) + "\n")
@@ -325,6 +320,10 @@ git -C "$project_dir" add .kogen/project.yaml
 git -C "$project_dir" -c user.name='Kogen Bench' -c user.email='kogen-bench@invalid' \
   -c commit.gpgsign=false commit --quiet -m 'Configure Kogen benchmark project'
 git clone --quiet --bare "$project_dir" "$origin"
+# The account is a machine choice, never committed: bind this throwaway project to it.
+if [ -n "${KOGEN_BENCH_ACCOUNT:-}" ]; then
+  "$KOGEN_BIN" provider use chatgpt --as "$KOGEN_BENCH_ACCOUNT" --project "$project_dir" >/dev/null
+fi
 git --git-dir="$origin" symbolic-ref HEAD refs/heads/main
 base_sha=$(git --git-dir="$origin" rev-parse refs/heads/main)
 
@@ -668,9 +667,8 @@ runtime_tmpdir=$(cat "$scratch/project_tmpdir")
 setup_log_path="${runtime_tmpdir%/}/$(basename "$scratch")-$slug-setup.log"
 shaper_root="${runtime_tmpdir%/}/kogen-shaper/$slug"
 shape_wall_ms=0
-if run_capture shape "$out_dir/shape.json" "$KOGEN_BIN" intent shape "$slug" \
-  --task-file "$prompt_file" --project "$project_dir" --origin "$origin" \
-  --base main --json; then
+if run_capture shape "$out_dir/shape.json" "$KOGEN_BIN" intent shape "$slug" "$prompt_file" \
+  --project "$project_dir" --origin "$origin" --base main --json; then
   shape_wall_ms=$CAPTURE_WALL_MS
 else
   stage_status=$?
@@ -682,8 +680,11 @@ else
 fi
 copy_bench_setup_log
 
-if run_capture approve "$scratch/approve.txt" "$KOGEN_BIN" intent approve "$slug" \
-  --project "$project_dir" --origin "$origin" --base main --by kogen-bench --yes; then
+# The benchmark approves exactly the bytes it shaped: the hash is the Intent's SHA-256 prefix.
+intent_hash=$(python3 -c 'import hashlib, sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest()[:12])' \
+  "$project_dir/.kogen/intents/$slug/intent.md")
+if run_capture approve "$scratch/approve.txt" "$KOGEN_BIN" intent approve "$slug" "$intent_hash" \
+  --project "$project_dir" --origin "$origin" --base main --by kogen-bench; then
   :
 else
   stage_status=$?
@@ -691,23 +692,16 @@ else
   exit "$stage_status"
 fi
 
-if run_capture build "$scratch/build.txt" "$KOGEN_BIN" build "$slug" \
+# Approval queues the Intent; queue start builds it in the foreground and exits with its result.
+if run_capture build "$scratch/build.txt" "$KOGEN_BIN" queue start \
   --project "$project_dir" --origin "$origin" --base main; then
   :
 else
   stage_status=$?
   build_wall_ms=$CAPTURE_WALL_MS
-  if [ "$stage_status" -eq 143 ]; then
-    run_id=$(sed -n 's/^run: \([[:alnum:]][[:alnum:]._-]*\)$/\1/p' "$scratch/build.txt" | tail -n 1)
-    if [ -n "$run_id" ]; then
-      if run_capture reconcile "$scratch/reconcile.txt" "$KOGEN_BIN" reconcile "$run_id" \
-        --project "$project_dir" --origin "$origin" --base main; then
-        :
-      fi
-    fi
-  fi
-  if run_capture report "$out_dir/report.json" "$KOGEN_BIN" build show "$slug" \
-    --project "$project_dir" --origin "$origin" --base main --json; then
+  # status recovers an interrupted (143) or crashed Build first, so the report is terminal.
+  if run_capture report "$out_dir/report.json" "$KOGEN_BIN" status "$slug" --json \
+    --project "$project_dir" --origin "$origin" --base main; then
     :
   fi
   copy_candidate_diffs
@@ -715,8 +709,8 @@ else
   exit "$stage_status"
 fi
 
-if run_capture report "$out_dir/report.json" "$KOGEN_BIN" build show "$slug" \
-  --project "$project_dir" --origin "$origin" --base main --json; then
+if run_capture report "$out_dir/report.json" "$KOGEN_BIN" status "$slug" --json \
+  --project "$project_dir" --origin "$origin" --base main; then
   :
 else
   stage_status=$?

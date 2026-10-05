@@ -2,7 +2,7 @@
 
 Kogen is an AI-agent software-building system written in Elixir. A human approves a short Markdown Intent; Kogen builds it in an isolated checkout with an LLM Developer loop, verifies the result with deterministic checks, and lands it on the selected base branch.
 
-This repository is the single Mix application that forms Kogen's core. Kogen owns its ChatGPT logins; each project's `.kogen/project.yaml` selects an account, base branch, Build recipe, and role models. Build receipts record the selected account and model settings. Approval records the baseline of red project checks and warns instead of blocking.
+This repository is the single Mix application that forms Kogen's core. Kogen owns its ChatGPT logins, which belong to the machine: `kogen provider use` picks the default account and, optionally, one per project. Each project's `.kogen/project.yaml` selects its base branch, Build recipe, and role models. Build receipts record the selected account and model settings. Approval records the baseline of red project checks and warns instead of blocking.
 
 ## Start here
 
@@ -15,20 +15,23 @@ This repository is the single Mix application that forms Kogen's core. Kogen own
 
 ## CLI
 
-Commands are noun-first. Use `kogen` or `kogen help` for the short top-level list, then `kogen <command> --help` for that command's options.
+Commands are noun-first. `kogen` lists the commands, `kogen <command>` lists its subcommands, and `--help` works everywhere. Approved Intents build through the queue, one at a time; crashed Builds are recovered automatically by `status` and `queue start`.
 
 ```sh
-kogen intent check greet
-kogen intent approve greet --yes
-kogen build greet
-kogen build show greet
-kogen status
+kogen intent shape greet request.md   # or - to read the request from stdin
+kogen intent approve greet            # review card with the hash; exits 5
+kogen intent approve greet 3fa2c1d0   # approve exactly what you reviewed; queues it
+kogen queue start                     # build the queue in the foreground (--detach for background)
+kogen status                          # queue, then Intents by state
+kogen status greet                    # one Intent and its latest Build (--json for the report)
+kogen provider use chatgpt --as work --project .
 ```
+
+The full tree, output and exit codes are in [docs/interfaces.md](docs/interfaces.md#command-line).
 
 Build settings belong in `.kogen/project.yaml`:
 
 ```yaml
-account: default
 base: main
 build:
   recipe: staged
@@ -68,7 +71,9 @@ When `base` is omitted, Kogen uses the origin HEAD branch recorded locally, then
 | Checks | Deterministic verification and check results | Contracts, Proc, Workspace, Project |
 | Tooling | Builder tool schemas, confined file access, edits, search, writes, and shell commands | Contracts, Proc |
 | Harness | Provider-backed Developer orchestration and stage coordination | Checks, Contracts, Proc, Provider, Project, Tooling |
-| Kernel | CLI and cross-domain coordination | Every domain above |
+| Queue | Intent states, the serial drain and its lock, automatic crash recovery, Build reports | Proc, State, Workspace |
+| CLI | Command parsing and static help (pure) | — |
+| Kernel | Command execution and cross-domain coordination | Every domain above |
 
 ## Run the checks
 

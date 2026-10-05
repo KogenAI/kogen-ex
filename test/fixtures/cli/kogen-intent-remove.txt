@@ -1,0 +1,10 @@
+Usage: kogen intent remove <slug> [options]
+
+Removes the Intent files and its approval in one commit. An Intent in a running Build
+can't be removed.
+
+Options:
+  --force               Confirm removing an approved (queued), failed or parked Intent
+  --project <checkout>  Project checkout (default: current directory)
+  --origin <repo>       Git repository holding Intent state and the target branch
+  --base <branch>       Target branch (project setting, origin HEAD, then current branch)

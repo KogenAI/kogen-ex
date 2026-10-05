@@ -68,13 +68,14 @@ defmodule Kogen.State.Lifecycle do
     end
   end
 
-  @spec recover_crashed(term(), Path.t(), Run.t(), map(), module()) :: :ok | {:error, term()}
-  def recover_crashed(repo, root, %Run{} = run, git_env, workspace) do
+  @spec recover_crashed(term(), Path.t(), Run.t(), map(), module(), :crashed | :interrupted) ::
+          :ok | {:error, term()}
+  def recover_crashed(repo, root, %Run{} = run, git_env, workspace, reason \\ :crashed) do
     with {:ok, current} <- RunStore.load(root, run.id) do
       case current.status do
         :running ->
           with :ok <-
-                 RunStore.record(current, %{event: :finished, status: :failed, reason: :crashed}) do
+                 RunStore.record(current, %{event: :finished, status: :failed, reason: reason}) do
             release(repo, current.id, git_env, workspace)
           end
 

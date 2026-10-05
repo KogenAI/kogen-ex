@@ -10,7 +10,6 @@ defmodule Kogen.Acceptance.InterruptedBuildsEndTest do
   @moduletag :acceptance
   @project_root Path.expand("../..", __DIR__)
   @dead_pid 999_999
-  @run_id "0123456789abcdef0123456789abcdef"
   @git_env %{
     "GIT_CONFIG_GLOBAL" => "/dev/null",
     "GIT_CONFIG_NOSYSTEM" => "1",
@@ -30,37 +29,37 @@ defmodule Kogen.Acceptance.InterruptedBuildsEndTest do
   """
 
   @tag intent: "interrupted-builds-end/A1"
-  test "show and status report a dead interrupted run", %{tmp_dir: tmp_dir} do
+  test "status, with and without a slug, reports a dead interrupted run", %{tmp_dir: tmp_dir} do
     {repo, branch, home, run} = interrupted_run(tmp_dir)
 
     show =
-      ["build", "show", "interrupted-probe", "--origin", repo, "--base", branch]
-      |> cli(
-        repo,
-        home
-      )
+      ["status", "interrupted-probe", "--origin", repo, "--base", branch, "--json"]
+      |> cli(repo, home)
       |> :json.decode()
 
     status =
       ["status", "--origin", repo, "--base", branch, "--json"]
       |> cli(repo, home)
-      |> :json.decode()
+      |> String.split("\n", trim: true)
+      |> Enum.map(&:json.decode/1)
 
     assert show["status"] == "interrupted"
     run_id = run.id
 
-    assert [%{"slug" => "interrupted-probe", "status" => "interrupted", "run_id" => ^run_id}] =
+    assert [%{"slug" => "interrupted-probe", "status" => "interrupted", "build_id" => ^run_id}] =
              status
+
+    assert cli(["status", "--origin", repo, "--base", branch], repo, home) =~
+             ~r/^Interrupted:\n  interrupted-probe  interrupted \(Build /m
   end
 
   @tag intent: "interrupted-builds-end/A2"
-  test "benchmark reconciles exit 143 before capturing its report", %{tmp_dir: tmp_dir} do
+  test "benchmark captures a terminal report after the queue exits 143", %{tmp_dir: tmp_dir} do
     task_dir = Path.join(tmp_dir, "task")
     out_dir = Path.join(tmp_dir, "out")
     work_dir = Git.create!(Path.join(tmp_dir, "work"))
     fake_kogen = Path.join(tmp_dir, "fake-kogen")
     calls_path = Path.join(tmp_dir, "calls.log")
-    reconciled_path = Path.join(tmp_dir, "reconciled")
     home = Path.join(tmp_dir, "home")
 
     File.mkdir_p!(task_dir)
@@ -73,7 +72,7 @@ defmodule Kogen.Acceptance.InterruptedBuildsEndTest do
     )
 
     Git.git!(work_dir, ["branch", "-M", "main"])
-    File.write!(fake_kogen, fake_kogen_script(calls_path, reconciled_path))
+    File.write!(fake_kogen, fake_kogen_script(calls_path))
     File.chmod!(fake_kogen, 0o755)
 
     script = Path.expand("../../bin/kogen-bench", __DIR__)
@@ -86,7 +85,6 @@ defmodule Kogen.Acceptance.InterruptedBuildsEndTest do
                  "HOME" => home,
                  "KOGEN_BIN" => fake_kogen,
                  "KOGEN_CALLS" => calls_path,
-                 "KOGEN_RECONCILED" => reconciled_path,
                  "PATH" => runtime.base_env["PATH"],
                  "TMPDIR" => tmp_dir
                },
@@ -94,14 +92,15 @@ defmodule Kogen.Acceptance.InterruptedBuildsEndTest do
              )
 
     calls = calls_path |> File.read!() |> String.split("\n", trim: true)
-    reconcile_index = Enum.find_index(calls, &(&1 == "reconcile:#{@run_id}"))
-    report_index = Enum.find_index(calls, &(&1 == "build:show"))
+    queue_index = Enum.find_index(calls, &(&1 == "queue:start"))
+    report_index = Enum.find_index(calls, &(&1 == "status:task"))
     report = out_dir |> Path.join("report.json") |> File.read!() |> :json.decode()
 
-    assert is_integer(reconcile_index)
+    assert is_integer(queue_index)
     assert is_integer(report_index)
-    assert reconcile_index < report_index
-    assert report["status"] == "failed"
+    assert queue_index < report_index
+    refute Enum.any?(calls, &String.starts_with?(&1, "reconcile:"))
+    assert report["status"] == "interrupted"
   end
 
   defp interrupted_run(tmp_dir) do
@@ -158,39 +157,41 @@ defmodule Kogen.Acceptance.InterruptedBuildsEndTest do
     File.write!(path, :json.encode(contents))
   end
 
-  defp fake_kogen_script(calls_path, reconciled_path) do
-    """
-    #!/bin/sh
-    set -eu
-    printf '%s:%s\\n' "$1" "${2:-}" >> "$KOGEN_CALLS"
-    case "$1:${2:-}" in
-      intent:shape)
-        printf '%s\\n' '{"slug":"task","usage":[]}'
-        ;;
-      intent:approve)
-        exit 0
-        ;;
-      build:show)
-        if [ -f "$KOGEN_RECONCILED" ]; then
-          printf '%s\\n' '{"status":"failed","candidate_diffs":[]}'
-        else
-          printf '%s\\n' '{"status":"building","candidate_diffs":[]}'
-        fi
-        ;;
-      build:*)
-        printf '%s\\n' 'run: #{@run_id}'
-        exit 143
-        ;;
-      reconcile:#{@run_id})
-        touch "$KOGEN_RECONCILED"
-        ;;
-      *)
-        exit 2
-        ;;
-    esac
-    """
-    |> String.replace("$KOGEN_CALLS", calls_path)
-    |> String.replace("$KOGEN_RECONCILED", reconciled_path)
+  defp fake_kogen_script(calls_path) do
+    String.replace(
+      """
+      #!/bin/sh
+      set -eu
+      printf '%s:%s\\n' "$1" "${2:-}" >> "$KOGEN_CALLS"
+      case "$1:${2:-}" in
+        intent:shape)
+          project=
+          previous=
+          for argument in "$@"; do
+            if [ "$previous" = --project ]; then project=$argument; fi
+            previous=$argument
+          done
+          mkdir -p "$project/.kogen/intents/task"
+          printf '%s\\n' 'shaped' > "$project/.kogen/intents/task/intent.md"
+          printf '%s\\n' '{"slug":"task","usage":[]}'
+          ;;
+        intent:approve)
+          exit 0
+          ;;
+        queue:start)
+          exit 143
+          ;;
+        status:task)
+          printf '%s\\n' '{"status":"interrupted","candidate_diffs":[]}'
+          ;;
+        *)
+          exit 2
+          ;;
+      esac
+      """,
+      "$KOGEN_CALLS",
+      calls_path
+    )
   end
 
   defp git(repo, args), do: Proc.cmd!("git", ["-C", repo | args], env: Map.to_list(@git_env))

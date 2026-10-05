@@ -100,9 +100,8 @@ defmodule Kogen.Kernel.CLI.Signal do
 
   defp record_interruption(argv) do
     case Arguments.parse(argv) do
-      {:ok, %Args{command: :build, positionals: [slug], project: project}} ->
-        project = Path.expand(project || ".")
-        _result = Kogen.Kernel.interrupt_build(project, slug)
+      {:ok, %Args{command: :queue_start, project: project}} ->
+        _result = Kogen.Kernel.interrupt_builds(Path.expand(project || "."))
         :ok
 
       _other ->

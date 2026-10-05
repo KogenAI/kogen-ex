@@ -50,11 +50,11 @@ defmodule Kogen.Acceptance.CliDefaultsTest do
 
     output = cli(["status", "--json"], repo)
 
-    assert :json.decode(output) == [
+    assert output |> String.split("\n", trim: true) |> Enum.map(&:json.decode/1) == [
              %{
                "slug" => "defaults-probe",
                "status" => "draft",
-               "run_id" => :null,
+               "build_id" => :null,
                "landed_sha" => :null
              }
            ]

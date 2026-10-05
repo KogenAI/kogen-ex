@@ -1,0 +1,3 @@
+Usage: kogen version
+
+Prints the commit Kogen was built from and its date.

@@ -2,8 +2,6 @@ defmodule Kogen.Shaper.ShapingReliabilityTests do
   @moduledoc false
   use Kogen.Testkit.Case
 
-  import ExUnit.CaptureIO
-
   alias Kogen.E2e.ScriptedProvider
   alias Kogen.E2e.ScriptedProvider.Config
   alias Kogen.Kernel.CLI
@@ -66,30 +64,26 @@ defmodule Kogen.Shaper.ShapingReliabilityTests do
 
       Git.git!(project, ["branch", "-M", "main"])
 
-      approval_output =
-        capture_io(fn ->
-          result =
-            CLI.execute([
-              "intent",
-              "approve",
-              "shape-loop",
-              "--project",
-              project,
-              "--origin",
-              project,
-              "--base",
-              "main",
-              "--by",
-              "T22"
-            ])
+      assert {5, card} =
+               CLI.execute([
+                 "intent",
+                 "approve",
+                 "shape-loop",
+                 "--project",
+                 project,
+                 "--origin",
+                 project,
+                 "--base",
+                 "main",
+                 "--by",
+                 "T22"
+               ])
 
-          send(self(), {:approval_result, result})
-        end)
+      assert card =~ "shape_reclassified"
+      assert card =~ "A1 changed from test keep to test"
 
-      assert_receive {:approval_result, {2, summary}}
-      assert summary =~ "approval requires a TTY"
-      assert approval_output =~ "shape_reclassified"
-      assert approval_output =~ "A1 changed from test keep to test"
+      assert card =~
+               "Approve with:\n  kogen intent approve shape-loop #{binary_part(intent_hash, 0, 8)}\n"
     after
       GenServer.stop(server, :normal)
     end

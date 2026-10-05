@@ -5,30 +5,23 @@ defmodule Kogen.Kernel.ShapeArgumentsTest do
   alias Kogen.Cli.Arguments
   alias Kogen.Kernel.CLI.TaskInput
 
-  test "intent shape accepts a task file and output format" do
+  test "intent shape takes the request file as an argument, - for stdin" do
     assert {:ok, %Args{} = args} =
              Arguments.parse([
                "intent",
                "shape",
                "new-feature",
-               "--task-file",
                "/tmp/task.md",
                "--project",
                "/tmp/project",
                "--json"
              ])
 
-    assert args.command == :intent_shape
-    assert args.task_file == "/tmp/task.md"
-    assert args.json
-  end
+    assert {args.command, args.positionals, args.json} ==
+             {:intent_shape, ["new-feature", "/tmp/task.md"], true}
 
-  test "intent shape reads from stdin when its task file is omitted or -" do
-    assert {:ok, %Args{command: :intent_shape, task_file: nil}} =
-             Arguments.parse(["intent", "shape", "new-feature"])
-
-    assert {:ok, %Args{command: :intent_shape, task_file: "-"}} =
-             Arguments.parse(["intent", "shape", "new-feature", "--task-file", "-"])
+    assert {:ok, %Args{positionals: ["new-feature", "-"]}} =
+             Arguments.parse(["intent", "shape", "new-feature", "-"])
   end
 
   test "task input reads stdin and rejects empty input" do

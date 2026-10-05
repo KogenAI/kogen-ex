@@ -3,12 +3,16 @@ defmodule Kogen.Kernel.Workspaces do
 
   @spec root(Path.t(), Path.t()) :: Path.t()
   def root(project_root, home) do
-    absolute_project = project_root |> Path.expand() |> canonical_path()
+    absolute_project = canonical(project_root)
     basename = absolute_project |> Path.basename() |> safe_basename()
     digest = :sha256 |> :crypto.hash(absolute_project) |> Base.encode16(case: :lower)
 
     Path.join([home, ".kogen", "workspaces", "#{basename}-#{binary_part(digest, 0, 10)}"])
   end
+
+  @doc "The absolute project path with symlinks resolved; the key for per-project state."
+  @spec canonical(Path.t()) :: Path.t()
+  def canonical(project_root), do: project_root |> Path.expand() |> canonical_path()
 
   defp canonical_path(path) do
     ["/" | components] = Path.split(path)

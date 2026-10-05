@@ -138,14 +138,12 @@ defmodule Kogen.Workspace do
 
   @doc false
   @spec status_snapshot(Path.t(), String.t(), git_env()) ::
-          {:ok, %{approvals: map(), landed: map(), claim_run_id: String.t() | nil}}
-          | {:error, term()}
+          {:ok, StatusRefs.snapshot()} | {:error, term()}
   def status_snapshot(repo, branch, git_env), do: StatusRefs.snapshot(repo, branch, git_env, true)
 
   @doc false
   @spec status_snapshot(Path.t(), String.t(), git_env(), boolean()) ::
-          {:ok, %{approvals: map(), landed: map(), claim_run_id: String.t() | nil}}
-          | {:error, term()}
+          {:ok, StatusRefs.snapshot()} | {:error, term()}
   def status_snapshot(repo, branch, git_env, include_claim?),
     do: StatusRefs.snapshot(repo, branch, git_env, include_claim?)
 

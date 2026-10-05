@@ -21,7 +21,7 @@ defmodule Kogen.Acceptance.ReconcileCrashedTest do
   test "a crashed run is marked failed and its claim is released", %{tmp_dir: tmp_dir} do
     {repo, branch, run} = crashed_run(tmp_dir, @dead_pid)
 
-    cli(["reconcile", run.id, "--base", branch], repo)
+    cli(["status", "--base", branch], repo)
 
     assert run_json(run)["status"] == "failed"
     assert run_events(run) =~ "crashed"
@@ -33,7 +33,7 @@ defmodule Kogen.Acceptance.ReconcileCrashedTest do
     {repo, branch, run} = crashed_run(tmp_dir, String.to_integer(System.pid()))
     claim_before = claim_sha(repo)
 
-    cli(["reconcile", run.id, "--base", branch], repo)
+    cli(["status", "--base", branch], repo)
 
     assert run_json(run)["status"] == "running"
     assert claim_sha(repo) == claim_before

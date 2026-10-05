@@ -1,0 +1,11 @@
+Usage: kogen intent approve <slug> [<hash>] [options]
+
+Without <hash>: runs the approval checks, prints the review card and exits 5.
+With <hash> (at least 6 characters of the card's SHA-256): records the approval, which
+queues the Intent. Approving never starts the queue; run kogen queue start.
+
+Options:
+  --by <name>           Who approves, when not Git's user (e.g. an agent acting for you)
+  --project <checkout>  Project checkout (default: current directory)
+  --origin <repo>       Git repository holding Intent state and the target branch
+  --base <branch>       Target branch (project setting, origin HEAD, then current branch)

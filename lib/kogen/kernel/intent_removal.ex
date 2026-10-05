@@ -3,9 +3,9 @@ defmodule Kogen.Kernel.IntentRemoval do
 
   alias Kogen.Engine.Runtime
   alias Kogen.Kernel.ProjectContext
-  alias Kogen.Kernel.Status
-  alias Kogen.Kernel.Types.IntentStatus
   alias Kogen.Kernel.Workspaces
+  alias Kogen.Queue.IntentStatus
+  alias Kogen.Queue.Status
   alias Kogen.Workspace
 
   @spec run(String.t(), Path.t(), Path.t() | nil, String.t() | nil, boolean()) ::

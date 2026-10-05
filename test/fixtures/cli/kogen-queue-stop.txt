@@ -1,0 +1,8 @@
+Usage: kogen queue stop [options]
+
+Asks the running queue to stop after its current Build.
+
+Options:
+  --project <checkout>  Project checkout (default: current directory)
+  --origin <repo>       Git repository holding Intent state and the target branch
+  --base <branch>       Target branch (project setting, origin HEAD, then current branch)

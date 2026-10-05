@@ -21,8 +21,9 @@ defmodule Kogen.Kernel.ShapeExecution do
          {default_model, default_effort} = BuildConfig.shape_settings(build_config.roles),
          {:ok, runtime, process_env, run_dir} <-
            shape_environment(slug, project_root, runtime, project),
+         {:ok, account} <- Kogen.Kernel.Accounts.label(project_root, project),
          {:ok, provider_config, _source, _label} <-
-           Kogen.Kernel.provider_config(label: project.account),
+           Kogen.Kernel.provider_config(label: account),
          {:ok, request} <-
            shape_request(%ShapeInputs{
              slug: slug,

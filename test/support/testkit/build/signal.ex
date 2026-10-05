@@ -8,8 +8,6 @@ defmodule Kogen.E2e.Build.Signal do
   alias Kogen.State
   alias Kogen.Workspace
 
-  @slug "build-engine"
-
   def run(parent, seed_project, pid_path) do
     command = "printf '%s\\n' \"$$\" > lib/kogen-term-child.pid; exec sleep 60"
 
@@ -24,7 +22,7 @@ defmodule Kogen.E2e.Build.Signal do
     File.write!(pid_path, System.pid())
 
     Kogen.Kernel.CLI.main(
-      ["build", @slug, "--project", fixture.project_root, "--origin", fixture.origin],
+      ["queue", "start", "--project", fixture.project_root, "--origin", fixture.origin],
       fn _argv -> execute(request) end
     )
   end

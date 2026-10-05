@@ -7,12 +7,12 @@ defmodule Kogen.Cli.Args do
     :origin,
     :base,
     :by,
-    :task_file,
     :account_label,
     positionals: [],
     force: false,
-    yes: false,
-    json: false
+    json: false,
+    watch: false,
+    detach: false
   ]
 
   @type t :: %__MODULE__{
@@ -21,11 +21,11 @@ defmodule Kogen.Cli.Args do
           origin: Path.t() | nil,
           base: String.t() | nil,
           by: String.t() | nil,
-          task_file: Path.t() | nil,
           account_label: String.t() | nil,
           positionals: [String.t()],
           force: boolean(),
-          yes: boolean(),
-          json: boolean()
+          json: boolean(),
+          watch: boolean(),
+          detach: boolean()
         }
 end

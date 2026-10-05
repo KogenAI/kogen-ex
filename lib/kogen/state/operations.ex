@@ -75,8 +75,17 @@ defmodule Kogen.State.Operations do
 
   @spec recover_crashed(term(), Path.t(), Run.t(), map(), keyword()) :: :ok | {:error, term()}
   def recover_crashed(repo, root, run, git_env, options \\ []) do
-    with {:ok, workspace} <- workspace(options) do
-      Lifecycle.recover_crashed(repo, root, run, git_env, workspace)
+    with {:ok, workspace} <- workspace(options),
+         {:ok, reason} <- crash_reason(options) do
+      Lifecycle.recover_crashed(repo, root, run, git_env, workspace, reason)
+    end
+  end
+
+  # A Build whose owner died after recording a SIGTERM ended as `interrupted`, not `crashed`.
+  defp crash_reason(options) do
+    case Keyword.get(options, :reason, :crashed) do
+      reason when reason in [:crashed, :interrupted] -> {:ok, reason}
+      _other -> {:error, :invalid_options}
     end
   end
 

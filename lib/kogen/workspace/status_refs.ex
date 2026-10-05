@@ -43,35 +43,58 @@ defmodule Kogen.Workspace.StatusRefs do
     end
   end
 
+  @typedoc """
+  `approvals` and `approved_at` map slugs to the approval ref tip and its commit time (Unix
+  seconds); `landed` maps slugs to landing commits and `landed_order` lists them newest first.
+  """
+  @type snapshot :: %{
+          approvals: %{String.t() => String.t()},
+          approved_at: %{String.t() => integer()},
+          landed: %{String.t() => String.t()},
+          landed_order: [String.t()],
+          claim_run_id: String.t() | nil
+        }
+
   @spec snapshot(Path.t(), String.t(), %{String.t() => String.t()}, boolean()) ::
-          {:ok, %{approvals: map(), landed: map(), claim_run_id: String.t() | nil}}
-          | {:error, term()}
+          {:ok, snapshot()} | {:error, term()}
   def snapshot(repo, branch, git_env, include_claim?) do
-    with {:ok, approvals} <- approval_refs(repo, git_env),
-         {:ok, landed} <- landed_intents(repo, branch, git_env),
+    with {:ok, approvals, approved_at} <- approval_refs(repo, git_env),
+         {:ok, landed, landed_order} <- landed_intents(repo, branch, git_env),
          {:ok, claim_run_id} <- claim_run_id(repo, git_env, include_claim?) do
-      {:ok, %{approvals: approvals, landed: landed, claim_run_id: claim_run_id}}
+      {:ok,
+       %{
+         approvals: approvals,
+         approved_at: approved_at,
+         landed: landed,
+         landed_order: landed_order,
+         claim_run_id: claim_run_id
+       }}
     end
   end
 
   defp approval_refs(repo, git_env) do
     case Git.run(
            repo,
-           ["for-each-ref", "--format=%(refname)%00%(objectname)", "refs/kogen/intents/"],
+           [
+             "for-each-ref",
+             "--format=%(refname)%00%(objectname)%00%(committerdate:unix)",
+             "refs/kogen/intents/"
+           ],
            git_env
          ) do
       {:ok, 0, output} ->
-        approvals =
+        rows =
           output
           |> String.split("\n", trim: true)
-          |> Enum.reduce(%{}, fn line, refs ->
-            case String.split(line, <<0>>, parts: 2) do
-              ["refs/kogen/intents/" <> slug, sha] -> Map.put(refs, slug, String.trim(sha))
-              _other -> refs
+          |> Enum.flat_map(fn line ->
+            case String.split(line, <<0>>, parts: 3) do
+              ["refs/kogen/intents/" <> slug, sha, time] -> [{slug, String.trim(sha), time}]
+              _other -> []
             end
           end)
 
-        {:ok, approvals}
+        {:ok, Map.new(rows, fn {slug, sha, _time} -> {slug, sha} end),
+         Map.new(rows, fn {slug, _sha, time} -> {slug, unix_time(time)} end)}
 
       {:ok, _status, _output} ->
         {:error, :git_failed}
@@ -86,28 +109,39 @@ defmodule Kogen.Workspace.StatusRefs do
     format = "%H%x00%(trailers:key=Kogen-Intent,valueonly)%x00"
 
     case Git.run(repo, ["log", "--format=#{format}", revision], git_env) do
-      {:ok, 0, output} -> {:ok, parse_landed_intents(output)}
-      {:ok, _status, _output} -> {:error, :git_failed}
-      {:error, reason} -> {:error, reason}
+      {:ok, 0, output} ->
+        rows = parse_landed_intents(output)
+        {:ok, Map.new(Enum.reverse(rows)), rows |> Enum.map(&elem(&1, 0)) |> Enum.uniq()}
+
+      {:ok, _status, _output} ->
+        {:error, :git_failed}
+
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
+  # Newest first, as git log prints them; the newest landing of a slug wins.
   defp parse_landed_intents(output) do
     output
     |> String.split(<<0>>)
     |> Enum.chunk_every(2)
-    |> Enum.reduce(%{}, fn
-      [sha, slug | _rest], landed ->
+    |> Enum.flat_map(fn
+      [sha, slug | _rest] ->
         sha = String.trim(sha)
         slug = String.trim(slug)
+        if valid_sha?(sha) and valid_intent_slug?(slug), do: [{slug, sha}], else: []
 
-        if valid_sha?(sha) and valid_intent_slug?(slug),
-          do: Map.put_new(landed, slug, sha),
-          else: landed
-
-      _other, landed ->
-        landed
+      _other ->
+        []
     end)
+  end
+
+  defp unix_time(value) do
+    case Integer.parse(String.trim(value)) do
+      {seconds, ""} -> seconds
+      _invalid -> 0
+    end
   end
 
   defp claim_run_id(_repo, _git_env, false), do: {:ok, nil}

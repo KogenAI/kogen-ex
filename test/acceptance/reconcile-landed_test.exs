@@ -18,20 +18,20 @@ defmodule Kogen.Acceptance.ReconcileLandedTest do
   @dead_pid 999_999
 
   @tag intent: "reconcile-landed/A1"
-  test "a crash after landing reconciles as landed", %{tmp_dir: tmp_dir} do
+  test "status closes a crash after landing as landed", %{tmp_dir: tmp_dir} do
     {repo, branch, run} = crashed_run(tmp_dir, @dead_pid)
     land!(repo, run, branch, true)
 
-    assert cli(["reconcile", run.id, "--base", branch], repo) =~ "reconcile: landed"
+    cli(["status", "--base", branch], repo)
     assert run_json(run)["status"] == "landed"
   end
 
   @tag intent: "reconcile-landed/A2"
-  test "reconciling a landed crash releases the claim", %{tmp_dir: tmp_dir} do
+  test "closing a landed crash releases the claim", %{tmp_dir: tmp_dir} do
     {repo, branch, run} = crashed_run(tmp_dir, @dead_pid)
     land!(repo, run, branch, true)
 
-    cli(["reconcile", run.id, "--base", branch], repo)
+    cli(["status", "--base", branch], repo)
 
     assert git(repo, ["for-each-ref", "refs/kogen/claim"]) == ""
   end
@@ -41,7 +41,7 @@ defmodule Kogen.Acceptance.ReconcileLandedTest do
     {repo, branch, run} = crashed_run(tmp_dir, @dead_pid)
     land!(repo, run, branch, false)
 
-    assert cli(["reconcile", run.id, "--base", branch], repo) =~ "reconcile: crashed"
+    cli(["status", "--base", branch], repo)
     assert run_json(run)["status"] == "failed"
   end
 

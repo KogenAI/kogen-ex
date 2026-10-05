@@ -56,7 +56,7 @@ defmodule Kogen.E2e.OriginStatusTest do
       CLI.execute(["status", "--project", project, "--base", "main", "--json"])
 
     assert [%{"landed_sha" => :null, "slug" => @slug, "status" => "approved"}] =
-             Enum.filter(:json.decode(approved_json), &(&1["slug"] == @slug))
+             Enum.filter(json_lines(approved_json), &(&1["slug"] == @slug))
 
     build_server = start_build_server()
 
@@ -73,7 +73,7 @@ defmodule Kogen.E2e.OriginStatusTest do
                build.landed_sha
 
       assert {:ok, [status]} =
-               Kogen.Kernel.Status.list(project, workspace_root, origin, "main", Git.env())
+               Kogen.Queue.Status.list(project, workspace_root, origin, "main", Git.env())
 
       assert status.status == :landed
       assert status.run_id == build.run_id
@@ -85,27 +85,18 @@ defmodule Kogen.E2e.OriginStatusTest do
       assert [
                %{
                  "landed_sha" => landed_sha,
-                 "run_id" => run_id,
+                 "build_id" => run_id,
                  "slug" => @slug,
                  "status" => "landed"
                }
              ] =
-               Enum.filter(:json.decode(status_json), &(&1["slug"] == @slug))
+               Enum.filter(json_lines(status_json), &(&1["slug"] == @slug))
 
       assert landed_sha == build.landed_sha
       assert run_id == build.run_id
 
       {0, report_json} =
-        CLI.execute([
-          "build",
-          "show",
-          @slug,
-          "--json",
-          "--project",
-          project,
-          "--base",
-          "main"
-        ])
+        CLI.execute(["status", @slug, "--json", "--project", project, "--base", "main"])
 
       assert %{"landed_sha" => ^landed_sha, "status" => "landed"} = :json.decode(report_json)
     after
@@ -274,4 +265,7 @@ defmodule Kogen.E2e.OriginStatusTest do
       kernel: [lib, test]
     """
   end
+
+  defp json_lines(output),
+    do: output |> String.split("\n", trim: true) |> Enum.map(&:json.decode/1)
 end

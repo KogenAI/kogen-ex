@@ -1,6 +1,8 @@
 defmodule Kogen.Kernel.CLI do
   @moduledoc "The escript entry point for the Kogen command line."
-  use Boundary, deps: [Kogen.Cli, Kogen.Contracts, Kogen.Engine, Kogen.Kernel], exports: []
+  use Boundary,
+    deps: [Kogen.Cli, Kogen.Contracts, Kogen.Engine, Kogen.Kernel, Kogen.Queue],
+    exports: []
 
   alias Kogen.Cli.Args
   alias Kogen.Cli.Arguments
@@ -32,26 +34,21 @@ defmodule Kogen.Kernel.CLI do
   @spec execute([String.t()]) :: {non_neg_integer(), String.t()}
   def execute(argv) do
     case Arguments.parse(argv) do
-      {:ok, %Args{command: command} = args} -> dispatch(command, normalize_paths(args))
-      {:error, reason} -> {2, "kogen: #{reason}\n\n" <> elem(Help.render([]), 1)}
+      {:ok, %Args{command: :help, positionals: topic}} -> {0, Help.render(topic)}
+      {:ok, %Args{} = args} -> Runner.run(normalize_paths(args))
+      {:error, {:usage, message, topic}} -> {2, message <> "\n\n" <> Help.render(topic)}
+      {:error, {:moved, message}} -> {2, "kogen: moved: use #{message}\n"}
     end
   end
 
-  defp dispatch(:help, args), do: Help.render(args.positionals)
-  defp dispatch(_command, %Args{} = args), do: Runner.run(args)
+  @machine_commands [:version, :provider_list, :provider_login, :provider_logout, :provider_use]
 
   defp normalize_paths(%Args{} = args) do
     project =
       case args.project do
-        nil
-        when args.command in [:help, :version, :provider_list, :provider_login, :provider_logout] ->
-          nil
-
-        nil ->
-          File.cwd!()
-
-        path ->
-          Path.expand(path)
+        nil when args.command in @machine_commands -> nil
+        nil -> File.cwd!()
+        path -> Path.expand(path)
       end
 
     %{args | project: project, origin: expand_optional_path(args.origin)}

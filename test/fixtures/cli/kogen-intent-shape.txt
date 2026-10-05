@@ -1,0 +1,11 @@
+Usage: kogen intent shape <slug> <file|-> [options]
+
+Shapes .kogen/intents/<slug>/intent.md and its acceptance test from the request in <file>
+(- reads stdin). Waits until the shaper finishes, with no time limit. Never approves.
+Model and effort come from build.roles.shaper in .kogen/project.yaml.
+
+Options:
+  --json                Print the shape result and model usage as JSON
+  --project <checkout>  Project checkout (default: current directory)
+  --origin <repo>       Git repository holding Intent state and the target branch
+  --base <branch>       Target branch (project setting, origin HEAD, then current branch)

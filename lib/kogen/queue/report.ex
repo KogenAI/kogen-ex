@@ -1,7 +1,7 @@
-defmodule Kogen.Kernel.Report do
-  @moduledoc false
+defmodule Kogen.Queue.Report do
+  @moduledoc "The latest Build of an Intent as one JSON document: outcome, stages, checks and timings."
 
-  alias Kogen.Kernel.StateView
+  alias Kogen.Queue.StateView
   alias Kogen.State
   alias Kogen.State.Event
   alias Kogen.State.Run
@@ -36,43 +36,51 @@ defmodule Kogen.Kernel.Report do
   defp landed_sha(_status, _origin, _base, _slug, _git_env), do: {:ok, nil}
 
   defp encode(%Run{} = run, events, status, landed_sha) do
-    report =
-      json_object([
-        {"slug", run.slug},
-        {"status", Atom.to_string(status)},
-        {"recipe", nullable(event_value(events, :recipe))},
-        {"roles", event_value(events, :roles) || %{}},
-        {"escalation", nullable(event_value(events, :escalation))},
-        {"escalations", escalations(events)},
-        {"attempts", attempts(events)},
-        {"approval", nullable(run.approval_commit)},
-        {"approved_by", nullable(event_value(events, :approved_by))},
-        {"base",
-         nullable(event_value(events, :base_sha) || landing_value(run, :expected_parent))},
-        {"candidate", nullable(landing_value(run, :candidate_commit))},
-        {"landed_sha", nullable(landed_sha)},
-        {"credential",
-         json_object([
-           {"source", nullable(event_value(events, :credential_source))},
-           {"label", nullable(event_value(events, :credential_label))}
-         ])},
-        {"acceptance_results", event_payload(events, "acceptance_result", :ledger, [])},
-        {"check_receipts", event_payload(events, "check_result", :receipts, [])},
-        {"excused_flakes", excused_flakes(events)},
-        {"candidate_diffs", candidate_diffs(run, events)},
-        {"red_checks", latest_candidate_value(events, :red_checks, [])},
-        {"acceptance_items", latest_candidate_value(events, :acceptance_items, [])},
-        {"model_stages", model_stages(events)},
-        {"phase_timings", phase_timings(events)},
-        {"findings", findings(events)},
-        {"failures", failures(events)},
-        {"last_gate", last_gate(events)},
-        {"stop", stop(events)}
-      ])
-
+    report = json_object(identity(run, events, status, landed_sha) ++ outcome(run, events))
     {:ok, report |> :json.encode() |> IO.iodata_to_binary()}
   rescue
     ArgumentError -> {:error, :report_encoding_failed}
+  end
+
+  defp identity(run, events, status, landed_sha) do
+    [
+      {"slug", run.slug},
+      {"status", Atom.to_string(status)},
+      {"build_id", run.id},
+      {"journal", run.dir},
+      {"recipe", nullable(event_value(events, :recipe))},
+      {"roles", event_value(events, :roles) || %{}},
+      {"escalation", nullable(event_value(events, :escalation))},
+      {"escalations", escalations(events)},
+      {"attempts", attempts(events)},
+      {"approval", nullable(run.approval_commit)},
+      {"approved_by", nullable(event_value(events, :approved_by))},
+      {"base", nullable(event_value(events, :base_sha) || landing_value(run, :expected_parent))},
+      {"candidate", nullable(landing_value(run, :candidate_commit))},
+      {"landed_sha", nullable(landed_sha)},
+      {"credential",
+       json_object([
+         {"source", nullable(event_value(events, :credential_source))},
+         {"label", nullable(event_value(events, :credential_label))}
+       ])}
+    ]
+  end
+
+  defp outcome(run, events) do
+    [
+      {"acceptance_results", event_payload(events, "acceptance_result", :ledger, [])},
+      {"check_receipts", event_payload(events, "check_result", :receipts, [])},
+      {"excused_flakes", excused_flakes(events)},
+      {"candidate_diffs", candidate_diffs(run, events)},
+      {"red_checks", latest_candidate_value(events, :red_checks, [])},
+      {"acceptance_items", latest_candidate_value(events, :acceptance_items, [])},
+      {"model_stages", model_stages(events)},
+      {"phase_timings", phase_timings(events)},
+      {"findings", findings(events)},
+      {"failures", failures(events)},
+      {"last_gate", last_gate(events)},
+      {"stop", stop(events)}
+    ]
   end
 
   defp model_stages(events) do

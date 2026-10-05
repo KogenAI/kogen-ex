@@ -13,7 +13,7 @@ defmodule Kogen.Contracts.Project do
                 env: %{},
                 sandbox: true,
                 base: nil,
-                account: "default",
+                account: nil,
                 build: nil
               ]
 
@@ -34,7 +34,7 @@ defmodule Kogen.Contracts.Project do
           env: %{optional(String.t()) => String.t()},
           sandbox: boolean(),
           base: String.t() | nil,
-          account: String.t(),
+          account: String.t() | nil,
           build: %{optional(:recipe) => String.t(), optional(:roles) => map()} | nil
         }
 end

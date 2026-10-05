@@ -2,7 +2,7 @@ defmodule Kogen.Kernel.IntentRemovalTest do
   use Kogen.Testkit.Case
 
   alias Kogen.Kernel.IntentRemoval
-  alias Kogen.Kernel.Types.IntentStatus
+  alias Kogen.Queue.IntentStatus
   alias Kogen.Testkit.Git
   alias Kogen.Workspace
 

@@ -103,17 +103,20 @@ defmodule Kogen.Acceptance.ApprovalCheckOutputTest do
   defp approve(repo) do
     branch = repo |> git(["rev-parse", "--abbrev-ref", "HEAD"]) |> String.trim()
 
+    intent = File.read!(Path.join(repo, ".kogen/intents/probe/intent.md"))
+    hash = :sha256 |> :crypto.hash(intent) |> Base.encode16(case: :lower) |> binary_part(0, 12)
+
     args = [
       "intent",
       "approve",
       "probe",
+      hash,
       "--project",
       repo,
       "--origin",
       repo,
       "--base",
       branch,
-      "--yes",
       "--by",
       "acceptance test"
     ]
