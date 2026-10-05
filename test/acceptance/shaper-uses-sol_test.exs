@@ -15,6 +15,12 @@ defmodule Kogen.Acceptance.ShaperUsesSolTest do
     roles = %{builder: %{model: "gpt-6-luna", effort: "max"}}
 
     assert BuildConfig.shape_settings(roles) == {"gpt-6.1-sol", "high"}
+
+    assert BuildConfig.shape_settings(Map.put(roles, :shaper, %{effort: "low"})) ==
+             {"gpt-6.1-sol", "low"}
+
+    assert BuildConfig.shape_settings(Map.put(roles, :shaper, %{model: "experiment"})) ==
+             {"experiment", "high"}
   end
 
   @tag intent: "shaper-uses-sol/A2"

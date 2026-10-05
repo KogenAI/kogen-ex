@@ -65,7 +65,9 @@ defmodule Kogen.Harness.Opts do
             optional(:context) => model(),
             optional(:planner) => model(),
             optional(:reviewer) => model(),
-            optional(:auditor) => model()
+            optional(:auditor) => model(),
+            optional(:shaper) => model(),
+            optional(:edge_writer) => model()
           },
           limits: %{max_turns: pos_integer(), wall_ms: pos_integer() | :infinity},
           resilience: Policy.t(),

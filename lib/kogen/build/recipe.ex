@@ -1,6 +1,8 @@
 defmodule Kogen.Build.Recipe do
   @moduledoc "Plain-data Build recipes and their role model settings."
 
+  alias Kogen.Resilience.Policy
+
   @type stage ::
           :context | :plan | :develop | :done_gate | :fix | :check | :review | :commit | :land
   @type role :: :context | :planner | :builder | :reviewer | :auditor
@@ -60,7 +62,14 @@ defmodule Kogen.Build.Recipe do
           required(:on) => [atom()]
         }
 
-  @ladder_names ["ladder", "ladder-diverse", "ladder-luna", "ladder-sol-medium"]
+  @builder_ladders [
+    {"ladder-luna", {"gpt-6-luna", "max"}},
+    {"ladder-sol-low", {"gpt-6.1-sol", "low"}},
+    {"ladder-sol-medium", {"gpt-6.1-sol", "medium"}},
+    {"ladder-sol-high", {"gpt-6.1-sol", "high"}}
+  ]
+  @builder_ladder_names Enum.map(@builder_ladders, &elem(&1, 0))
+  @ladder_names ["ladder", "ladder-diverse"] ++ @builder_ladder_names
   @names [
            "staged",
            "plan-shell",
@@ -157,15 +166,16 @@ defmodule Kogen.Build.Recipe do
   defp roles_for(name, builder) when name in ["ladder", "ladder-diverse"],
     do: %{planner: @sol_high, builder: builder, auditor: @sol_high}
 
-  defp roles_for("ladder-luna", _builder), do: single_model_roles(@luna_max)
-  defp roles_for("ladder-sol-medium", _builder), do: single_model_roles(@sol_medium)
+  defp roles_for(name, _builder) when name in @builder_ladder_names,
+    do: builder_ladder_roles(elem(List.keyfind(@builder_ladders, name, 0), 1))
 
   defp roles_for(_direct_recipe, builder), do: %{builder: builder}
 
-  defp single_model_roles(model), do: %{planner: model, builder: model, auditor: model}
+  defp builder_ladder_roles(builder),
+    do: %{planner: @sol_high, builder: builder, auditor: @sol_high}
 
-  # Each ladder is data. `ladder` mixes models; the single-model variants compare Kogen with a
-  # direct agent on the same model: fresh attempts, the auditor and raw-request, one model.
+  # Builder ladders keep every fresh and raw-request attempt on the same builder settings.
+  # Planning and acceptance auditing always use Sol high.
   defp ladder_rungs("ladder") do
     [
       %{name: "builder", builder: :builder, input: :plan},
@@ -187,9 +197,8 @@ defmodule Kogen.Build.Recipe do
     })
   end
 
-  defp ladder_rungs("ladder-luna"), do: @luna_rungs
-
-  defp ladder_rungs("ladder-sol-medium"), do: Enum.map(@luna_rungs, &%{&1 | builder: @sol_medium})
+  defp ladder_rungs(name) when name in @builder_ladder_names,
+    do: Enum.map(@luna_rungs, &%{&1 | builder: elem(List.keyfind(@builder_ladders, name, 0), 1)})
 
   defp builder_tools(name),
     do:
@@ -206,6 +215,15 @@ defmodule Kogen.Build.Recipe do
 
   @spec role(t(), role()) :: {String.t(), String.t()}
   def role(%{roles: roles}, role), do: Map.fetch!(roles, role)
+
+  @doc "Whether the recipe pins every builder rung to one model and effort."
+  @spec fixed_builder?(t()) :: boolean()
+  def fixed_builder?(%{name: name}), do: name in @builder_ladder_names
+
+  @doc "Keeps pinned builder recipes on their role models through provider retries."
+  @spec resilience(t(), Policy.t()) :: Policy.t()
+  def resilience(recipe, policy),
+    do: if(fixed_builder?(recipe), do: %{policy | fallbacks: %{}}, else: policy)
 
   @spec role_settings(t()) :: %{role() => %{model: String.t(), effort: String.t()}}
   def role_settings(%{roles: roles}) do

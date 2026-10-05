@@ -28,15 +28,7 @@ defmodule Kogen.Kernel.BuildConfig do
 
   @spec shape_settings(map()) :: {String.t(), String.t()}
   def shape_settings(roles) do
-    builder = builder_settings(roles)
-
-    case Map.get(roles, :shaper) do
-      nil ->
-        {"gpt-6.1-sol", "high"}
-
-      settings ->
-        {Map.get(settings, :model, elem(builder, 0)),
-         Map.get(settings, :effort, elem(builder, 1))}
-    end
+    settings = Map.get(roles, :shaper, %{})
+    {Map.get(settings, :model, "gpt-6.1-sol"), Map.get(settings, :effort, "high")}
   end
 end

@@ -2,7 +2,7 @@ defmodule Kogen.E2e.LadderTest do
   use Kogen.Testkit.Case
 
   import Kogen.E2e.Ladder,
-    only: [done: 0, events: 2, source_at: 2, stage_events: 2, user_text: 1, write: 2, write: 3]
+    only: [done: 0, events: 2, source_at: 2, user_text: 1, write: 2, write: 3]
 
   alias Kogen.E2e.Build
   alias Kogen.E2e.Build.Result
@@ -216,45 +216,6 @@ defmodule Kogen.E2e.LadderTest do
              Kogen.Kernel.status(result.fixture.project_root, result.fixture.origin, "main")
 
     assert [%{status: :failed, detail: "needs attention: kogen/build-engine"}] = statuses
-  end
-
-  test "ladder-luna climbs fresh Luna max rungs with a Luna auditor and no Sol", context do
-    script = [
-      ScriptedProvider.answer(:plan, @plan),
-      write("builder", :wrong),
-      done(),
-      ScriptedProvider.answer(:audit, @upheld),
-      done(),
-      write("fresh-2", :ready),
-      done()
-    ]
-
-    result = run!(context, "luna", script, "ladder-luna")
-
-    assert %Result{build: %{status: :landed, landed_sha: sha}} = result
-    assert source_at(result, sha) =~ "# revision: fresh-2"
-
-    assert Enum.uniq(Enum.map(result.provider_requests, &{&1.model, &1.effort})) == [
-             {"gpt-6-luna", "max"}
-           ]
-
-    assert [%{attempt: "fresh-2", trigger: "unchanged"}] = events(result, "escalation_started")
-    assert [%{model: "gpt-6-luna", effort: "max"}] = stage_events(result, "audit")
-    assert [%{recipe: "ladder-luna"}] = events(result, "started")
-  end
-
-  test "ladder-sol-medium keeps planning and building on Sol medium", context do
-    script = [ScriptedProvider.answer(:plan, @plan), write("sol-medium", :ready), done()]
-
-    result = run!(context, "sol-medium-only", script, "ladder-sol-medium")
-
-    assert %Result{build: %{status: :landed}} = result
-
-    assert Enum.uniq(Enum.map(result.provider_requests, &{&1.model, &1.effort})) == [
-             {"gpt-6.1-sol", "medium"}
-           ]
-
-    assert [%{recipe: "ladder-sol-medium"}] = events(result, "started")
   end
 
   defp run!(context, name, script, recipe \\ "ladder"),

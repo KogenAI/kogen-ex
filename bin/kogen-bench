@@ -22,15 +22,15 @@ case "$edge_tests" in
 esac
 # A ladder recipe with a +edge suffix runs the edge probe, like KOGEN_BENCH_EDGE_TESTS=1.
 case "$recipe" in
-  ladder|ladder-diverse|ladder-luna|ladder-sol-medium|staged|plan-shell|direct|direct-shell|direct-escalate|escalate-shell) ;;
-  ladder+edge|ladder-diverse+edge|ladder-luna+edge|ladder-sol-medium+edge)
+  ladder|ladder-diverse|ladder-luna|ladder-sol-low|ladder-sol-medium|ladder-sol-high|staged|plan-shell|direct|direct-shell|direct-escalate|escalate-shell) ;;
+  ladder+edge|ladder-diverse+edge|ladder-luna+edge|ladder-sol-low+edge|ladder-sol-medium+edge|ladder-sol-high+edge)
     recipe=${recipe%+edge}
     edge_tests=1
     ;;
-  *) echo "KOGEN_BENCH_RECIPE must be ladder, ladder-diverse, ladder-luna, ladder-sol-medium (each optionally with +edge), staged, plan-shell, direct, direct-shell, direct-escalate, or escalate-shell" >&2; exit 2 ;;
+  *) echo "KOGEN_BENCH_RECIPE must be ladder, ladder-diverse, ladder-luna, ladder-sol-low, ladder-sol-medium, ladder-sol-high (each optionally with +edge), staged, plan-shell, direct, direct-shell, direct-escalate, or escalate-shell" >&2; exit 2 ;;
 esac
 case "$edge_tests:$recipe" in
-  1:ladder|1:ladder-diverse|1:ladder-luna|1:ladder-sol-medium|0:*) ;;
+  1:ladder|1:ladder-diverse|1:ladder-luna|1:ladder-sol-low|1:ladder-sol-medium|1:ladder-sol-high|0:*) ;;
   *) echo "KOGEN_BENCH_EDGE_TESTS=1 needs a ladder recipe" >&2; exit 2 ;;
 esac
 export KOGEN_BENCH_EDGE_TESTS="$edge_tests"
@@ -48,8 +48,8 @@ case "$format_scope" in
 esac
 builder_model=${KOGEN_BENCH_MODEL:-gpt-6-luna}
 builder_effort=${KOGEN_BENCH_EFFORT:-max}
-shape_model=${KOGEN_BENCH_SHAPE_MODEL:-gpt-6-luna}
-shape_effort=${KOGEN_BENCH_SHAPE_EFFORT:-max}
+shape_model=${KOGEN_BENCH_SHAPE_MODEL:-gpt-6.1-sol}
+shape_effort=${KOGEN_BENCH_SHAPE_EFFORT:-high}
 shape_fallback=${KOGEN_BENCH_SHAPE_FALLBACK:-raw}
 case "$shape_fallback" in
   raw|none) ;;
@@ -182,6 +182,33 @@ with open(os.path.join(out_dir, "requests.jsonl"), "w", encoding="utf-8") as tar
             for line in source:
                 if line.strip():
                     target.write(line.rstrip("\n") + "\n")
+
+usage_path = os.path.join(out_dir, "usage.json")
+usage = read_json(usage_path)
+role_stages = {
+    "shape": "shaper", "plan": "planner", "develop": "builder",
+    "context": "context", "review": "reviewer", "audit": "auditor", "edge": "edge_writer",
+}
+roles = {}
+with open(os.path.join(out_dir, "requests.jsonl"), encoding="utf-8") as source:
+    for line in source:
+        try:
+            row = json.loads(line)
+        except ValueError:
+            continue
+        role = role_stages.get(row.get("stage"))
+        model, effort = row.get("model"), row.get("effort")
+        if role and isinstance(model, str) and isinstance(effort, str):
+            settings = {"model": model, "effort": effort}
+            used = roles.setdefault(role, [])
+            if settings not in used:
+                used.append(settings)
+if usage:
+    usage["roles"] = roles
+    usage["builder_models"] = sorted({settings["model"] for settings in roles.get("builder", [])})
+    with open(usage_path, "w", encoding="utf-8") as output:
+        json.dump(usage, output, indent=2)
+        output.write("\n")
 PY
 }
 trap 'copy_requests; rm -rf "$scratch"' EXIT

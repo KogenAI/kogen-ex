@@ -15,7 +15,7 @@ case "$1 ${2:-}" in
     done
     shape_dir="${TMPDIR:-/tmp}/kogen-shaper/$slug/fake-shape"
     mkdir -p "$shape_dir"
-    printf '%s\n' '{"stage":"shape","outcome":"ok","retries":0}' > "$shape_dir/requests.jsonl"
+    printf '%s\n' '{"stage":"shape","model":"gpt-6.1-sol","effort":"high","outcome":"ok","retries":0}' > "$shape_dir/requests.jsonl"
     [ -z "${FAKE_KOGEN_PROJECT_COPY:-}" ] || cp "$project/.kogen/project.yaml" "$FAKE_KOGEN_PROJECT_COPY"
     [ -z "${FAKE_KOGEN_SHAPE_EXIT:-}" ] || exit "$FAKE_KOGEN_SHAPE_EXIT"
     mkdir -p "$project/.kogen/intents/$slug"
@@ -61,8 +61,11 @@ case "$1 ${2:-}" in
     run_dir="$project/.kogen/test-run"
     mkdir -p "$run_dir"
     printf '%s\n' 'candidate implementation' > "$run_dir/candidate.diff"
-    printf '%s\n' '{"stage":"develop","outcome":"ok","retries":0}' \
-      '{"stage":"develop","outcome":"timeout","retries":0}' > "$run_dir/requests.jsonl"
+    printf '%s\n' '{"stage":"develop","model":"gpt-6-luna","effort":"max","outcome":"ok","retries":0}' \
+      '{"stage":"develop","model":"gpt-6.1-sol","effort":"medium","outcome":"timeout","retries":0}' \
+      '{"stage":"plan","model":"gpt-6.1-sol","effort":"high","outcome":"ok","retries":0}' \
+      '{"stage":"audit","model":"gpt-6.1-sol","effort":"high","outcome":"ok","retries":0}' \
+      '{"stage":"edge","model":"gpt-6.1-sol","effort":"high","outcome":"ok","retries":0}' > "$run_dir/requests.jsonl"
     python3 - "$run_dir/candidate.diff" "$run_dir" <<'PY'
 import json
 import os

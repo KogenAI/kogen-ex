@@ -37,11 +37,11 @@ defmodule Kogen.E2e.LadderEdgeTest do
     assert %Result{build: %{status: :landed, landed_sha: sha}} = result
     assert source_at(result, sha) =~ "# revision: builder-edge"
 
-    # One edge call, on the ladder's builder model, from the Request alone.
+    # One Sol high edge call from the Request alone.
     assert [edge_call] =
              Enum.filter(result.provider_requests, &(&1.instructions =~ "edge-test writer"))
 
-    assert {edge_call.model, edge_call.effort} == {"gpt-6-luna", "max"}
+    assert {edge_call.model, edge_call.effort} == {"gpt-6.1-sol", "high"}
     text = user_text(edge_call)
     assert text =~ "Preserve this fixture wording verbatim as source context."
     assert text =~ "TinyApp"

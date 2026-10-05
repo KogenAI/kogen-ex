@@ -216,7 +216,7 @@ defmodule Kogen.Harness.ExchangeResilienceTest do
       FakeResponsesServer.stop(server)
     end
 
-    test "the planner falls back from Sol high to Sol medium", %{tmp_dir: tmp_dir} do
+    test "the planner keeps Sol high through overload retries", %{tmp_dir: tmp_dir} do
       {url, server} = FakeResponsesServer.start([@overloaded, @overloaded, {:ok, "plan"}])
       opts = opts(tmp_dir, url, %{}, @fast)
 
@@ -224,8 +224,8 @@ defmodule Kogen.Harness.ExchangeResilienceTest do
       assert {:ok, %{text: "plan"}} = Exchange.respond(opts, planner)
 
       assert_receive {:fake_request, 3, %{"model" => "gpt-6.1-sol"} = body, _at}
-      assert body["reasoning"] == %{"effort" => "medium"}
-      assert_receive {:recorded, %{event: :model_fallback, to: %{effort: "medium"}}}
+      assert body["reasoning"] == %{"effort" => "high"}
+      refute_received {:recorded, %{event: :model_fallback}}
       FakeResponsesServer.stop(server)
     end
 

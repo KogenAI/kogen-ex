@@ -174,7 +174,7 @@ defmodule Kogen.Harness.Shaping do
   end
 
   defp shape_turn(%State{} = state, remaining_ms) do
-    {model, effort} = state.opts.models.builder
+    {model, effort} = Map.get(state.opts.models, :shaper, {"gpt-6.1-sol", "high"})
 
     request = %ExchangeRequest{
       stage: :shape,

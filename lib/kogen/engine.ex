@@ -43,9 +43,13 @@ defmodule Kogen.Engine do
   def build_recipe(name, model, effort, role_settings) when is_map(role_settings) do
     recipe = Recipe.for_build(name, model, effort)
 
+    if Recipe.fixed_builder?(recipe), do: recipe, else: override_roles(recipe, role_settings)
+  end
+
+  defp override_roles(recipe, role_settings) do
     roles =
       Enum.reduce(role_settings, recipe.roles, fn {role, settings}, acc ->
-        {default_model, default_effort} = Map.get(acc, role, {model, effort})
+        {default_model, default_effort} = Map.get(acc, role, {"gpt-6.1-sol", "high"})
 
         Map.put(acc, role, {
           Map.get(settings, :model, default_model),

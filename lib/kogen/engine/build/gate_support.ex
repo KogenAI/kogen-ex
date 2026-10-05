@@ -273,7 +273,7 @@ defmodule Kogen.Engine.Build.GateSupport do
   defp default_harness_options(session, guard) do
     context = Map.get(session.request.recipe.roles, :context)
     builder = builder_settings(session)
-    planner = Map.get(session.request.recipe.roles, :planner, builder)
+    planner = Map.get(session.request.recipe.roles, :planner, {"gpt-6.1-sol", "high"})
     reviewer = Map.get(session.request.recipe.roles, :reviewer, builder)
     recipe = session.request.recipe
 
@@ -284,7 +284,7 @@ defmodule Kogen.Engine.Build.GateSupport do
       sandbox: session.sandbox,
       provider_mod: session.request.provider_mod,
       provider_config: session.request.provider_config,
-      resilience: session.request.resilience,
+      resilience: Recipe.resilience(recipe, session.request.resilience),
       proc_mod: Kogen.Proc,
       env: session.process_env,
       before_gate: guard,

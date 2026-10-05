@@ -353,11 +353,10 @@ defmodule Kogen.Shaper.Runner do
       proc_mod: Proc,
       sandbox: request.sandbox,
       env: Map.merge(request.env, project.env),
-      models: %{builder: {request.model, request.effort}, strong: {request.model, request.effort}},
       limits: request.limits
     }
 
-    {:ok, opts}
+    {:ok, %{opts | models: Map.put(opts.models, :shaper, {request.model, request.effort})}}
   end
 
   defp result(request, calls, rounds, opts, warnings) do

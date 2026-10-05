@@ -10,7 +10,9 @@ defmodule Kogen.Acceptance.LadderIsDefaultTest do
   @recipes [
     "ladder",
     "ladder-luna",
+    "ladder-sol-low",
     "ladder-sol-medium",
+    "ladder-sol-high",
     "staged",
     "plan-shell",
     "direct",
@@ -54,10 +56,16 @@ defmodule Kogen.Acceptance.LadderIsDefaultTest do
   end
 
   @tag intent: "ladder-is-default/A4"
-  test "the benchmark runner honors an explicit recipe, including single-model ladders", %{
+  test "the benchmark runner honors an explicit recipe, including builder ladders", %{
     tmp_dir: tmp_dir
   } do
-    for recipe <- ["direct-shell", "ladder-luna", "ladder-sol-medium"] do
+    for recipe <- [
+          "direct-shell",
+          "ladder-luna",
+          "ladder-sol-low",
+          "ladder-sol-medium",
+          "ladder-sol-high"
+        ] do
       usage = run_benchmark!(Path.join(tmp_dir, recipe), recipe)
       assert usage["recipe"] == recipe
     end

@@ -48,10 +48,12 @@ defmodule Kogen.Build.LadderCycleTest do
     assert Recipe.stages(recipe) == Recipe.stages(@recipe)
   end
 
-  test "single-model ladder variants keep every model call on one model" do
+  test "builder ladder variants keep every rung on one builder model" do
     for {name, model} <- [
           {"ladder-luna", {"gpt-6-luna", "max"}},
-          {"ladder-sol-medium", {"gpt-6.1-sol", "medium"}}
+          {"ladder-sol-low", {"gpt-6.1-sol", "low"}},
+          {"ladder-sol-medium", {"gpt-6.1-sol", "medium"}},
+          {"ladder-sol-high", {"gpt-6.1-sol", "high"}}
         ] do
       recipe = Recipe.for_build(name, "configured-builder", "low")
       %{rungs: rungs, parallel_on_hard: 2, repair_cap: 6} = Recipe.ladder(recipe)
@@ -63,8 +65,8 @@ defmodule Kogen.Build.LadderCycleTest do
                {"raw-request", model, :raw_request}
              ]
 
-      assert Recipe.role(recipe, :planner) == model
-      assert Recipe.auditor(recipe) == model
+      assert Recipe.role(recipe, :planner) == {"gpt-6.1-sol", "high"}
+      assert Recipe.auditor(recipe) == {"gpt-6.1-sol", "high"}
       assert Recipe.stages(recipe) == Recipe.stages(@recipe)
       assert recipe.builder_tools == :shell
     end

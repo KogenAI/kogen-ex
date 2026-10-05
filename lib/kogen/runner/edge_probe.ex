@@ -2,7 +2,7 @@ defmodule Kogen.Runner.EdgeProbe do
   @moduledoc false
 
   # The ladder's opt-in edge probe. Once the first green Candidates exist, one call on the
-  # ladder's builder model writes black-box edge tests from the verbatim Request. They run
+  # Sol high model writes black-box edge tests from the verbatim Request. They run
   # against every green Candidate in a scratch copy; tests that fail on all of them are
   # discarded as possibly wrong, and the kept tests each Candidate passes become its
   # `edge_passed` for the selector. A lone green Candidate that fails edge tests gets one
@@ -72,12 +72,12 @@ defmodule Kogen.Runner.EdgeProbe do
 
   defp ask(session, request) do
     started = now()
-    {model, effort} = Recipe.role(session.request.recipe, :builder)
+    {model, effort} = {"gpt-6.1-sol", "high"}
     opts = GateSupport.harness_options(session)
-    opts = %{opts | models: %{opts.models | builder: {model, effort}}}
+    opts = %{opts | models: Map.put(opts.models, :edge_writer, {model, effort})}
 
     text = EdgeTests.input(request, EdgeTests.module_names(session.workdir))
-    call = %{stage: :edge, role: :builder, instructions: EdgeTests.instructions(), text: text}
+    call = %{stage: :edge, role: :edge_writer, instructions: EdgeTests.instructions(), text: text}
 
     case Harness.ask(opts, call) do
       {:ok, %{text: reply, usage: usage}} ->

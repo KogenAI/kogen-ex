@@ -41,7 +41,9 @@ defmodule Kogen.Harness.ReadSearchSandboxTests do
     assert {:ok, result} = Harness.shape(opts, "fixture", "Describe this project.", [], nil, 0)
     assert result.text == "No matching context was found."
 
-    request_inputs = provider |> ScriptedProvider.requests() |> Enum.map(&inspect(&1.input))
+    requests = ScriptedProvider.requests(provider)
+    assert Enum.all?(requests, &(&1.model == "gpt-6.1-sol" and &1.effort == "high"))
+    request_inputs = Enum.map(requests, &inspect(&1.input))
     assert Enum.any?(request_inputs, &String.contains?(&1, "No matches."))
   end
 

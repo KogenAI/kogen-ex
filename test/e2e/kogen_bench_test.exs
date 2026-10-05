@@ -42,9 +42,12 @@ defmodule Kogen.E2e.KogenBenchTest do
            |> File.read!()
            |> String.split("\n", trim: true) ==
              [
-               ~s({"stage":"shape","outcome":"ok","retries":0}),
-               ~s({"stage":"develop","outcome":"ok","retries":0}),
-               ~s({"stage":"develop","outcome":"timeout","retries":0})
+               ~s({"stage":"shape","model":"gpt-6.1-sol","effort":"high","outcome":"ok","retries":0}),
+               ~s({"stage":"develop","model":"gpt-6-luna","effort":"max","outcome":"ok","retries":0}),
+               ~s({"stage":"develop","model":"gpt-6.1-sol","effort":"medium","outcome":"timeout","retries":0}),
+               ~s({"stage":"plan","model":"gpt-6.1-sol","effort":"high","outcome":"ok","retries":0}),
+               ~s({"stage":"audit","model":"gpt-6.1-sol","effort":"high","outcome":"ok","retries":0}),
+               ~s({"stage":"edge","model":"gpt-6.1-sol","effort":"high","outcome":"ok","retries":0})
              ]
 
     usage = paths.out_dir |> Path.join("usage.json") |> File.read!() |> :json.decode()
@@ -57,6 +60,19 @@ defmodule Kogen.E2e.KogenBenchTest do
            }
 
     assert %{"partial" => true} = Enum.find(usage["stages"], &(&1["stage"] == "develop"))
+
+    assert usage["roles"] == %{
+             "shaper" => [%{"model" => "gpt-6.1-sol", "effort" => "high"}],
+             "planner" => [%{"model" => "gpt-6.1-sol", "effort" => "high"}],
+             "auditor" => [%{"model" => "gpt-6.1-sol", "effort" => "high"}],
+             "edge_writer" => [%{"model" => "gpt-6.1-sol", "effort" => "high"}],
+             "builder" => [
+               %{"model" => "gpt-6-luna", "effort" => "max"},
+               %{"model" => "gpt-6.1-sol", "effort" => "medium"}
+             ]
+           }
+
+    assert usage["builder_models"] == ["gpt-6-luna", "gpt-6.1-sol"]
   end
 
   test "writes a request journal even when the benchmark stops before the Build", %{
@@ -66,7 +82,11 @@ defmodule Kogen.E2e.KogenBenchTest do
     assert status == 9, output
 
     assert File.read!(Path.join(paths.out_dir, "requests.jsonl")) ==
-             ~s({"stage":"shape","outcome":"ok","retries":0}\n)
+             ~s({"stage":"shape","model":"gpt-6.1-sol","effort":"high","outcome":"ok","retries":0}\n)
+
+    usage = paths.out_dir |> Path.join("usage.json") |> File.read!() |> :json.decode()
+    assert usage["builder_models"] == []
+    assert usage["roles"] == %{"shaper" => [%{"model" => "gpt-6.1-sol", "effort" => "high"}]}
   end
 
   test "grades a Build's best candidate branch as the final diff when it did not land", %{
@@ -84,6 +104,8 @@ defmodule Kogen.E2e.KogenBenchTest do
     assert usage["recipe"] == "ladder"
     assert {usage["landed"], usage["best_candidate"]} == {false, true}
     assert usage["best_candidate_detail"]["branch"] == "kogen/task"
+    assert usage["builder_models"] == ["gpt-6-luna", "gpt-6.1-sol"]
+    assert usage["roles"]["shaper"] == [%{"model" => "gpt-6.1-sol", "effort" => "high"}]
 
     assert File.read!(Path.join(paths.out_dir, "log.txt")) =~
              "grading its best candidate kogen/task"

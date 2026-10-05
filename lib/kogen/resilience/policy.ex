@@ -33,12 +33,12 @@ defmodule Kogen.Resilience.Policy do
             fallbacks: %{
               builder: [@sol_medium],
               context: [@sol_medium],
-              planner: [@sol_medium],
+              planner: [],
               reviewer: [@sol_medium]
             }
 
   @type model :: {String.t(), String.t()}
-  @type role :: :builder | :context | :planner | :reviewer
+  @type role :: :builder | :context | :planner | :reviewer | :shaper | :auditor | :edge_writer
   @type t :: %__MODULE__{
           max_attempts: pos_integer(),
           backoff_base_ms: non_neg_integer(),
@@ -67,6 +67,9 @@ defmodule Kogen.Resilience.Policy do
 
   @doc "Maps an Exchange stage to the model role that serves it."
   @spec role(atom()) :: role()
+  def role(:shape), do: :shaper
+  def role(:audit), do: :auditor
+  def role(:edge), do: :edge_writer
   def role(:plan), do: :planner
   def role(:review), do: :reviewer
   def role(:context), do: :context

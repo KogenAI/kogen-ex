@@ -51,7 +51,9 @@ The `ladder` recipe plans once, then builds on fresh Candidates rung by rung (co
 
 Intent shaping defaults to **gpt-6.1-sol at high effort**, independently of the builder model. An explicit `build.roles.shaper` in `.kogen/project.yaml` or `~/.kogen/config.yaml` overrides this default; project fields take precedence over machine settings.
 
-For benchmarks on one model, use `ladder-luna` or `ladder-sol-medium` with `KOGEN_BENCH_NO_FALLBACK=1`. This overrides project and machine `build.model_fallback` settings, keeps overload retries on the same model and effort with backoff until the Build's wall budget runs out, and records `model_fallback: false` in the run journal, status report and benchmark `usage.json`. Projects can also set `build.model_fallback: false`. Fallback remains enabled by default; shaping without a wall budget still stops at its retry limit.
+Builder ladders `ladder-luna`, `ladder-sol-low`, `ladder-sol-medium`, and `ladder-sol-high` keep every builder attempt, including fresh and raw-request rungs and overload retries, on their named model and effort. Luna uses `gpt-6-luna` at max; the Sol variants use `gpt-6.1-sol` at low, medium, or high. Their planner, acceptance-test auditor, and edge-test writer use Sol high. Builder role overrides do not change these recipes.
+
+For benchmarks on one model, use `ladder-luna`, `ladder-sol-low`, `ladder-sol-medium`, or `ladder-sol-high` with `KOGEN_BENCH_NO_FALLBACK=1`. This overrides project and machine `build.model_fallback` settings, keeps overload retries on the same model and effort with backoff until the Build's wall budget runs out, and records `model_fallback: false` in the run journal, status report and benchmark `usage.json`. Projects can also set `build.model_fallback: false`. Fallback remains enabled by default; shaping without a wall budget still stops at its retry limit.
 
 When `base` is omitted, Kogen uses the origin HEAD branch recorded locally, then the checkout's current branch. Optional machine defaults live in `~/.kogen/config.yaml`; project settings override them.
 

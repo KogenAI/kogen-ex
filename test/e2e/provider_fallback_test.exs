@@ -32,7 +32,10 @@ defmodule Kogen.E2e.ProviderFallbackTest do
     result = Build.run!(context.tmp_dir, script, options(context.seed))
 
     assert %Result{build: %{status: :landed}, run_status: :landed} = result
-    assert Enum.all?(result.provider_requests, &(&1.model == "gpt-6-luna" and &1.effort == "max"))
+
+    assert Enum.map(result.provider_requests, &{&1.model, &1.effort}) ==
+             Enum.map(requests(result), &role_settings(&1["stage"]))
+
     refute Enum.any?(result.events, &(&1.event == "model_fallback"))
     assert Enum.any?(requests(result), &(&1["retries"] > @same_model.max_attempts))
     assert {:ok, report} = Build.report(result)
@@ -50,7 +53,11 @@ defmodule Kogen.E2e.ProviderFallbackTest do
 
       assert %Result{build: %{status: :failed, reason: :budget_exhausted}} = result
       refute Enum.any?(result.events, &(&1.event == "model_fallback"))
-      assert Enum.all?(requests(result), &(&1["model"] == "gpt-6-luna"))
+
+      assert Enum.all?(
+               requests(result),
+               &({&1["model"], &1["effort"]} == role_settings(&1["stage"]))
+             )
 
       assert Enum.any?(requests(result), &(&1["outcome"] == "overload"))
 
@@ -69,6 +76,9 @@ defmodule Kogen.E2e.ProviderFallbackTest do
       resilience: @same_model
     }
   end
+
+  defp role_settings("plan"), do: {"gpt-6.1-sol", "high"}
+  defp role_settings("develop"), do: {"gpt-6-luna", "max"}
 
   defp ready_source, do: "defmodule TinyApp do\n  def value, do: :ready\nend\n"
 

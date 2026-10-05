@@ -3,7 +3,7 @@ defmodule Kogen.Project.BuildSettings do
 
   alias Kogen.Contracts.Yaml
 
-  @ladders ~w(ladder ladder-diverse ladder-luna ladder-sol-medium)
+  @ladders ~w(ladder ladder-diverse ladder-luna ladder-sol-low ladder-sol-medium ladder-sol-high)
   @recipes @ladders ++
              ~w(staged plan-shell direct direct-shell direct-escalate escalate-shell) ++
              Enum.map(@ladders, &(&1 <> "+edge"))
