@@ -1,0 +1,7 @@
+fn value ->
+  with {:ok, x} <- value do
+    {:ok, x}
+  else
+    error -> error
+  end
+end

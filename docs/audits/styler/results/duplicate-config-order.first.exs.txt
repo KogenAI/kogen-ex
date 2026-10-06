@@ -1,0 +1,4 @@
+import Config
+
+config :styler_probe, value: :a
+config :styler_probe, value: :z

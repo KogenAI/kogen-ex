@@ -1,0 +1,6 @@
+fn value ->
+  case value do
+    true -> :ok
+    false -> :error
+  end
+end

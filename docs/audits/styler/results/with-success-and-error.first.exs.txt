@@ -1,0 +1,6 @@
+fn value ->
+  case value do
+    {:ok, x} -> {:ok, x}
+    error -> error
+  end
+end

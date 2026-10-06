@@ -1,0 +1,9 @@
+fn value ->
+  x = :outer
+  result = with {:ok, x} <- value, true <- is_integer(x) do
+    {:ok, x}
+  else
+    _ -> {:error, x}
+  end
+  {result, x}
+end

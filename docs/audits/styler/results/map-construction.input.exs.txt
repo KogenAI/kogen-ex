@@ -1,0 +1,1 @@
+fn pairs -> Enum.into(pairs, %{}) end

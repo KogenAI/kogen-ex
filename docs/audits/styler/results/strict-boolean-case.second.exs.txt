@@ -1,0 +1,7 @@
+fn value ->
+  if value do
+    :ok
+  else
+    :error
+  end
+end
