@@ -29,6 +29,7 @@ defmodule Kogen.Contracts do
       ShapeWarning,
       ShapeWarningCodec,
       Stack,
+      StreamProgress,
       ToolCall,
       WorkerGuard,
       Yaml

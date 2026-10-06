@@ -3,6 +3,8 @@ defmodule Kogen.Contracts.ModelRequest do
   A provider-neutral request to a language model. A streaming provider calls `on_progress`
   on every nonempty raw response chunk, including SSE comments, keepalives and reasoning
   events, so the caller can time the first byte and notice a stream that went silent.
+  `on_byte` also marks body bytes, and `on_event` carries decoded streaming events before
+  completion. `continuation_items` retains replayed progress across replacement requests.
   """
 
   @enforce_keys [:model, :effort, :instructions, :input, :tools, :previous_response_id]
@@ -10,6 +12,9 @@ defmodule Kogen.Contracts.ModelRequest do
               [
                 prompt_cache_key: nil,
                 on_progress: nil,
+                on_byte: nil,
+                on_event: nil,
+                continuation_items: [],
                 adapter: :responses,
                 text_verbosity: nil,
                 reasoning_summary: :auto,
@@ -28,6 +33,10 @@ defmodule Kogen.Contracts.ModelRequest do
           tools: [map()],
           previous_response_id: String.t() | nil,
           prompt_cache_key: String.t() | nil,
+          on_progress: (-> :ok) | nil,
+          on_byte: (-> :ok) | nil,
+          on_event: (map() -> term()) | nil,
+          continuation_items: [map()],
           adapter: :responses | :lite,
           text_verbosity: nil | :low | :medium | :high,
           reasoning_summary: :none | :auto | :concise | :detailed,
@@ -35,7 +44,6 @@ defmodule Kogen.Contracts.ModelRequest do
           tool_choice: :auto | :none | :required,
           parallel_tool_calls: boolean(),
           session_id: String.t() | nil,
-          model_generation_tokens: pos_integer() | nil,
-          on_progress: (-> :ok) | nil
+          model_generation_tokens: pos_integer() | nil
         }
 end

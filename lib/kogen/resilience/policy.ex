@@ -29,6 +29,7 @@ defmodule Kogen.Resilience.Policy do
             backoff_max_ms: 60_000,
             request_cap_ms: 1_200_000,
             stream_idle_ms: 90_000,
+            first_byte_ms: 120_000,
             overload_fallback_after: 2,
             model_fallback: true,
             fallbacks: %{
@@ -46,6 +47,7 @@ defmodule Kogen.Resilience.Policy do
           backoff_max_ms: non_neg_integer(),
           request_cap_ms: pos_integer(),
           stream_idle_ms: pos_integer(),
+          first_byte_ms: pos_integer(),
           overload_fallback_after: pos_integer(),
           model_fallback: boolean(),
           fallbacks: %{optional(role()) => [model()]}

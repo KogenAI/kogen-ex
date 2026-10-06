@@ -64,20 +64,43 @@ defmodule Kogen.Http.Transport do
       {:ok, ref} ->
         now = System.monotonic_time(:millisecond)
 
-        receive_response(
-          ref,
-          now + min(Keyword.get(opts, :first_byte_ms, timeout_ms), timeout_ms),
-          timeout_ms,
-          %State{
-            total_deadline: total_deadline(now, Keyword.get(opts, :total_ms)),
-            on_chunk: Keyword.get(opts, :on_chunk)
-          },
-          profile
-        )
+        watcher = cancel_on_exit(ref, profile)
+
+        try do
+          receive_response(
+            ref,
+            min(
+              now + min(Keyword.get(opts, :first_byte_ms, timeout_ms), timeout_ms),
+              total_deadline(now, Keyword.get(opts, :total_ms))
+            ),
+            timeout_ms,
+            %State{
+              total_deadline: total_deadline(now, Keyword.get(opts, :total_ms)),
+              on_chunk: Keyword.get(opts, :on_chunk)
+            },
+            profile
+          )
+        after
+          send(watcher, :finished)
+        end
 
       {:error, _reason} ->
         {:error, :transport}
     end
+  end
+
+  # A provider watchdog may stop the receiver before its own HTTP timer runs.
+  defp cancel_on_exit(ref, profile) do
+    receiver = self()
+
+    spawn(fn ->
+      monitor = Process.monitor(receiver)
+
+      receive do
+        :finished -> Process.demonitor(monitor, [:flush])
+        {:DOWN, ^monitor, :process, ^receiver, _reason} -> cancel(ref, profile)
+      end
+    end)
   end
 
   defp total_deadline(_now, nil), do: :infinity
@@ -168,14 +191,14 @@ defmodule Kogen.Http.Transport do
           receive_response(ref, deadline, idle_timeout_ms, %{state | status: 200}, profile)
 
         {:http, {^ref, :stream, chunk}} when is_binary(chunk) ->
-          notify_chunk(state, chunk)
+          state = notify_chunk(state, chunk)
           append_chunk(ref, idle_timeout_ms, state, chunk, profile)
 
         {:http, {^ref, :stream_end, _headers}} ->
           finish_stream(state)
 
         {:http, {^ref, {{_version, status, _reason}, _headers, body}}} ->
-          notify_chunk(state, body)
+          _state = notify_chunk(state, body)
           full_response(status, body)
 
         {:http, {^ref, {:error, reason}}} ->
@@ -190,10 +213,16 @@ defmodule Kogen.Http.Transport do
 
   # Hands every body chunk to the caller, so it can time the first byte and notice a stream
   # that stopped making progress.
-  defp notify_chunk(%State{on_chunk: callback}, chunk) when is_function(callback, 1),
-    do: callback.(chunk)
+  defp notify_chunk(%State{on_chunk: {callback, accumulator}} = state, chunk) do
+    %{state | on_chunk: {callback, callback.(chunk, accumulator)}}
+  end
 
-  defp notify_chunk(%State{}, _chunk), do: :ok
+  defp notify_chunk(%State{on_chunk: callback} = state, chunk) when is_function(callback, 1) do
+    callback.(chunk)
+    state
+  end
+
+  defp notify_chunk(%State{} = state, _chunk), do: state
 
   defp append_chunk(ref, idle_timeout_ms, state, chunk, profile) do
     size = state.size + byte_size(chunk)

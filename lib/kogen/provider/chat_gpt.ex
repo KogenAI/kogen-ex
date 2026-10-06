@@ -199,7 +199,7 @@ defmodule Kogen.Provider.ChatGPT do
              proxy_env: config.proxy_env,
              first_byte_ms: config.first_byte_timeout_ms,
              total_ms: config.total_timeout_ms,
-             on_chunk: progress(request.on_progress)
+             on_chunk: progress(request)
            ) do
       handle_response(response)
     else
@@ -242,13 +242,20 @@ defmodule Kogen.Provider.ChatGPT do
     end
   end
 
-  # Any received bytes prove the stream is alive, including comments, keepalives and
-  # partial SSE frames. Progress is independent of which events the codec consumes.
-  defp progress(callback) when is_function(callback, 0) do
-    fn chunk -> if byte_size(chunk) > 0, do: callback.(), else: :ok end
-  end
+  # Every nonempty chunk keeps the stream alive, including comments, keepalives and
+  # partial frames. Decoding retains received progress across cuts.
+  defp progress(request) do
+    callback = fn chunk, stream ->
+      if chunk != "" do
+        if is_function(request.on_byte, 0), do: request.on_byte.()
+        if is_function(request.on_progress, 0), do: request.on_progress.()
+      end
 
-  defp progress(_callback), do: nil
+      Codec.feed(stream, chunk)
+    end
+
+    {callback, %{Codec.new_stream() | on_event: request.on_event}}
+  end
 
   defp handle_response(%Transport.Response{status: status, body: body, chunks: chunks})
        when status in 200..299 do

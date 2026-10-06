@@ -5,7 +5,14 @@ defmodule Kogen.Contracts.ProviderError do
   """
 
   @enforce_keys [:class, :message]
-  defstruct @enforce_keys ++ [usage: nil, response_id: nil, incomplete_reason: nil]
+  defstruct @enforce_keys ++
+              [
+                usage: nil,
+                response_id: nil,
+                incomplete_reason: nil,
+                partial_items: [],
+                cut_after_ms: nil
+              ]
 
   @type class ::
           :login
@@ -22,6 +29,8 @@ defmodule Kogen.Contracts.ProviderError do
           message: String.t(),
           usage: map() | nil,
           response_id: String.t() | nil,
-          incomplete_reason: String.t() | nil
+          incomplete_reason: String.t() | nil,
+          partial_items: [map()],
+          cut_after_ms: non_neg_integer() | nil
         }
 end

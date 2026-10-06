@@ -150,7 +150,12 @@ defmodule Kogen.Provider.ChatGPT.Codec do
   defp maybe_put_prompt_cache_key(body, _cache_key), do: body
 
   defp decode_event(data, stream) do
-    case decode_json(data) do
+    decoded = decode_json(data)
+
+    if is_function(stream.on_event, 1) and match?({:ok, %{}}, decoded),
+      do: stream.on_event.(elem(decoded, 1))
+
+    case decoded do
       {:ok, %{"type" => "response.output_item.done", "item" => item}} when is_map(item) ->
         %{stream | items: [item | stream.items]}
 

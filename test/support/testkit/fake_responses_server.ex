@@ -15,6 +15,7 @@ defmodule Kogen.Testkit.FakeResponsesServer do
   @type behaviour ::
           {:ok, String.t()}
           | {:status, pos_integer(), binary()}
+          | {:cut, [map()], :close | :hang | :end}
           | :hang
           | :close
           | :trickle
@@ -56,9 +57,26 @@ defmodule Kogen.Testkit.FakeResponsesServer do
     [_headers, body] = :binary.split(request, "\r\n\r\n")
     send(owner, {:fake_request, index, :json.decode(body), System.monotonic_time(:millisecond)})
     respond(socket, behaviour)
+    send(owner, {:fake_request_ended, index})
   end
 
   defp respond(socket, {:ok, text}), do: send_stream(socket, text)
+
+  defp respond(socket, {:cut, events, ending}) do
+    :ok = :gen_tcp.send(socket, stream_header())
+    pause(20)
+
+    for event <- events do
+      data = "data: " <> IO.iodata_to_binary(:json.encode(event)) <> "\n\n"
+      :ok = :gen_tcp.send(socket, chunk(data))
+      pause(20)
+    end
+
+    case ending do
+      :end -> :gen_tcp.send(socket, "0\r\n\r\n")
+      other -> respond(socket, other)
+    end
+  end
 
   defp respond(socket, :stall) do
     started_stream(socket)
@@ -101,11 +119,8 @@ defmodule Kogen.Testkit.FakeResponsesServer do
   defp respond(socket, :close), do: :gen_tcp.close(socket)
 
   defp respond(socket, :hang) do
-    receive do
-      :never -> :ok
-    after
-      @read_ms -> :gen_tcp.close(socket)
-    end
+    _closed = :gen_tcp.recv(socket, 0, @read_ms)
+    :gen_tcp.close(socket)
   end
 
   defp respond(socket, :trickle) do

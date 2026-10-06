@@ -7,7 +7,8 @@ defmodule Kogen.Resilience.RequestLog do
   `last_byte_at` bound the response's progress and are null when the provider never answered
   (or cannot tell). A `stall` record's `idle_ms` is the silence that ended it. Token counts are
   null unless the response reported them. The journal file is `requests.jsonl` in the run
-  directory.
+  directory. `cut_after_ms` records how long an interrupted stream ran; `resumed` means
+  the attempt carries received conversation from an earlier interrupted attempt.
   """
 
   alias Kogen.Contracts.ModelRequest
@@ -24,6 +25,7 @@ defmodule Kogen.Resilience.RequestLog do
   @type t :: %__MODULE__{started_at: integer(), progress: :atomics.atomics_ref()}
   @type meta :: %{
           optional(:settings) => map(),
+          optional(:resumed) => boolean(),
           required(:stage) => atom(),
           required(:turn) => non_neg_integer(),
           required(:model) => String.t(),
@@ -66,6 +68,17 @@ defmodule Kogen.Resilience.RequestLog do
   @spec start() :: t()
   def start, do: %__MODULE__{started_at: now(), progress: :atomics.new(2, signed: false)}
 
+  @doc "Marks the first body byte, including comments and keepalives."
+  @spec first_byte_marker(t()) :: (-> :ok)
+  def first_byte_marker(%__MODULE__{progress: ref}) do
+    fn ->
+      at = now()
+      _previous = :atomics.compare_exchange(ref, 1, 0, at)
+      _previous = :atomics.compare_exchange(ref, 2, 0, at)
+      :ok
+    end
+  end
+
   @doc "The request's `on_progress`: the first call marks the first byte, every call the last."
   @spec progress_marker(t()) :: (-> :ok)
   def progress_marker(%__MODULE__{progress: ref}) do
@@ -98,6 +111,8 @@ defmodule Kogen.Resilience.RequestLog do
         last_byte_at: last_byte_at,
         ended_at: ended_at,
         outcome: outcome,
+        resumed: Map.get(meta, :resumed, false),
+        cut_after_ms: cut_after_ms(result),
         response_id: response_id(result),
         incomplete_reason: incomplete_reason(result),
         usage_status: usage_status(tokens, outcome),
@@ -125,6 +140,9 @@ defmodule Kogen.Resilience.RequestLog do
   @doc "The journal's file name inside a run directory."
   @spec file_name() :: String.t()
   def file_name, do: @file_name
+
+  defp cut_after_ms({:error, %ProviderError{cut_after_ms: cut}}), do: cut || :null
+  defp cut_after_ms(_result), do: :null
 
   defp outcome({:ok, %ModelResponse{usage: usage}}), do: {:ok, tokens(usage)}
   defp outcome({:error, %ProviderError{class: class, usage: usage}}), do: {class, tokens(usage)}

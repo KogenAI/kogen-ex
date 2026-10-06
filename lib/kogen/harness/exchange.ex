@@ -40,6 +40,7 @@ defmodule Kogen.Harness.Exchange do
   alias Kogen.Harness.Recording
   alias Kogen.Resilience.Policy
   alias Kogen.Resilience.ProviderCall
+  alias Kogen.Resilience.Recovery
   alias Kogen.Resilience.RequestLog
   alias Kogen.Resilience.Retry
   alias Kogen.Tooling.Error
@@ -86,7 +87,7 @@ defmodule Kogen.Harness.Exchange do
           after_failure(opts, {exchange_request, request, deadline}, {error, retry, decision})
 
         _result ->
-          record_response(opts, exchange_request, result)
+          record_response(opts, exchange_request, Recovery.complete(request, result))
       end
     end
   end
@@ -98,7 +99,8 @@ defmodule Kogen.Harness.Exchange do
       |> Map.take([:stage, :turn, :model, :effort])
       |> Map.merge(%{
         retries: retry.attempt - 1,
-        history: Codec.history_size(exchange_request.items),
+        history: Codec.history_size(request.input),
+        resumed: request.continuation_items != [],
         tags:
           Map.put(opts.request_tags, :conversation_id, conversation_key(opts, exchange_request)),
         settings: request_settings(opts, request)
@@ -142,6 +144,8 @@ defmodule Kogen.Harness.Exchange do
          {exchange_request, request, deadline},
          {error, retry, {:retry, next, delay_ms, fallback}}
        ) do
+    request = Recovery.continue(request, error)
+    exchange_request = %{exchange_request | items: request.input}
     {next_exchange, next_request} = switch_model(opts, exchange_request, request, fallback)
 
     with :ok <- record_provider_error(opts, exchange_request, error),
@@ -176,10 +180,13 @@ defmodule Kogen.Harness.Exchange do
 
   defp switch_model(_opts, exchange_request, request, nil), do: {exchange_request, request}
 
-  defp switch_model(opts, exchange_request, _request, {model, effort}) do
+  defp switch_model(opts, exchange_request, request, {model, effort}) do
     items = Codec.without_reasoning(exchange_request.items)
     switched = %{exchange_request | model: model, effort: effort, items: items}
-    {switched, build_request(opts, switched)}
+    next_request = build_request(opts, switched)
+
+    {switched,
+     %{next_request | continuation_items: Codec.without_reasoning(request.continuation_items)}}
   end
 
   defp record_provider_error(opts, exchange_request, error),
@@ -201,7 +208,8 @@ defmodule Kogen.Harness.Exchange do
       reason: error.class,
       delay_ms: delay_ms,
       model: elem(retry.model, 0),
-      detail: "Retrying idempotent model request after #{error.class}."
+      detail:
+        "Retrying model request after #{error.class}; carrying received progress when available."
     })
   end
 
@@ -286,9 +294,31 @@ defmodule Kogen.Harness.Exchange do
   end
 
   defp provider_call(opts, %ModelRequest{} = request, remaining_ms, probe) do
-    request = %{request | on_progress: RequestLog.progress_marker(probe)}
+    request = %{
+      request
+      | on_progress: RequestLog.progress_marker(probe),
+        on_byte: RequestLog.first_byte_marker(probe)
+    }
+
     idle_ms = opts.resilience.stream_idle_ms
-    ProviderCall.run(opts.provider_mod, opts.provider_config, request, remaining_ms, idle_ms)
+
+    first_byte_ms =
+      if is_map(opts.provider_config),
+        do:
+          min(
+            Map.get(opts.provider_config, :first_byte_timeout_ms, opts.resilience.first_byte_ms),
+            opts.resilience.first_byte_ms
+          ),
+        else: opts.resilience.first_byte_ms
+
+    ProviderCall.run(
+      opts.provider_mod,
+      opts.provider_config,
+      request,
+      remaining_ms,
+      idle_ms,
+      first_byte_ms
+    )
   end
 
   defp record_response(opts, request, {:ok, %ModelResponse{} = response}) do

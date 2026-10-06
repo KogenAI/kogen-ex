@@ -5,7 +5,8 @@ defmodule Kogen.Provider.ChatGPT.Codec.Stream do
             items: [],
             completed: nil,
             failure: nil,
-            malformed?: false
+            malformed?: false,
+            on_event: nil
 
   @type t :: %__MODULE__{
           buffer: binary(),
@@ -13,7 +14,8 @@ defmodule Kogen.Provider.ChatGPT.Codec.Stream do
           items: [map()],
           completed: map() | nil,
           failure: Kogen.Contracts.ProviderError.t() | nil,
-          malformed?: boolean()
+          malformed?: boolean(),
+          on_event: (map() -> term()) | nil
         }
 end
 

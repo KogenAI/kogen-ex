@@ -102,7 +102,7 @@ defmodule Kogen.Harness.ExchangeRequestJournalTest do
 
     assert [stalled, recovered] = records(tmp_dir)
     assert %{"outcome" => "stall", "retries" => 0, "tokens" => :null} = stalled
-    assert stalled["first_byte_at"] == stalled["last_byte_at"]
+    assert stalled["first_byte_at"] <= stalled["last_byte_at"]
     assert stalled["idle_ms"] == stalled["ended_at"] - stalled["last_byte_at"]
     assert stalled["idle_ms"] >= 2_000 and stalled["idle_ms"] < 15_000
     assert %{"outcome" => "ok", "retries" => 1, "idle_ms" => :null} = recovered
