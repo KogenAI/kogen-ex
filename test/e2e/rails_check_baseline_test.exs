@@ -31,7 +31,7 @@ defmodule Kogen.E2e.RailsCheckBaselineTest do
 
       steps =
         [ScriptedProvider.write(:develop, @controller, source)] ++
-          List.duplicate(ScriptedProvider.answer(:develop, "Done."), 4)
+          List.duplicate(ScriptedProvider.finish(), 4)
 
       {:ok, server} = ScriptedProvider.start_link(steps)
       on_exit(fn -> if Process.alive?(server), do: GenServer.stop(server) end)
