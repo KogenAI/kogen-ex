@@ -167,6 +167,67 @@ defmodule KogenChecks.Check.FailOpenWithTest do
     |> refute_issues()
   end
 
+  test "receives report each lost error at its branch without failing the gate" do
+    source = """
+    defmodule Inbox do
+      def await do
+        receive do
+          {:error, _reason} -> nil
+          {:error, _} -> {:ok, :fallback}
+          {:error, reason} -> []
+        after
+          100 -> nil
+        end
+      end
+    end
+    """
+
+    source
+    |> to_source_file("lib/inbox.ex")
+    |> run_check(FailOpenWith)
+    |> assert_issues(fn issues ->
+      assert Enum.sort(Enum.map(issues, & &1.line_no)) == [4, 5, 6]
+      assert Enum.all?(issues, &(&1.trigger == "receive" and &1.exit_status == 0))
+      assert Enum.all?(issues, &(Credo.Priority.to_atom(&1.priority) == :low))
+      assert Enum.all?(issues, &String.contains?(&1.message, "drops its reason"))
+    end)
+  end
+
+  test "receives allow handled reasons, message filtering, timeouts and predicate defaults" do
+    """
+    defmodule Inbox do
+      def timeout_only do
+        receive do
+        after
+          100 -> nil
+        end
+      end
+
+      def await do
+        receive do
+          {:error, reason} ->
+            report(reason)
+            nil
+          {:error, reason} ->
+            Logger.warning(inspect(reason))
+            :ok
+          {:error, reason} -> {:error, reason}
+          {:error, reason} -> raise reason
+          {:error, :missing} -> false
+          {:error, _reason} -> true
+          {:message, _payload} -> nil
+          _other -> :ok
+        after
+          100 -> nil
+        end
+      end
+    end
+    """
+    |> to_source_file("lib/inbox.ex")
+    |> run_check(FailOpenWith)
+    |> refute_issues()
+  end
+
   test "does not scan tests" do
     """
     defmodule X do

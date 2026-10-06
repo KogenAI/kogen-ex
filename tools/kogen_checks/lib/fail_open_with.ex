@@ -3,7 +3,7 @@ defmodule KogenChecks.Check.FailOpenWith do
   Flags error branches that turn failures into success-shaped values.
 
   A `with ... else` branch that maps an unexpected failure to a success shape fails the gate.
-  A `case` clause that maps `{:error, reason}` to a literal success default is an advisory:
+  A `case` or `receive` clause that maps `{:error, reason}` to a literal success default is an advisory:
   it stays visible under `--strict` and never changes the exit status.
   """
   use Credo.Check,
@@ -59,6 +59,16 @@ defmodule KogenChecks.Check.FailOpenWith do
     {node, check_case(clauses, meta, issue_meta) ++ issues}
   end
 
+  defp walk({:receive, _, [keywords]} = node, issues, issue_meta) do
+    advisories =
+      for {:->, meta, [[pattern], body]} <- List.wrap(Keyword.get(keywords, :do)),
+          error_to_default?({pattern, body}),
+          not handles_reason?(pattern, body),
+          do: default_advisory(issue_meta, meta[:line], "receive")
+
+    {node, advisories ++ issues}
+  end
+
   defp walk(node, issues, _issue_meta), do: {node, issues}
 
   defp check_else(nil, _meta, _issue_meta), do: []
@@ -98,14 +108,27 @@ defmodule KogenChecks.Check.FailOpenWith do
 
   # Advisory only: low priority and exit status 0, so it is shown but never fails the gate.
   defp case_advisory(issue_meta, line_no) do
+    default_advisory(issue_meta, line_no, "case")
+  end
+
+  defp default_advisory(issue_meta, line_no, trigger) do
     format_issue(issue_meta,
       message:
         "An error branch drops its reason and returns a success default. Log, propagate, or re-raise the error.",
-      trigger: "case",
+      trigger: trigger,
       line_no: line_no,
       priority: Credo.Priority.to_integer(:low),
       exit_status: 0
     )
+  end
+
+  defp handles_reason?({:error, reason}, body) do
+    {_body, used?} =
+      Macro.prewalk(body, false, fn node, found? ->
+        {node, found? or same_value?(reason, node)}
+      end)
+
+    used?
   end
 
   defp fail_open?({pattern, body}) do
