@@ -107,6 +107,10 @@ defmodule Kogen.E2e.RailsBuildTest do
     assert Git.git!(project, ["show", "#{build.landed_sha}:test/acceptance/#{@slug}_test.rb"]) ==
              acceptance()
 
+    landed_paths = Git.git!(project, ["show", "--pretty=", "--name-only", build.landed_sha])
+    refute landed_paths =~ ".bundle/"
+    refute landed_paths =~ "vendor/bundle/"
+
     assert {:ok, report} = Kogen.Kernel.report(@slug, project, project, "main")
     decoded = :json.decode(report)
     assert Enum.all?(decoded["acceptance_results"], &(&1["status"] == "passed"))

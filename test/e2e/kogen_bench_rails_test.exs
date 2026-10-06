@@ -106,8 +106,8 @@ defmodule Kogen.E2e.KogenBenchRailsTest do
         root = pathlib.Path(args[args.index("--project") + 1])
         capture = pathlib.Path(os.environ["KOGEN_BENCH_CAPTURE"])
         env = os.environ.copy()
-        env["BUNDLE_PATH"] = "vendor/bundle"
-        env["BUNDLE_USER_HOME"] = str(root / ".kogen/bundle")
+        env["BUNDLE_PATH"] = ".bundle/gems"
+        env["BUNDLE_USER_HOME"] = str(root / ".bundle/user")
         env["BUNDLE_APP_CONFIG"] = str(root / ".bundle")
         section = ""
         for line in (root / ".kogen/project.yaml").read_text().splitlines():

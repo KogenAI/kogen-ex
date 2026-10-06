@@ -12,8 +12,8 @@ defmodule Kogen.Engine.RailsEnvironment do
 
       :rails ->
         env
-        |> then(&Map.merge(Map.new([{"BUNDLE_PATH", "vendor/bundle"}]), &1))
-        |> Map.put("BUNDLE_USER_HOME", Path.join(root, ".kogen/bundle"))
+        |> then(&Map.merge(Map.new([{"BUNDLE_PATH", ".bundle/gems"}]), &1))
+        |> Map.put("BUNDLE_USER_HOME", Path.join(root, ".bundle/user"))
         |> Map.put("BUNDLE_APP_CONFIG", Path.join(root, ".bundle"))
     end
   end

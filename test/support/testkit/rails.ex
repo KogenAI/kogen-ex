@@ -82,7 +82,11 @@ defmodule Kogen.Testkit.Rails do
 
     File.write!(
       Path.join(root, ".gitignore"),
-      File.read!(Path.join(root, ".gitignore")) <> "deps/\n_build/\n.test-bin/\n"
+      root
+      |> Path.join(".gitignore")
+      |> File.read!()
+      |> String.replace(["vendor/bundle/\n", ".kogen/bundle/\n"], "")
+      |> Kernel.<>("deps/\n_build/\n.test-bin/\n")
     )
 
     Git.git!(root, ["init", "--quiet", "--template="])
