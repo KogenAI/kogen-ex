@@ -2,9 +2,8 @@ defmodule Kogen.Workspace.Checkout do
   @moduledoc false
 
   alias Kogen.Contracts.ProcResult
+  alias Kogen.Contracts.Stack
   alias Kogen.Workspace.Git
-
-  @seed_dirs ["deps", "_build"]
 
   @spec create(Path.t(), String.t(), Path.t(), String.t(), %{String.t() => String.t()}) ::
           {:ok, %{path: Path.t(), base_sha: String.t()}} | {:error, term()}
@@ -232,7 +231,7 @@ defmodule Kogen.Workspace.Checkout do
 
   @spec seed(Path.t(), Path.t(), %{String.t() => String.t()}) :: :ok | {:error, term()}
   defp seed(destination, origin, git_env) do
-    Enum.reduce_while(@seed_dirs, :ok, fn directory, :ok ->
+    Enum.reduce_while(Stack.seed_dirs(Stack.detect(destination)), :ok, fn directory, :ok ->
       case seed_directory(destination, origin, directory, git_env) do
         :ok -> {:cont, :ok}
         {:error, reason} -> {:halt, {:error, reason}}
@@ -255,11 +254,13 @@ defmodule Kogen.Workspace.Checkout do
           :ok | {:error, term()}
   defp seed_directory(destination, origin, directory, git_env) do
     source = Path.join(origin, directory)
+    target_parent = Path.join(destination, Path.dirname(directory))
+    File.mkdir_p!(target_parent)
 
-    if File.dir?(source) do
-      case copy_with_clonefile(source, destination, git_env) do
+    if File.dir?(source) and not File.exists?(Path.join(destination, directory)) do
+      case copy_with_clonefile(source, target_parent, git_env) do
         :ok -> :ok
-        {:error, _reason} -> copy_plain(source, destination, directory, git_env)
+        {:error, _reason} -> copy_plain(source, target_parent, Path.basename(directory), git_env)
       end
     else
       :ok

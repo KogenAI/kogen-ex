@@ -88,9 +88,10 @@ defmodule Kogen.Engine do
   @spec candidate_environment(Path.t(), Runtime.t(), Project.t()) ::
           {:ok, %{String.t() => String.t()}}
           | {:error, :invalid_toolchain_environment | {:toolchain_failed, String.t()}}
-  def candidate_environment(workdir, %Runtime{} = runtime, %Project{env: project_env}) do
+  def candidate_environment(workdir, %Runtime{} = runtime, %Project{env: project_env} = project) do
     with {:ok, environment} <- project_environment(workdir, runtime) do
-      {:ok, Map.merge(environment, project_env)}
+      {:ok,
+       Kogen.Engine.RailsEnvironment.apply(Map.merge(environment, project_env), workdir, project)}
     end
   end
 end

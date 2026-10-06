@@ -15,7 +15,7 @@ defmodule Kogen.Engine.Runtime do
           sandboxed: boolean()
         }
 
-  @base_keys ~w(PATH HOME LANG LC_ALL TERM TMPDIR USER SHELL MIX_HOME HEX_HOME https_proxy HTTPS_PROXY all_proxy ALL_PROXY http_proxy HTTP_PROXY no_proxy NO_PROXY)
+  @base_keys ~w(PATH HOME LANG LC_ALL TERM TMPDIR USER SHELL GEM_HOME GEM_PATH RUBYOPT BUNDLE_PATH BUNDLE_CACHE_PATH BUNDLE_WITHOUT MIX_HOME HEX_HOME https_proxy HTTPS_PROXY all_proxy ALL_PROXY http_proxy HTTP_PROXY no_proxy NO_PROXY)
 
   @spec new(map(), Path.t(), Path.t() | nil, Path.t(), Path.t()) :: t()
   def new(system_env, mise, script_path, ert_dir, ert_bin) do

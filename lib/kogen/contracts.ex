@@ -27,6 +27,7 @@ defmodule Kogen.Contracts do
       RolePrompt,
       ShapeWarning,
       ShapeWarningCodec,
+      Stack,
       ToolCall,
       Yaml
     ]

@@ -30,6 +30,7 @@ defmodule Kogen.Project.Loader do
   end
 
   defp validate_document(document, checkout_root) do
+    document = Kogen.Project.StackDefaults.apply(document, checkout_root)
     {attributes, field_errors} = project_fields(document, checkout_root)
     errors = unknown_keys(document, @project_keys, "project") ++ field_errors
     project_result(errors, attributes)
