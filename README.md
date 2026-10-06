@@ -104,3 +104,5 @@ make check-fast D=contracts
 ## Toolchain and layout
 
 Elixir 1.20.4-otp-29 and Erlang/OTP 29.1.1 are pinned in `mise.toml`. The repository is one Mix app named `kogen`; domain modules live in `lib/kogen/`, tests in `test/`, test support in `test/support/`, and local static-analysis checks in `tools/kogen_checks/`.
+
+Rails projects can use the same shape, approve, build, gate and land workflow. See [Rails profiles](docs/rails.md) for configuration and offline setup.

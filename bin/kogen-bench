@@ -288,6 +288,10 @@ PY
 git clone --quiet "$work_dir" "$project_dir"
 git -C "$project_dir" checkout --quiet -B main "$work_base"
 mkdir -p "$project_dir/.kogen"
+acceptance_ext=exs
+if [ -f "$project_dir/Gemfile" ] && [ -f "$project_dir/config/application.rb" ]; then
+  acceptance_ext=rb
+fi
 python3 - "$task_json" "$project_dir/.kogen/project.yaml" "$scratch/project_tmpdir" \
   "$timer_script" "$phase_file" "$timings_file" "$format_check_script" "$format_scope" \
   "$recipe" "$builder_model" "$builder_effort" "$shape_model" "$shape_effort" <<'PY'
@@ -295,6 +299,7 @@ import json
 import os
 import re
 import shutil
+import subprocess
 import sys
 
 (
@@ -333,12 +338,12 @@ if toolchain_override:
     extra_path = toolchain_override
     env["BENCH_EXTRA_PATH"] = extra_path
 if extra_path:
-    env["PATH"] = extra_path + (":" + env["PATH"] if env.get("PATH") else "")
+    env["PATH"] = extra_path + ":" + (env.get("PATH") or os.environ.get("PATH", "/usr/bin:/bin"))
 
 mise_path = shutil.which("mise")
 if mise_path:
     mise_bin = os.path.dirname(mise_path)
-    env["PATH"] = mise_bin + (":" + env["PATH"] if env.get("PATH") else "")
+    env["PATH"] = mise_bin + ":" + (env.get("PATH") or os.environ.get("PATH", "/usr/bin:/bin"))
 
 mise_config = os.environ.get("KOGEN_BENCH_MISE_CONFIG")
 if mise_config:
@@ -349,32 +354,76 @@ if mise_config:
 prefix = ["mise", "exec", "--"] if mise_path else []
 if not prefix and not (env.get("PATH") and shutil.which("mix", path=env["PATH"])):
     prefix = ["mise", "exec", "--"]
+project_root = os.path.dirname(os.path.dirname(target_path))
+rails = os.path.isfile(os.path.join(project_root, "Gemfile")) and os.path.isfile(os.path.join(project_root, "config/application.rb"))
+raw_setup = document.get("setup")
+if rails:
+    # The public environment patch is part of the task base, before approval hashes it.
+    # Keep the remaining public setup commands; each workspace installs its bundle locally.
+    patch_path = os.path.join(os.path.dirname(source_path), "environment.patch")
+    patch_command = r"git\s+apply\s+(?:--[\w-]+\s+)*(?:\"[^\"]*environment\.patch\"|'[^']*environment\.patch'|[^\s;&|]*environment\.patch)(?=\s*(?:&&|;|$))"
+    patch_setup = isinstance(raw_setup, str) and re.search(patch_command, raw_setup)
+    patch_argv = raw_setup.get("argv") if isinstance(raw_setup, dict) else raw_setup
+    if isinstance(patch_argv, list):
+        patch_setup = patch_argv[:2] == ["git", "apply"] and any("environment.patch" in arg for arg in patch_argv[2:])
+    if patch_setup:
+        if not os.path.isfile(patch_path):
+            raise SystemExit("Rails setup references environment.patch but the public task file is missing")
+        if subprocess.run(["git", "apply", "--check", patch_path], cwd=project_root, capture_output=True).returncode == 0:
+            subprocess.run(["git", "apply", patch_path], cwd=project_root, check=True)
+        elif subprocess.run(["git", "apply", "--reverse", "--check", patch_path], cwd=project_root, capture_output=True).returncode != 0:
+            raise SystemExit("Rails environment.patch does not apply to the task base")
+        shutil.copyfile(patch_path, os.path.join(os.path.dirname(event_path), "environment.patch"))
+        raw_setup = re.sub(patch_command, ":", raw_setup) if isinstance(raw_setup, str) else []
 quote = lambda value: json.dumps(str(value), ensure_ascii=False)
 array = lambda values: "[" + ", ".join(quote(value) for value in values) + "]"
 timer_prefix = [sys.executable, timer_path, phase_path, event_path]
 timed = lambda name, argv: timer_prefix + [name, "--"] + argv
-if format_scope == "all":
-    format_argv = prefix + ["mix", "format"]
+if rails:
+    declarations = ""
+    for filename in ("Gemfile", "Gemfile.lock"):
+        path = os.path.join(project_root, filename)
+        if os.path.isfile(path):
+            with open(path, encoding="utf-8") as source:
+                declarations += source.read() + "\n"
+    linters = []
+    for name, command, config in (("standard", "standardrb", ".standard.yml"), ("rubocop", "rubocop", ".rubocop.yml")):
+        pattern = r"\bgem\s+[\"']" + name + r"(?:-[\w-]+)?[\"']|^    " + name + r" \("
+        if os.path.isfile(os.path.join(project_root, config)) or re.search(pattern, declarations, re.MULTILINE):
+            linters.append((name, prefix + ["bundle", "exec", command]))
+    lines = ["name: kogen-bench"]
+    if linters:
+        lines.append("format: " + array(timed("format", linters[0][1] + ["-a"])))
+    lines += ["checks:", "  - name: tests", "    argv: " + array(timed("check:tests", prefix + ["bundle", "exec", "rails", "test"])), "    timeout_ms: 900000"]
+    for name, argv in linters:
+        lines += ["  - name: " + name, "    argv: " + array(timed("check:" + name, argv)), "    timeout_ms: 300000"]
+    lines += ["acceptance_checks:", "  - name: syntax-acceptance", "    argv: " + array(timed("acceptance:syntax", prefix + ["ruby", "-c", "{path}"])), "    timeout_ms: 60000"]
 else:
-    format_argv = [sys.executable, format_check_script] + prefix + ["mix", "format"]
+    if format_scope == "all":
+        format_argv = prefix + ["mix", "format"]
+    else:
+        format_argv = [sys.executable, format_check_script] + prefix + ["mix", "format"]
 
-lines = [
-    "name: kogen-bench",
-    "format: " + array(timed("format", format_argv)),
-    "checks:",
-    "  - name: tests",
-    "    argv: " + array(timed("check:tests", prefix + ["mix", "test"])),
-    "    timeout_ms: 900000",
-    "  - name: format",
-    "    argv: " + array(timed("check:format", format_argv + ["--check-formatted"])),
-    "    timeout_ms: 300000",
-    "acceptance_checks:",
-    "  - name: compile-acceptance",
-    "    argv: " + array(timed("acceptance:compile-acceptance", prefix + ["mix", "test", "--dry-run", "{path}"])),
-    "    timeout_ms: 600000",
-    "  - name: format-acceptance",
-    "    argv: " + array(timed("acceptance:format-acceptance", prefix + ["mix", "format", "--check-formatted", "{path}"])),
-    "    timeout_ms: 300000",
+    lines = [
+        "name: kogen-bench",
+        "format: " + array(timed("format", format_argv)),
+        "checks:",
+        "  - name: tests",
+        "    argv: " + array(timed("check:tests", prefix + ["mix", "test"])),
+        "    timeout_ms: 900000",
+        "  - name: format",
+        "    argv: " + array(timed("check:format", format_argv + ["--check-formatted"])),
+        "    timeout_ms: 300000",
+        "acceptance_checks:",
+        "  - name: compile-acceptance",
+        "    argv: " + array(timed("acceptance:compile-acceptance", prefix + ["mix", "test", "--dry-run", "{path}"])),
+        "    timeout_ms: 600000",
+        "  - name: format-acceptance",
+        "    argv: " + array(timed("acceptance:format-acceptance", prefix + ["mix", "format", "--check-formatted", "{path}"])),
+        "    timeout_ms: 300000",
+    ]
+
+lines += [
     "build:",
     "  recipe: " + quote(recipe),
 ] + (["  edge_tests: true"] if os.environ.get("KOGEN_BENCH_EDGE_TESTS") == "1" else []) + [
@@ -388,9 +437,8 @@ lines = [
     "      effort: " + quote(shape_effort),
 ]
 
-raw_setup = document.get("setup")
 deps_source_override = os.environ.get("KOGEN_BENCH_DEPS_SOURCE")
-if deps_source_override and isinstance(raw_setup, str):
+if not rails and deps_source_override and isinstance(raw_setup, str):
     copy_step = re.match(r"\s*cp\s+-cR\s+\S+\s+deps\s+&&\s*(.*)$", raw_setup, re.DOTALL)
     if not copy_step:
         raise SystemExit("KOGEN_BENCH_DEPS_SOURCE requires setup to begin by copying deps")
@@ -423,7 +471,7 @@ elif isinstance(raw_setup, dict) and isinstance(raw_setup.get("argv"), list):
 else:
     setup_text = ""
 
-if setup_argv and re.search(r"(?<![A-Za-z0-9_])mix(?=\s|$)", setup_text):
+if not rails and setup_argv and re.search(r"(?<![A-Za-z0-9_])mix(?=\s|$)", setup_text):
     lines.append("setup_outputs: [deps, _build]")
 
 if setup_argv:
@@ -435,18 +483,27 @@ if setup_argv:
         "    timeout_ms: 900000",
     ]
 
+if rails:
+    if not setup_argv:
+        lines.append("setup:")
+    lines += [
+        "  - name: bundle-install",
+        "    argv: " + array(timed("setup:bundle-install", prefix + ["bundle", "install", "--local"])),
+        "    timeout_ms: 900000",
+    ]
+
 if env:
     lines.append("env:")
     lines.extend("  " + key + ": " + quote(value) for key, value in sorted(env.items()))
 
-lines += ["domains:", "  app: [lib, test]"]
+lines += ["domains:", "  app: [app, config, db, lib, test]" if rails else "  app: [lib, test]"]
 with open(target_path, "w", encoding="utf-8") as target:
     target.write("\n".join(lines) + "\n")
 with open(tmpdir_path, "w", encoding="utf-8") as target:
     target.write(env.get("TMPDIR") or os.environ.get("TMPDIR", "/tmp"))
 PY
 
-git -C "$project_dir" add .kogen/project.yaml
+git -C "$project_dir" add --all
 git -C "$project_dir" -c user.name='Kogen Bench' -c user.email='kogen-bench@invalid' \
   -c commit.gpgsign=false commit --quiet -m 'Configure Kogen benchmark project'
 git clone --quiet --bare "$project_dir" "$origin"
@@ -817,9 +874,14 @@ PY
 }
 
 write_raw_fallback_intent() {
+  if [ "$acceptance_ext" = rb ]; then
+    # A provider outage uses the documented project-check-only raw mode, without a made-up smoke test.
+    write_raw_intent
+    return
+  fi
   mkdir -p "$project_dir/.kogen/intents/$slug" "$project_dir/.kogen/acceptance"
   python3 - "$prompt_file" "$slug" "$project_dir/.kogen/intents/$slug/intent.md" \
-    "$project_dir/.kogen/acceptance/${slug}_test.exs" <<'PY'
+    "$project_dir/.kogen/acceptance/${slug}_test.$acceptance_ext" <<'PY'
 import sys
 
 prompt_path, slug, intent_path, test_path = sys.argv[1:]
@@ -868,7 +930,7 @@ write_raw_intent() {
       '## Request'
     cat "$prompt_file"
   } > "$project_dir/.kogen/intents/$slug/intent.md"
-  : > "$project_dir/.kogen/acceptance/${slug}_test.exs"
+  : > "$project_dir/.kogen/acceptance/${slug}_test.$acceptance_ext"
 }
 
 slug=$(basename "$task_dir")
@@ -879,8 +941,8 @@ shape_wall_ms=0
 if [ "$intent_source" = provided ]; then
   mkdir -p "$project_dir/.kogen/intents/$slug" "$project_dir/.kogen/acceptance"
   cp "$provided_intent_dir/intent.md" "$project_dir/.kogen/intents/$slug/intent.md"
-  cp "$provided_intent_dir/acceptance_test.exs" \
-    "$project_dir/.kogen/acceptance/${slug}_test.exs"
+  cp "$provided_intent_dir/acceptance_test.$acceptance_ext" \
+    "$project_dir/.kogen/acceptance/${slug}_test.$acceptance_ext"
 elif [ "$intent_source" = raw ]; then
   log_line "intent source is raw: building from the verbatim prompt without shaping"
   write_raw_intent
