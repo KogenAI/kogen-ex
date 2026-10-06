@@ -1,8 +1,10 @@
 defmodule Kogen.Workspace.Guard do
   @moduledoc false
 
+  alias Kogen.Contracts.Failure
   alias Kogen.Contracts.Intent
   alias Kogen.Contracts.Project
+  alias Kogen.Contracts.Stack
   alias Kogen.Workspace
 
   @absent_digest :sha256 |> :crypto.hash("kogen:absent") |> Base.encode16(case: :lower)
@@ -25,6 +27,56 @@ defmodule Kogen.Workspace.Guard do
     with {:ok, changed} <- Workspace.changed_paths(workdir, base_sha, git_env) do
       prefixes = Enum.flat_map(intent.domains, &Map.get(project.domains, &1, [])) ++ allowed_extra
       {:ok, Enum.reject(changed, &under_prefix?(&1, prefixes))}
+    end
+  end
+
+  @spec check_candidate(Path.t(), String.t(), map(), map()) ::
+          :ok | {:error, Failure.t()}
+  def check_candidate(workdir, base_sha, manifest, git_env) do
+    case protected_violations(workdir, base_sha, manifest, git_env) do
+      {:ok, []} ->
+        :ok
+
+      {:ok, protected} ->
+        failure(:protected_edit, "Protected paths changed: #{Enum.join(protected, ", ")}")
+
+      {:error, reason} ->
+        failure(
+          :workspace_failed,
+          "Cannot inspect protected paths: #{inspect(reason)}",
+          :controller
+        )
+    end
+  end
+
+  @spec scope_warnings(Path.t(), String.t(), Intent.t(), Project.t(), map()) ::
+          {:ok, [map()]} | {:error, Failure.t()}
+  def scope_warnings(workdir, base_sha, intent, project, git_env) do
+    case scope_violations(workdir, base_sha, intent, project, allowed_extra(intent, project.root), git_env) do
+      {:ok, paths} ->
+        domains = Enum.sort(intent.domains)
+
+        warnings =
+          paths
+          |> Enum.sort()
+          |> Enum.map(fn path ->
+            %{
+              path: path,
+              declared_domains: domains,
+              finding:
+                "Scope warning: #{path} is outside the Intent's declared domains " <>
+                  "[#{Enum.join(domains, ", ")}]."
+            }
+          end)
+
+        {:ok, warnings}
+
+      {:error, reason} ->
+        failure(
+          :workspace_failed,
+          "Cannot inspect scope paths: #{inspect(reason)}",
+          :controller
+        )
     end
   end
 
@@ -68,4 +120,13 @@ defmodule Kogen.Workspace.Guard do
       path == prefix or String.starts_with?(path, String.trim_trailing(prefix, "/") <> "/")
     end)
   end
+
+  defp allowed_extra(%Intent{slug: slug}, root),
+    do: [
+      ".kogen/intents/#{slug}"
+      | [Stack.acceptance_source(root, slug), Stack.acceptance_test(root, slug)]
+    ]
+
+  defp failure(reason, detail, class \\ :candidate),
+    do: {:error, %Failure{class: class, reason: reason, detail: detail}}
 end

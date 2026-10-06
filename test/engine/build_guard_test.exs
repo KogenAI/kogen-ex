@@ -5,7 +5,6 @@ defmodule Kogen.Engine.BuildGuardTest do
   alias Kogen.Contracts.Intent
   alias Kogen.Contracts.Project
   alias Kogen.Contracts.ToolCall
-  alias Kogen.Engine.Build.Guard
   alias Kogen.Harness.Opts
   alias Kogen.Harness.Tools
   alias Kogen.Testkit.Git
@@ -22,33 +21,10 @@ defmodule Kogen.Engine.BuildGuardTest do
     base_sha = repo |> git_output!(["rev-parse", "HEAD"]) |> String.trim()
     File.write!(Path.join(repo, protected_path), "check: edited\n")
 
-    project = %Project{
-      root: repo,
-      name: "guard-fixture",
-      checks: [],
-      setup: [],
-      fix: [],
-      diagnose: [],
-      protected_paths: [protected_path],
-      domains: %{"kernel" => ["lib/kogen/kernel"]}
-    }
-
-    intent = %Intent{
-      slug: "guard-fixture",
-      title: "Guard fixture",
-      size: :small,
-      brief: "Exercise the protected-file guard.",
-      acceptance: [],
-      domains: ["kernel"],
-      notes: nil,
-      path: "guard-fixture/intent.md",
-      sha256: String.duplicate("a", 64)
-    }
-
     manifest = %{protected_path => sha256(original)}
 
     assert {:error, %Failure{class: :candidate, reason: :protected_edit, detail: detail}} =
-             Guard.check(repo, base_sha, intent, project, manifest, %{})
+             Workspace.check_candidate(repo, base_sha, manifest, %{})
 
     assert detail =~ protected_path
   end
@@ -73,18 +49,6 @@ defmodule Kogen.Engine.BuildGuardTest do
       domains: %{"kernel" => ["lib/kogen/kernel"]}
     }
 
-    intent = %Intent{
-      slug: "guard-fixture",
-      title: "Guard fixture",
-      size: :small,
-      brief: "Exercise the shell protected-file guard.",
-      acceptance: [],
-      domains: ["kernel"],
-      notes: nil,
-      path: "guard-fixture/intent.md",
-      sha256: String.duplicate("a", 64)
-    }
-
     opts = %Opts{
       workdir: repo,
       run_dir: Path.join(tmp_dir, "run"),
@@ -106,11 +70,9 @@ defmodule Kogen.Engine.BuildGuardTest do
     assert File.read!(Path.join(repo, protected_path)) == "check: shell-edited\n"
 
     assert {:error, %Failure{class: :candidate, reason: :protected_edit, detail: detail}} =
-             Guard.check(
+             Workspace.check_candidate(
                repo,
                base_sha,
-               intent,
-               project,
                %{protected_path => sha256(original)},
                %{}
              )
@@ -155,7 +117,7 @@ defmodule Kogen.Engine.BuildGuardTest do
       sha256: String.duplicate("a", 64)
     }
 
-    assert :ok = Guard.check(workdir, base_sha, intent, project, %{}, candidate_env)
+    assert :ok = Workspace.check_candidate(workdir, base_sha, %{}, candidate_env)
 
     assert {:ok,
             [
@@ -164,7 +126,7 @@ defmodule Kogen.Engine.BuildGuardTest do
                 declared_domains: ["kernel"],
                 finding: finding
               }
-            ]} = Guard.scope_warnings(workdir, base_sha, intent, project, candidate_env)
+            ]} = Workspace.scope_warnings(workdir, base_sha, intent, project, candidate_env)
 
     assert finding =~ "hidden.txt"
     assert finding =~ "kernel"

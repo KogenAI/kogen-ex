@@ -3,7 +3,6 @@ defmodule Kogen.Engine.Build.Commit do
 
   alias Kogen.Contracts.Failure
   alias Kogen.Engine.Build.CheckStage
-  alias Kogen.Engine.Build.Guard
   alias Kogen.Engine.Build.Session
   alias Kogen.State
   alias Kogen.Workspace
@@ -31,7 +30,7 @@ defmodule Kogen.Engine.Build.Commit do
   end
 
   @spec tree_hash(Session.t()) :: {:ok, String.t()} | {:error, term()}
-  def tree_hash(session), do: Guard.tree_hash(session.workdir, session.git_env)
+  def tree_hash(session), do: Workspace.tree_hash(session.workdir, session.git_env)
 
   defp do_run(session, force_check) do
     with :ok <- guard(session),
@@ -55,7 +54,7 @@ defmodule Kogen.Engine.Build.Commit do
   end
 
   defp finish_commit(session) do
-    with {:ok, tree} <- tag(:tree_hash, Guard.tree_hash(session.workdir, session.git_env)),
+    with {:ok, tree} <- tag(:tree_hash, Workspace.tree_hash(session.workdir, session.git_env)),
          {:ok, commit} <-
            tag(:candidate_commit, Workspace.rev_parse(session.workdir, "HEAD", session.git_env)),
          {:ok, committed_tree} <-
@@ -199,18 +198,16 @@ defmodule Kogen.Engine.Build.Commit do
     with :ok <- guard(session),
          {:ok, checks, acceptance} <- CheckStage.verify(session),
          :ok <- CheckStage.passed(session, checks, acceptance),
-         {:ok, tree} <- Guard.tree_hash(session.workdir, session.git_env),
+         {:ok, tree} <- Workspace.tree_hash(session.workdir, session.git_env),
          :ok <- same_tree(checks.tree, tree) do
       {:ok, checks, acceptance.ledger}
     end
   end
 
   defp guard(session) do
-    Guard.check(
+    Workspace.check_candidate(
       session.workdir,
       session.base_sha,
-      session.intent,
-      session.project,
       session.approval.protected_manifest,
       session.git_env
     )

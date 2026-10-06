@@ -7,7 +7,6 @@ defmodule Kogen.Engine.Build.CheckStage do
 
   alias Kogen.Build.Verification
   alias Kogen.Contracts.Failure
-  alias Kogen.Engine.Build.Guard
   alias Kogen.Engine.Build.Session
   alias Kogen.State
   alias Kogen.Workspace
@@ -68,11 +67,9 @@ defmodule Kogen.Engine.Build.CheckStage do
   end
 
   defp guard(session) do
-    Guard.check(
+    Workspace.check_candidate(
       session.workdir,
       session.base_sha,
-      session.intent,
-      session.project,
       session.approval.protected_manifest,
       session.git_env
     )

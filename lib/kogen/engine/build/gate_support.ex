@@ -5,7 +5,6 @@ defmodule Kogen.Engine.Build.GateSupport do
   alias Kogen.Contracts.Failure
   alias Kogen.Contracts.ProcResult
   alias Kogen.Contracts.Stack
-  alias Kogen.Engine.Build.Guard
   alias Kogen.Engine.Build.Session
   alias Kogen.Harness.Opts
   alias Kogen.Harness.Result, as: HarnessResult
@@ -15,11 +14,9 @@ defmodule Kogen.Engine.Build.GateSupport do
   @spec harness_options(Session.t()) :: Opts.t()
   def harness_options(%Session{} = session) do
     guard = fn ->
-      Guard.check(
+      Workspace.check_candidate(
         session.workdir,
         session.base_sha,
-        session.intent,
-        session.project,
         session.approval.protected_manifest,
         session.git_env
       )
@@ -201,7 +198,7 @@ defmodule Kogen.Engine.Build.GateSupport do
 
   @spec scope_warnings(Session.t()) :: {:ok, [map()]} | {:error, Failure.t()}
   def scope_warnings(%Session{} = session) do
-    Guard.scope_warnings(
+    Workspace.scope_warnings(
       session.workdir,
       session.base_sha,
       session.intent,

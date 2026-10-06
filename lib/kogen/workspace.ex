@@ -2,6 +2,9 @@ defmodule Kogen.Workspace do
   @moduledoc "Creates isolated checkouts and performs safe Git ref operations."
   use Boundary, deps: [Kogen.Contracts, Kogen.Proc], exports: []
 
+  alias Kogen.Contracts.Failure
+  alias Kogen.Contracts.Intent
+  alias Kogen.Contracts.Project
   alias Kogen.Workspace.ApprovalManifest
   alias Kogen.Workspace.ApprovedFile
   alias Kogen.Workspace.BaseGlob
@@ -144,13 +147,30 @@ defmodule Kogen.Workspace do
   @spec scope_violations(
           Path.t(),
           String.t(),
-          Kogen.Contracts.Intent.t(),
-          Kogen.Contracts.Project.t(),
+          Intent.t(),
+          Project.t(),
           [String.t()],
           git_env()
         ) :: {:ok, [String.t()]} | {:error, term()}
   def scope_violations(workdir, base_sha, intent, project, allowed_extra, git_env),
     do: Guard.scope_violations(workdir, base_sha, intent, project, allowed_extra, git_env)
+
+  @doc "Validates Candidate protected paths against their approved manifest."
+  @spec check_candidate(Path.t(), String.t(), map(), git_env()) ::
+          :ok | {:error, Failure.t()}
+  def check_candidate(workdir, base_sha, manifest, git_env),
+    do: Guard.check_candidate(workdir, base_sha, manifest, git_env)
+
+  @doc "Reports changed paths outside the Intent's domains, allowing its installed files."
+  @spec scope_warnings(
+          Path.t(),
+          String.t(),
+          Intent.t(),
+          Project.t(),
+          git_env()
+        ) :: {:ok, [map()]} | {:error, Failure.t()}
+  def scope_warnings(workdir, base_sha, intent, project, git_env),
+    do: Guard.scope_warnings(workdir, base_sha, intent, project, git_env)
 
   @spec remote_url(Path.t(), String.t(), git_env()) :: {:ok, String.t()} | {:error, term()}
   def remote_url(repo, remote, git_env), do: Refs.remote_url(repo, remote, git_env)

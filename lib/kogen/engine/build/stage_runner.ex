@@ -10,13 +10,13 @@ defmodule Kogen.Engine.Build.StageRunner do
   alias Kogen.Engine.Build.CheckStage
   alias Kogen.Engine.Build.Commit
   alias Kogen.Engine.Build.GateSupport
-  alias Kogen.Engine.Build.Guard
   alias Kogen.Engine.Build.Reviewer
   alias Kogen.Engine.Build.Session
   alias Kogen.Harness
   alias Kogen.Harness.Opts
   alias Kogen.Harness.Result, as: HarnessResult
   alias Kogen.State
+  alias Kogen.Workspace
 
   @spec run(atom(), map(), Session.t()) ::
           {:ok, Session.t(), [term()]}
@@ -164,7 +164,7 @@ defmodule Kogen.Engine.Build.StageRunner do
   defp finish_develop(session, result, started_at) do
     {model, effort} = GateSupport.builder_settings(session)
 
-    with {:ok, tree} <- Guard.tree_hash(session.workdir, session.git_env),
+    with {:ok, tree} <- Workspace.tree_hash(session.workdir, session.git_env),
          :ok <-
            record_model(
              session,
@@ -229,11 +229,9 @@ defmodule Kogen.Engine.Build.StageRunner do
 
   defp fix(session) do
     with :ok <-
-           Guard.check(
+           Workspace.check_candidate(
              session.workdir,
              session.base_sha,
-             session.intent,
-             session.project,
              manifest(session),
              session.git_env
            ),
@@ -290,11 +288,9 @@ defmodule Kogen.Engine.Build.StageRunner do
   defp manifest(session), do: session.approval.protected_manifest
 
   defp guard(session) do
-    Guard.check(
+    Workspace.check_candidate(
       session.workdir,
       session.base_sha,
-      session.intent,
-      session.project,
       manifest(session),
       session.git_env
     )
