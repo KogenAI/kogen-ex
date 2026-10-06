@@ -56,6 +56,7 @@ defmodule Kogen.Harness.Gate do
         changed_ranges: ranges
       )
     ]
+
   defp final_pass(opts, deadline) do
     Kogen.Checks.once_final_pass(
       opts.workdir,

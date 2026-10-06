@@ -46,7 +46,7 @@ defmodule Kogen.Diagnostics.Parser.CredoFailures do
           Common.finding(
             "credo",
             "parse_#{kind}",
-            {Common.normalize_path(path, workdir), 1, 1},
+            {Common.normalize_path(path, workdir), nil, nil},
             nil,
             message(kind)
           )
