@@ -24,12 +24,13 @@ defmodule Kogen.Grok.Codec do
           do: Map.put(body, "prompt_cache_key", request.prompt_cache_key),
           else: body
 
-      {:ok, body |> :json.encode() |> IO.iodata_to_binary()}
+      {:ok, encode_body(body)}
     else
       malformed()
     end
   rescue
     ArgumentError -> malformed()
+    ErlangError -> malformed()
   end
 
   def encode_request(_request), do: malformed()
@@ -47,5 +48,14 @@ defmodule Kogen.Grok.Codec do
 
   defp malformed do
     {:error, %ProviderError{class: :malformed, message: "Grok provider request is malformed."}}
+  end
+
+  # Keep all stable controls ahead of the growing history so each appended turn
+  # preserves the prior encoded prompt prefix.
+  defp encode_body(body) do
+    history = body |> Map.fetch!("input") |> :json.encode() |> IO.iodata_to_binary()
+    static = body |> Map.delete("input") |> :json.encode() |> IO.iodata_to_binary()
+    prefix = binary_part(static, 0, byte_size(static) - 1)
+    prefix <> ~s(,"input":) <> history <> "}"
   end
 end

@@ -339,14 +339,7 @@ defmodule Kogen.Kernel do
       base: base,
       model: model,
       effort: effort,
-      recipe:
-        Engine.build_recipe(
-          recipe_name(build_config),
-          model,
-          effort,
-          roles,
-          wall_ms(build_config)
-        ),
+      recipe: build_recipe(build_config, model, effort, roles),
       resilience: resilience(provider_mod, build_config.model_fallback),
       plan_max_words: build_config.plan_max_words,
       runtime: runtime,
@@ -361,6 +354,16 @@ defmodule Kogen.Kernel do
     do: %Policy{model_fallback: model_fallback, fallbacks: %{}}
 
   defp resilience(_provider, model_fallback), do: %Policy{model_fallback: model_fallback}
+
+  defp build_recipe(build_config, model, effort, roles) do
+    Engine.build_recipe(
+      recipe_name(build_config),
+      model,
+      effort,
+      roles,
+      wall_ms(build_config)
+    )
+  end
 
   defp wall_ms(%{wall_minutes: minutes}) when is_integer(minutes), do: minutes * 60_000
   defp wall_ms(_build_config), do: nil

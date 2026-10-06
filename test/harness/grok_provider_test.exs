@@ -4,13 +4,14 @@ defmodule Kogen.Harness.GrokProviderTest do
   alias Kogen.Contracts.ModelRequest
   alias Kogen.Contracts.Project
   alias Kogen.Contracts.RolePrompt
+  alias Kogen.Conversation.PromptCacheKey
   alias Kogen.Grok
+  alias Kogen.Grok.Codec
   alias Kogen.Grok.CredentialStore
   alias Kogen.Grok.DeviceAuth
   alias Kogen.Grok.Refresh
   alias Kogen.Harness
   alias Kogen.Harness.Opts
-  alias Kogen.Harness.PromptCacheKey
   alias Kogen.Resilience.Policy
   alias Kogen.Testkit.FakeOAuthServer
   alias Kogen.Testkit.FakeResponsesServer
@@ -79,6 +80,7 @@ defmodule Kogen.Harness.GrokProviderTest do
     run_dir = Path.join(tmp_dir, "run")
     affinity = PromptCacheKey.for_run_stage(run_dir, :develop)
     request = model_request(affinity, [user_item("call a tool")], [tool_spec()])
+    assert {:ok, first_body} = Codec.encode_request(request)
 
     assert {:ok, response} = Grok.respond(config, request)
     assert response.text == ""
@@ -96,6 +98,9 @@ defmodule Kogen.Harness.GrokProviderTest do
         ],
         [tool_spec()]
       )
+
+    assert {:ok, next_body} = Codec.encode_request(next_request)
+    assert_wire_prefix(first_body, next_body)
 
     assert {:ok, next_response} = Grok.respond(config, next_request)
     assert next_response.text == "tool result received"
@@ -320,6 +325,14 @@ defmodule Kogen.Harness.GrokProviderTest do
   defp receive_headers! do
     assert_receive {:fake_request_headers, _index, headers}, 10_000
     headers
+  end
+
+  defp assert_wire_prefix(before_bytes, after_bytes) do
+    assert String.ends_with?(before_bytes, "]}")
+    prefix = binary_part(before_bytes, 0, byte_size(before_bytes) - 2)
+    assert String.starts_with?(after_bytes, prefix)
+    assert binary_part(before_bytes, byte_size(prefix), 1) == "]"
+    assert binary_part(after_bytes, byte_size(prefix), 1) == ","
   end
 
   defp encode(value), do: value |> :json.encode() |> IO.iodata_to_binary()
