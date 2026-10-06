@@ -126,6 +126,7 @@
                Kogen.Workspace.Git,
                Kogen.Contracts.MiseEnvironment,
                Kogen.Engine.Runtime,
+               Kogen.Engine.RailsEnvironment,
                Kogen.Provider.ChatGPT.Codec,
                Kogen.Provider.ChatGPT.Codec.Recording,
                Kogen.Provider.ChatGPT.Callback,

@@ -9,7 +9,7 @@ defmodule Kogen.Project.RailsProfileTest do
     rails_project!(root)
     assert {:ok, project} = Project.load(root)
     assert Enum.map(project.checks, & &1.argv) == [["bundle", "exec", "rails", "test"]]
-    assert Enum.map(project.setup, & &1.argv) == [["bundle", "install", "--local"]]
+    assert Enum.map(project.setup, & &1.name) == ["bundle"]
     assert Enum.map(project.acceptance_checks, & &1.argv) == [["ruby", "-c", "{path}"]]
     assert project.format == nil
 

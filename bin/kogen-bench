@@ -491,7 +491,7 @@ if rails:
         lines.append("setup:")
     lines += [
         "  - name: bundle-install",
-        "    argv: " + array(timed("setup:bundle-install", prefix + ["bundle", "install", "--local"])),
+        "    argv: " + array(timed("setup:bundle-install", prefix + ["sh", "-c", "bundle exec ruby -e 'exit' || GIT_ALLOW_PROTOCOL=file bundle install --local"])),
         "    timeout_ms: 900000",
     ]
 

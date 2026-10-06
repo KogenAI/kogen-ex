@@ -38,8 +38,13 @@ optional edge probes also run Rails tests.
 Bundle installation is offline: cache the required gems in `vendor/cache` or make their
 installed gem archives available through the task's `GEM_HOME`/`GEM_PATH`. Kogen forwards
 Ruby/Bundler toolchain variables. The default `BUNDLE_PATH` is `.bundle/gems`; an explicit
-value is honored. Bundler's user and application config/cache directories are scoped to the
-checkout under `.bundle`, which generated Rails applications ignore. macOS Seatbelt already
+value is honored. With `GEM_HOME` alone, Kogen uses the installed gems there; with
+`BUNDLE_APP_CONFIG`, Bundler selects the configured cache path. Kogen preserves these variables
+and `BUNDLE_USER_HOME`, defaulting metadata directories under `.bundle` only when absent.
+All bundle commands use frozen/deployment settings. Setup first checks the installed bundle
+without changing its lockfile, then installs with `--local` and file-only Git transport if
+needed; a missing gem fails setup with Bundler's gem name instead of downloading it.
+macOS Seatbelt already
 permits reading and executing Ruby, Bundler, SQLite and their libraries; writes stay in the
 workspace/run/temp paths, and the existing origin and
 credential protections apply. Linux retains the existing unrestricted process policy.

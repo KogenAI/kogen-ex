@@ -21,7 +21,16 @@ defmodule Kogen.Project.StackDefaults do
         {"checks",
          Enum.map([spec("tests", ["bundle", "exec", "rails", "test"])] ++ tools, &encode/1)},
         {"acceptance_checks", [encode(spec("syntax", ["ruby", "-c", "{path}"]))]},
-        {"setup", [encode(spec("bundle", ["bundle", "install", "--local"]))]},
+        {"setup",
+         [
+           encode(
+             spec("bundle", [
+               "sh",
+               "-c",
+               "bundle exec ruby -e 'exit' || GIT_ALLOW_PROTOCOL=file bundle install --local"
+             ])
+           )
+         ]},
         {"protected_paths", ["test/test_helper.rb"]},
         {"gate_paths", ["Gemfile", "Gemfile.lock", "bin/rails", ".standard.yml", ".rubocop.yml"]}
       ])
