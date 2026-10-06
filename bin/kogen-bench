@@ -362,7 +362,7 @@ if rails:
     # The public environment patch is part of the task base, before approval hashes it.
     # Keep the remaining public setup commands; each workspace installs its bundle locally.
     patch_path = os.path.join(os.path.dirname(source_path), "environment.patch")
-    patch_command = r"git\s+apply\s+(?:--[\w-]+\s+)*(?:\"[^\"]*environment\.patch\"|'[^']*environment\.patch'|[^\s;&|]*environment\.patch)(?=\s*(?:&&|;|$))"
+    patch_command = r"git\s+apply\s+(?:--[\w-]+(?:=[^\s;&|]+)?\s+)*(?:\"[^\"]*environment\.patch\"|'[^']*environment\.patch'|[^\s;&|]*environment\.patch)(?=\s*(?:&&|;|$))"
     patch_setup = isinstance(raw_setup, str) and re.search(patch_command, raw_setup)
     patch_argv = raw_setup.get("argv") if isinstance(raw_setup, dict) else raw_setup
     if isinstance(patch_argv, list):
@@ -370,9 +370,11 @@ if rails:
     if patch_setup:
         if not os.path.isfile(patch_path):
             raise SystemExit("Rails setup references environment.patch but the public task file is missing")
-        if subprocess.run(["git", "apply", "--check", patch_path], cwd=project_root, capture_output=True).returncode == 0:
+        if subprocess.run(["git", "apply", "--check", "--reverse", patch_path], cwd=project_root, capture_output=True).returncode == 0:
+            pass
+        elif subprocess.run(["git", "apply", "--check", patch_path], cwd=project_root, capture_output=True).returncode == 0:
             subprocess.run(["git", "apply", patch_path], cwd=project_root, check=True)
-        elif subprocess.run(["git", "apply", "--reverse", "--check", patch_path], cwd=project_root, capture_output=True).returncode != 0:
+        else:
             raise SystemExit("Rails environment.patch does not apply to the task base")
         shutil.copyfile(patch_path, os.path.join(os.path.dirname(event_path), "environment.patch"))
         raw_setup = re.sub(patch_command, ":", raw_setup) if isinstance(raw_setup, str) else []

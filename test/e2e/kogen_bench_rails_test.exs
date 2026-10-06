@@ -14,6 +14,15 @@ defmodule Kogen.E2e.KogenBenchRailsTest do
   test "Rails benchmark setup preserves the public patch and installs its bundle without deps", %{
     tmp_dir: root
   } do
+    assert_setup(root, false)
+  end
+
+  test "Rails benchmark setup skips an option=value environment patch already applied by the runner",
+       %{tmp_dir: root} do
+    assert_setup(root, true)
+  end
+
+  defp assert_setup(root, already_applied?) do
     work = RailsFixture.project!(Path.join(root, "work"))
     task = Path.join(root, "rails-task")
     capture = Path.join(root, "capture")
@@ -21,6 +30,17 @@ defmodule Kogen.E2e.KogenBenchRailsTest do
     File.mkdir_p!(task)
     File.mkdir_p!(capture)
     File.write!(Path.join(task, "prompt.md"), "Change the greeting.\n")
+    prepare_patch(work, task, already_applied?)
+    write_task(root, task)
+    run_bench(root, work, task, capture, out)
+    assert_capture(root, capture)
+    assert Git.git!(work, ["status", "--porcelain"]) == ""
+
+    assert File.read!(Path.join(work, "config/fixture.txt")) ==
+             if(already_applied?, do: "patched\n", else: "before\n")
+  end
+
+  defp prepare_patch(work, task, already_applied?) do
     File.write!(Path.join(work, "config/fixture.txt"), "before\n")
     Git.git!(work, ["add", "--all"])
     Git.git!(work, ["commit", "--quiet", "-m", "Add patch target"])
@@ -36,17 +56,28 @@ defmodule Kogen.E2e.KogenBenchRailsTest do
 
     File.write!(Path.join(task, "environment.patch"), patch)
 
+    if already_applied? do
+      Git.git!(work, ["apply", Path.join(task, "environment.patch")])
+      Git.git!(work, ["add", "--all"])
+      Git.git!(work, ["commit", "--quiet", "-m", "Apply runner environment patch"])
+    end
+  end
+
+  defp write_task(root, task) do
     File.write!(
       Path.join(task, "task.json"),
       :json.encode(%{
-        "setup" => "git apply environment.patch",
+        "setup" =>
+          ~s(git apply --whitespace=nowarn "#{Path.join(task, "environment.patch")}" && touch config/setup-ran),
         "env" => %{
           "GEM_HOME" => Path.join(root, "gem-home"),
           "GEM_PATH" => Path.join(root, "gem-home")
         }
       })
     )
+  end
 
+  defp run_bench(root, work, task, capture, out) do
     home = Path.join(root, "home")
     File.mkdir_p!(home)
     runtime = RailsFixture.runtime!(work, home)
@@ -78,8 +109,11 @@ defmodule Kogen.E2e.KogenBenchRailsTest do
                env: env,
                timeout_ms: 180_000
              )
+  end
 
+  defp assert_capture(root, capture) do
     assert File.read!(Path.join(capture, "config/fixture.txt")) == "patched\n"
+    assert File.exists?(Path.join(capture, "config/setup-ran"))
     assert {:ok, project} = Project.load(capture)
     assert Enum.map(project.checks, & &1.name) == ["tests"]
     assert "rails" in hd(project.checks).argv
@@ -91,8 +125,6 @@ defmodule Kogen.E2e.KogenBenchRailsTest do
     assert File.exists?(Path.join(capture, "acceptance_test.rb"))
     refute File.exists?(Path.join(capture, "deps"))
     assert File.read!(Path.join(capture, "rails-tests.log")) =~ "0 failures, 0 errors"
-    assert Git.git!(work, ["status", "--porcelain"]) == ""
-    assert File.read!(Path.join(work, "config/fixture.txt")) == "before\n"
   end
 
   defp fake_kogen do
