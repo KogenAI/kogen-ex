@@ -119,6 +119,34 @@ defmodule Kogen.E2e.KogenBenchTest do
     assert usage["recipe"] == "ladder-diverse", output
   end
 
+  test "KOGEN_BENCH_PROVIDER=grok selects Grok defaults and reports required egress hosts", %{
+    tmp_dir: tmp_dir
+  } do
+    copy = Path.join(tmp_dir, "project.yaml")
+
+    {_status, output, paths} =
+      run_bench!(subdir(tmp_dir, "grok"), %{
+        "KOGEN_BENCH_PROVIDER" => "grok",
+        "FAKE_KOGEN_PROJECT_COPY" => copy
+      })
+
+    usage = paths.out_dir |> Path.join("usage.json") |> File.read!() |> :json.decode()
+
+    assert usage["provider"] == "grok", output
+    assert usage["builder"] == %{"model" => "grok-4.6", "effort" => "high"}
+    assert usage["shape"]["model"] == "grok-4.6"
+    assert usage["shape"]["effort"] == "high"
+
+    assert usage["egress_hosts"] == [
+             "auth.x.ai",
+             "accounts.x.ai",
+             "grok.com",
+             "cli-chat-proxy.grok.com"
+           ]
+
+    assert File.read!(copy) =~ "model: \"grok-4.6\""
+  end
+
   test "turns on the edge probe for a +edge ladder recipe or KOGEN_BENCH_EDGE_TESTS=1", %{
     tmp_dir: tmp_dir
   } do

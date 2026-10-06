@@ -46,9 +46,24 @@ case "$format_scope" in
   changed|all) ;;
   *) echo "KOGEN_BENCH_FORMAT_SCOPE must be changed or all" >&2; exit 2 ;;
 esac
-builder_model=${KOGEN_BENCH_MODEL:-gpt-6-luna}
-builder_effort=${KOGEN_BENCH_EFFORT:-max}
-shape_model=${KOGEN_BENCH_SHAPE_MODEL:-gpt-6.1-sol}
+provider=${KOGEN_BENCH_PROVIDER:-chatgpt}
+case "$provider" in
+  chatgpt)
+    default_model=gpt-6-luna
+    default_effort=max
+    default_shape_model=gpt-6.1-sol
+    ;;
+  grok)
+    default_model=grok-4.6
+    default_effort=high
+    default_shape_model=grok-4.6
+    ;;
+  *) echo "KOGEN_BENCH_PROVIDER must be chatgpt or grok" >&2; exit 2 ;;
+esac
+export KOGEN_BENCH_PROVIDER="$provider"
+builder_model=${KOGEN_BENCH_MODEL:-$default_model}
+builder_effort=${KOGEN_BENCH_EFFORT:-$default_effort}
+shape_model=${KOGEN_BENCH_SHAPE_MODEL:-$default_shape_model}
 shape_effort=${KOGEN_BENCH_SHAPE_EFFORT:-high}
 shape_fallback=${KOGEN_BENCH_SHAPE_FALLBACK:-raw}
 case "$shape_fallback" in
@@ -270,8 +285,12 @@ import os
 import sys
 
 path, recipe, model, effort, shape_model, shape_effort, intent_source = sys.argv[1:]
+provider = os.environ.get("KOGEN_BENCH_PROVIDER", "chatgpt")
+egress_hosts = ["auth.x.ai", "accounts.x.ai", "grok.com", "cli-chat-proxy.grok.com"] if provider == "grok" else []
 with open(path, "w", encoding="utf-8") as output:
     json.dump({
+        "provider": provider,
+        "egress_hosts": egress_hosts,
         "recipe": recipe,
         "edge_tests": os.environ.get("KOGEN_BENCH_EDGE_TESTS") == "1",
         "model_fallback": os.environ.get("KOGEN_BENCH_NO_FALLBACK") != "1",
@@ -528,7 +547,7 @@ git -C "$project_dir" -c user.name='Kogen Bench' -c user.email='kogen-bench@inva
 git clone --quiet --bare "$project_dir" "$origin"
 # The account is a machine choice, never committed: bind this throwaway project to it.
 if [ -n "${KOGEN_BENCH_ACCOUNT:-}" ]; then
-  "$KOGEN_BIN" provider use chatgpt --as "$KOGEN_BENCH_ACCOUNT" --project "$project_dir" >/dev/null
+  "$KOGEN_BIN" provider use "$provider" --as "$KOGEN_BENCH_ACCOUNT" --project "$project_dir" >/dev/null
 fi
 git --git-dir="$origin" symbolic-ref HEAD refs/heads/main
 base_sha=$(git --git-dir="$origin" rev-parse refs/heads/main)
@@ -689,6 +708,8 @@ from pathlib import Path
     status, wall_ms, transcript_root, recipe, timing_input, events_output, started_ns, finished_ns,
     builder_model, builder_effort, shape_model, shape_effort, shape_wall_ms, intent_source,
 ) = sys.argv[1:]
+provider = os.environ.get("KOGEN_BENCH_PROVIDER", "chatgpt")
+egress_hosts = ["auth.x.ai", "accounts.x.ai", "grok.com", "cli-chat-proxy.grok.com"] if provider == "grok" else []
 started_ns = int(started_ns)
 finished_ns = int(finished_ns)
 token_names = ("input", "cached_input", "output", "reasoning")
@@ -847,6 +868,8 @@ phases = [
 
 totals = {name: sum(stage["tokens"][name] for stage in stages) for name in token_names}
 result = {
+    "provider": provider,
+    "egress_hosts": egress_hosts,
     "recipe": recipe,
     "edge_tests": os.environ.get("KOGEN_BENCH_EDGE_TESTS") == "1",
     "model_fallback": os.environ.get("KOGEN_BENCH_NO_FALLBACK") != "1",
@@ -1157,6 +1180,8 @@ import os
 import sys
 
 shape_path, report_path, output_path, recipe, timing_input, events_output, started_ns, finished_ns, builder_model, builder_effort, shape_model, shape_effort, shape_wall_ms, slug, intent_source, landed = sys.argv[1:]
+provider = os.environ.get("KOGEN_BENCH_PROVIDER", "chatgpt")
+egress_hosts = ["auth.x.ai", "accounts.x.ai", "grok.com", "cli-chat-proxy.grok.com"] if provider == "grok" else []
 landed = landed == "true"
 started_ns = int(started_ns)
 finished_ns = int(finished_ns)
@@ -1266,6 +1291,8 @@ phases = [
 
 totals = {name: sum(stage["tokens"][name] for stage in stages) for name in token_names}
 result = {
+    "provider": provider,
+    "egress_hosts": egress_hosts,
     "recipe": recipe,
     "edge_tests": os.environ.get("KOGEN_BENCH_EDGE_TESTS") == "1",
     "model_fallback": os.environ.get("KOGEN_BENCH_NO_FALLBACK") != "1",
