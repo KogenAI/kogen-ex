@@ -1,6 +1,7 @@
 defmodule Kogen.Checks.FinalPass do
   @moduledoc false
 
+  alias Kogen.Checks.BaselineFix
   alias Kogen.Checks.Feedback
   alias Kogen.Checks.FinalPass.Cache
   alias Kogen.Checks.ReceiptBuilder
@@ -70,8 +71,12 @@ defmodule Kogen.Checks.FinalPass do
       log_path: log
     ]
 
-    result = process_result(Proc.run(spec.argv, options), spec, log)
     spec = %{spec | name: "fix/#{spec.name}"}
+
+    process =
+      BaselineFix.run(workdir, env, spec, baseline, fn -> Proc.run(spec.argv, options) end)
+
+    result = process_result(process, spec, log)
 
     %CheckOutput{
       name: spec.name,

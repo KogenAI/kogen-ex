@@ -68,3 +68,10 @@ unavailable. The scripted shape/build test proves a changed response red on the 
 status preserved on the base, green gate receipts and a landed commit. Additional tests cover
 missing/skipped/unknown acceptance items, paths with spaces, patch-based benchmark setup and
 new Rails failures on an already-red base.
+
+RuboCop and Standard findings recorded at approval are warnings when they persist on a
+Candidate, including during formatting. Moving an existing offence does not make it new;
+an additional occurrence or a different offence still blocks the Build.
+Baseline capture restores files changed by autocorrection. Later formatter writes already
+observed on the base are restored to the Candidate's pre-format bytes, preserving protected
+base files while retaining corrections in other files.

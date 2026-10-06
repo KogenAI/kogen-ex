@@ -91,16 +91,26 @@ defmodule Kogen.Contracts.CheckBaseline do
   end
 
   defp subset?(findings, base_findings) when findings != [] do
-    current = Enum.map(findings, &identity/1)
-    base = base_findings |> Enum.map(&identity/1) |> Enum.reject(&is_nil/1) |> MapSet.new()
+    current = findings |> Enum.map(&identity/1) |> Enum.frequencies()
+    base = base_findings |> Enum.map(&identity/1) |> Enum.reject(&is_nil/1) |> Enum.frequencies()
 
     Enum.all?(current, fn
-      nil -> false
-      identity -> MapSet.member?(base, identity)
+      {nil, _count} -> false
+      {identity, count} -> Map.get(base, identity, 0) >= count
     end)
   end
 
   defp subset?(_findings, _base_findings), do: false
+
+  defp compact_finding(%{tool: tool} = finding) when tool in ["rubocop", "standard"] do
+    %{
+      path: finding.path,
+      kind: :rule,
+      id: ruby_identity(finding),
+      tool: tool,
+      message: finding.message
+    }
+  end
 
   defp compact_finding(finding) do
     {kind, id} =
@@ -127,6 +137,10 @@ defmodule Kogen.Contracts.CheckBaseline do
        when tool in ["exunit", "minitest"] and is_binary(path) and is_binary(symbol),
        do: {tool, path, :test, symbol}
 
+  defp identity(%{path: path, tool: tool} = finding)
+       when tool in ["rubocop", "standard"] and is_binary(path),
+       do: {tool, path, :rule, ruby_identity(finding)}
+
   defp identity(%{path: path, rule: rule, tool: tool}) when is_binary(path) and is_binary(rule),
     do: {tool, path, :rule, rule}
 
@@ -134,6 +148,8 @@ defmodule Kogen.Contracts.CheckBaseline do
        when is_binary(path) and is_binary(id), do: {tool, path, :rule, id}
 
   defp identity(_finding), do: nil
+
+  defp ruby_identity(finding), do: Map.get(finding, :id) || "#{finding.rule}: #{finding.message}"
 
   defp finding_text(finding), do: "\n  - " <> finding_label(compact_finding(finding))
 

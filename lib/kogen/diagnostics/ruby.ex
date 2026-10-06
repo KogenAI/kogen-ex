@@ -12,13 +12,14 @@ defmodule Kogen.Diagnostics.Ruby do
   end
 
   def findings(output, tool, root) do
-    ~r/^([^\n]+\.rb):(\d+):(\d+):\s*(?:[CWEF]:\s*)?(?:\[Correctable\]\s*)?([\w\/]+):\s*(.+)$/m
+    ~r/^([^\n]+):(\d+):(\d+):\s*(?:[CWEF]:\s*)?(?:\[Correct(?:able|ed)\]\s*)?([\w\/]+):\s*(.+)$/m
     |> Regex.scan(output, capture: :all_but_first)
     |> Enum.map(fn [path, line, col, rule, message] ->
       Common.finding(
         tool,
         rule,
-        {Common.normalize_path(path, root), String.to_integer(line), String.to_integer(col)},
+        {Common.normalize_path(String.trim(path), root), String.to_integer(line),
+         String.to_integer(col)},
         nil,
         message
       )

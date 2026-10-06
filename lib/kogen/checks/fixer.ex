@@ -18,6 +18,7 @@ end
 defmodule Kogen.Checks.Fixer do
   @moduledoc false
 
+  alias Kogen.Checks.BaselineFix
   alias Kogen.Checks.Feedback
   alias Kogen.Checks.Fixer.State
   alias Kogen.Contracts.CheckBaseline
@@ -63,12 +64,20 @@ defmodule Kogen.Checks.Fixer do
       Path.join([state.run_dir, "logs", "fix-#{state.index}-#{safe_name(spec.name)}.log"])
 
     result =
-      Proc.run(spec.argv,
-        cd: state.workdir,
-        env: state.env,
-        timeout_ms: spec.timeout_ms,
-        log_path: log_path,
-        sandbox: state.sandbox
+      BaselineFix.run(
+        state.workdir,
+        state.env,
+        %{spec | name: "fix/#{spec.name}"},
+        state.baseline,
+        fn ->
+          Proc.run(spec.argv,
+            cd: state.workdir,
+            env: state.env,
+            timeout_ms: spec.timeout_ms,
+            log_path: log_path,
+            sandbox: state.sandbox
+          )
+        end
       )
 
     case assess(result, %{spec | name: "fix/#{spec.name}"}, log_path, state) do

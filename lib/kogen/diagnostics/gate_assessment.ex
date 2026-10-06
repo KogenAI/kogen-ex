@@ -31,7 +31,8 @@ defmodule Kogen.Diagnostics.GateAssessment do
       result.exit_level == 3 ->
         [finding("unavailable", spec.name, result.reason || "command could not run")]
 
-      String.starts_with?(spec.name, "fix/") and result.exit_status != 0 ->
+      String.starts_with?(spec.name, "fix/") and result.exit_status != 0 and
+          (result.tool not in ["rubocop", "standard"] or result.findings == []) ->
         [
           finding(
             "exit_#{inspect(result.exit_status)}",
