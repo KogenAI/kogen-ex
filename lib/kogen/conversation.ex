@@ -2,7 +2,7 @@ defmodule Kogen.Conversation do
   @moduledoc "Approved conversation authority and opt-in continuation checkpoints."
   use Boundary,
     deps: [Kogen.Contracts],
-    exports: [Budget, BuilderPolicy, PlanPolicy, PlanShellPrompts]
+    exports: [Budget, BuilderPolicy, PlanPolicy, PlanShellPrompts, PlannerPrompts]
 
   alias Kogen.Contracts.JSON
   alias Kogen.Contracts.ModelResponse

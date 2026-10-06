@@ -102,22 +102,21 @@ defmodule Kogen.Project.BuildSettings do
       end)
 
     %{
-      recipe: Map.get(project, :recipe) || Map.get(machine, :recipe) || "ladder",
+      recipe: prefer(project, machine, :recipe, "ladder"),
       roles: roles,
-      wall_minutes: Map.get(project, :wall_minutes) || Map.get(machine, :wall_minutes),
+      wall_minutes: prefer(project, machine, :wall_minutes),
       edge_tests: edge_setting(project, machine),
       model_fallback: fallback_setting(project, machine),
-      context_bytes: Map.get(project, :context_bytes) || Map.get(machine, :context_bytes),
-      luna_provider_mode:
-        Map.get(project, :luna_provider_mode) || Map.get(machine, :luna_provider_mode) ||
-          :responses,
-      tool_result_tokens:
-        Map.get(project, :tool_result_tokens) || Map.get(machine, :tool_result_tokens) || 2_000,
-      model_generation_tokens:
-        Map.get(project, :model_generation_tokens) || Map.get(machine, :model_generation_tokens),
-      plan_max_words:
-        Map.get(project, :plan_max_words) || Map.get(machine, :plan_max_words) || 500
+      context_bytes: prefer(project, machine, :context_bytes),
+      luna_provider_mode: prefer(project, machine, :luna_provider_mode, :responses),
+      tool_result_tokens: prefer(project, machine, :tool_result_tokens, 2_000),
+      model_generation_tokens: prefer(project, machine, :model_generation_tokens),
+      plan_max_words: prefer(project, machine, :plan_max_words, 500)
     }
+  end
+
+  defp prefer(project, machine, key, default \\ nil) do
+    Map.get(project, key) || Map.get(machine, key) || default
   end
 
   defp parse_machine(source) do
