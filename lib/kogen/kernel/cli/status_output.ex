@@ -18,6 +18,7 @@ defmodule Kogen.Kernel.CLI.StatusOutput do
     sections = [
       section("Building", Map.get(by_state, :building, []), &building_row(&1, now)),
       section("Queued", queued, &{&1.slug, nil}),
+      section("Blocked", Map.get(by_state, :blocked, []), &stopped_row/1),
       section("Failed", Map.get(by_state, :failed, []), &stopped_row/1),
       section("Parked", Map.get(by_state, :parked, []), &stopped_row/1),
       section("Interrupted", Map.get(by_state, :interrupted, []), &stopped_row/1),
@@ -26,7 +27,7 @@ defmodule Kogen.Kernel.CLI.StatusOutput do
     ]
 
     body = if statuses == [], do: "No Intents.\n", else: Enum.join(sections)
-    queue_line(queue, length(queued)) <> body
+    queue_line(queue, length(queued)) <> next_line(queued) <> body
   end
 
   @spec intent_text(IntentStatus.t(), non_neg_integer() | nil, non_neg_integer(), integer()) ::
@@ -83,10 +84,18 @@ defmodule Kogen.Kernel.CLI.StatusOutput do
     Map.new([
       {"slug", status.slug},
       {"status", Atom.to_string(status.status)},
+      {"priority", status.priority},
+      {"blocks_on", status.blocks_on},
+      {"detail", json_value(status.detail)},
       {"build_id", json_value(status.run_id)},
       {"landed_sha", json_value(status.landed_sha)}
     ])
   end
+
+  defp next_line([]), do: ""
+
+  defp next_line([next | _rest]),
+    do: "Next: #{next.slug} (#{Kogen.Queue.Selection.reason(next)})\n"
 
   defp queue_line({:running, pid}, _queued), do: "Queue: running (pid #{pid})\n"
   defp queue_line(_stopped, 0), do: "Queue: stopped\n"

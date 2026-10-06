@@ -55,7 +55,10 @@ defmodule Kogen.Acceptance.CliDefaultsTest do
                "slug" => "defaults-probe",
                "status" => "draft",
                "build_id" => :null,
-               "landed_sha" => :null
+               "landed_sha" => :null,
+               "priority" => 0,
+               "blocks_on" => [],
+               "detail" => :null
              }
            ]
   end

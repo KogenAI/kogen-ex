@@ -27,19 +27,32 @@ defmodule Kogen.Queue.Status do
              git_env,
              Enum.any?(current_runs ++ legacy_runs, &(&1.status == :running))
            ),
+         slugs = Enum.sort(Enum.uniq(slugs ++ Map.keys(snapshot.approvals))),
          {:ok, latest} <- latest_runs(slugs, current_runs, legacy_runs) do
-      {:ok, Enum.map(slugs, &intent_status(&1, Map.get(latest, &1), snapshot))}
+      statuses =
+        Enum.map(slugs, fn slug ->
+          slug
+          |> intent_status(Map.get(latest, slug), snapshot)
+          |> Kogen.Queue.Scheduling.load(
+            project_root,
+            origin,
+            Map.get(snapshot.approvals, slug),
+            git_env
+          )
+        end)
+
+      {:ok, Kogen.Queue.Selection.prepare(statuses, Map.keys(snapshot.landed))}
     end
   rescue
     ArgumentError -> {:error, :status_unavailable}
   end
 
-  @doc "Approved Intents in the order the queue builds them: oldest approval first."
+  @doc "Approved Intents in the order the queue builds them: delivered dependencies, then priority, approval time and slug."
   @spec queued([IntentStatus.t()]) :: [IntentStatus.t()]
   def queued(statuses) do
     statuses
     |> Enum.filter(&(&1.status == :approved))
-    |> Enum.sort_by(&{&1.approved_at || 0, &1.slug})
+    |> Enum.sort_by(&{-&1.priority, &1.approved_at || 0, &1.slug})
   end
 
   defp intent_paths(project_root) do

@@ -5,13 +5,25 @@ defmodule Kogen.Queue.IntentStatus do
   """
 
   @enforce_keys [:slug, :status, :run_id, :landed_sha]
-  defstruct @enforce_keys ++ [approved_at: nil, landed_index: nil, detail: nil, started_at: nil]
+  defstruct @enforce_keys ++
+              [
+                approved_at: nil,
+                landed_index: nil,
+                detail: nil,
+                started_at: nil,
+                blocks_on: [],
+                priority: 0,
+                scheduling_error: nil
+              ]
 
   @type t :: %__MODULE__{
           slug: String.t(),
-          status: Kogen.State.status(),
+          status: Kogen.State.status() | :blocked,
           run_id: String.t() | nil,
           landed_sha: String.t() | nil,
+          blocks_on: [String.t()],
+          priority: integer(),
+          scheduling_error: String.t() | nil,
           approved_at: integer() | nil,
           landed_index: non_neg_integer() | nil,
           detail: String.t() | nil,

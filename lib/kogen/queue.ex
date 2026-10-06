@@ -5,6 +5,16 @@ defmodule Kogen.Queue do
   explicit roots, origin, base and Git environment, and the Build itself as a hook.
   """
   use Boundary,
-    deps: [Kogen.Contracts, Kogen.Proc, Kogen.State, Kogen.Workspace],
-    exports: [BuildSummary, Drain, IntentStatus, Lock, Recovery, Report, StateView, Status]
+    deps: [Kogen.Intent, Kogen.Contracts, Kogen.Proc, Kogen.State, Kogen.Workspace],
+    exports: [
+      BuildSummary,
+      Drain,
+      IntentStatus,
+      Lock,
+      Recovery,
+      Report,
+      Selection,
+      StateView,
+      Status
+    ]
 end

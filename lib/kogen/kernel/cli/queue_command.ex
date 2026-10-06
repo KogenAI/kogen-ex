@@ -42,6 +42,8 @@ defmodule Kogen.Kernel.CLI.QueueCommand do
   defp already_running(%{pid: pid, started_at: started_at}),
     do: "queue: already running (pid #{pid}, started at #{started_at})\n"
 
+  defp exit_code(%{stop: :blocked}), do: 1
+
   defp exit_code(%{stop: {:failed, outcome}}), do: class_code(outcome.class)
 
   defp exit_code(%{builds: builds}),
@@ -50,6 +52,10 @@ defmodule Kogen.Kernel.CLI.QueueCommand do
   defp class_code(:environment), do: 3
   defp class_code(:provider), do: 4
   defp class_code(_class), do: 70
+
+  defp summary_line(%{builds: builds, stop: :blocked}),
+    do:
+      "queue: blocked; #{counts(builds)}; waiting for delivered dependencies or corrected metadata\n"
 
   defp summary_line(%{builds: [], stop: :empty}), do: "queue: nothing to build\n"
 

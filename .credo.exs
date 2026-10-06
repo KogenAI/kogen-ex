@@ -115,6 +115,7 @@
                Kogen.Quality.Codec,
                Kogen.Quality.Request,
                Kogen.Contracts.Yaml,
+               Kogen.Intent.Parser.Scheduling,
                Kogen.Contracts.ShapeWarningCodec,
                Kogen.Proc.Request,
                Kogen.Project.Loader,
@@ -194,7 +195,7 @@
                Kogen.Resilience => [],
                Kogen.Build => [Kogen.Resilience],
                Kogen.Tooling => [Kogen.Proc],
-               Kogen.Queue => [Kogen.Proc, Kogen.State, Kogen.Workspace],
+               Kogen.Queue => [Kogen.Intent, Kogen.Proc, Kogen.State, Kogen.Workspace],
                Kogen.Runner => [
                  Kogen.Build,
                  Kogen.Checks,

@@ -8,7 +8,7 @@ defmodule Kogen.Intent.Parser do
   alias Kogen.Intent.Parser.SectionLines
   alias Kogen.Intent.Parser.VerifyLine
 
-  @frontmatter_keys ~w(title domains size limits blocks_on changes_gate source)
+  @frontmatter_keys ~w(title domains size limits blocks_on priority changes_gate source)
   @changes_gate {[{:absent, false}, {"true", true}, {"false", false}], "true or false"}
   @source {[{:absent, nil}, {"raw", :raw}], "raw"}
   @sizes [{"small", :small}, {"medium", :medium}, {"large", :large}]
@@ -25,38 +25,13 @@ defmodule Kogen.Intent.Parser do
 
   @spec parse_binary(binary(), Path.t()) :: {:ok, Intent.t()} | {:error, [parse_error()]}
   def parse_binary(binary, path) when is_binary(binary) and is_binary(path) do
-    with {:ok, frontmatter, body, body_line} <- split_frontmatter(binary),
+    with {:ok, frontmatter, body, body_line} <- Kogen.Intent.Parser.Frontmatter.split(binary),
          {:ok, attrs} <- parse_metadata(frontmatter),
          {:ok, sections} <- parse_sections(body, body_line),
          {:ok, acceptance} <- parse_acceptance(sections.acceptance),
          {:ok, verifies} <- parse_verifies(sections.verify),
          :ok <- verify_ids(acceptance, verifies) do
       {:ok, build_intent(binary, path, attrs, sections, acceptance, verifies)}
-    end
-  end
-
-  defp split_frontmatter(binary) do
-    case String.split(binary, "\n", trim: false) do
-      [opening | rest] ->
-        if strip_cr(opening) == "---",
-          do: split_frontmatter_body(rest),
-          else: error(1, "frontmatter must start with `---`")
-
-      [] ->
-        error(1, "frontmatter must start with `---`")
-    end
-  end
-
-  defp split_frontmatter_body(lines) do
-    {frontmatter, closing_and_body} = Enum.split_while(lines, &(strip_cr(&1) != "---"))
-
-    case closing_and_body do
-      [_closing | body] ->
-        body_line = length(frontmatter) + 3
-        {:ok, Enum.join(frontmatter, "\n"), Enum.join(body, "\n"), body_line}
-
-      [] ->
-        error(length(lines) + 1, "frontmatter is missing its closing `---`")
     end
   end
 
@@ -75,11 +50,20 @@ defmodule Kogen.Intent.Parser do
          {:ok, domains} <- required_string_list(attrs, "domains", frontmatter),
          :ok <- optional_string_list(attrs, "limits", frontmatter),
          :ok <- optional_string_list(attrs, "blocks_on", frontmatter),
+         {:ok, blocks_on, priority} <- scheduling(attrs, frontmatter),
          {:ok, gate} <- optional_choice(attrs, "changes_gate", frontmatter, @changes_gate),
          {:ok, source} <- optional_choice(attrs, "source", frontmatter, @source) do
       size = @sizes |> List.keyfind(size, 0, {size, nil}) |> elem(1)
       metadata = %Metadata{title: title, size: size, domains: domains}
-      {:ok, %{metadata | changes_gate: gate, source: source}}
+
+      {:ok,
+       %{
+         metadata
+         | changes_gate: gate,
+           source: source,
+           blocks_on: blocks_on,
+           priority: priority
+       }}
     end
   end
 
@@ -142,6 +126,13 @@ defmodule Kogen.Intent.Parser do
 
       {:ok, _value} ->
         error(attribute_line(frontmatter, key), "frontmatter `#{key}` must be a list")
+    end
+  end
+
+  defp scheduling(attrs, frontmatter) do
+    case Kogen.Intent.Parser.Scheduling.parse(attrs) do
+      {:error, message} -> error(attribute_line(frontmatter, "priority"), message)
+      result -> result
     end
   end
 
@@ -357,6 +348,8 @@ defmodule Kogen.Intent.Parser do
       domains: metadata.domains,
       changes_gate: metadata.changes_gate,
       source: metadata.source,
+      blocks_on: metadata.blocks_on,
+      priority: metadata.priority,
       notes: if(notes == "", do: nil, else: notes),
       path: path,
       sha256: :sha256 |> :crypto.hash(binary) |> Base.encode16(case: :lower)

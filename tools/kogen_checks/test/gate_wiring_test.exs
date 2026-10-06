@@ -183,6 +183,28 @@ defmodule KogenChecks.GateWiringTest do
     assert Enum.any?(configured(enabled, DomainReach, [reverse]), &(&1.exit_status > 0))
   end
 
+  test "Queue can parse scheduling metadata through the declared Intent dependency", %{
+    enabled: enabled
+  } do
+    caller =
+      source(
+        "def run(path), do: Kogen.Intent.scheduling(path)",
+        "lib/kogen/queue/fixture.ex",
+        "Kogen.Queue.Fixture"
+      )
+
+    assert configured(enabled, DomainReach, [caller]) == []
+
+    codec =
+      source(
+        ~s{def run(data), do: Map.get(data, "priority")},
+        "lib/kogen/intent/parser/scheduling.ex",
+        "Kogen.Intent.Parser.Scheduling"
+      )
+
+    assert configured(enabled, StringKeyAccess, [codec]) == []
+  end
+
   defp configured(enabled, check, files) do
     case Map.fetch(enabled, check) do
       {:ok, params} -> run_check(files, check, params)

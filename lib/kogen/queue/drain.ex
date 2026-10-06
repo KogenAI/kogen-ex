@@ -34,7 +34,10 @@ defmodule Kogen.Queue.Drain do
   @pause_cap_ms 86_400_000
   @unavailable [{:provider, "usage_limit"}, {:provider, "login"}, {:environment, "login"}]
 
-  @type summary :: %{builds: [outcome()], stop: :empty | :requested | {:failed, outcome()}}
+  @type summary :: %{
+          builds: [outcome()],
+          stop: :empty | :blocked | :requested | {:failed, outcome()}
+        }
 
   @spec run(Path.t(), hooks()) :: {:ok, summary()} | {:running, pos_integer()} | {:error, term()}
   def run(state_root, hooks) do
@@ -73,13 +76,20 @@ defmodule Kogen.Queue.Drain do
 
       cond do
         Lock.stop_requested?(state_root) -> {:ok, summary(built, :requested)}
-        is_nil(next) -> {:ok, summary(built, :empty)}
+        is_nil(next) -> exhausted(hooks, statuses, built)
         true -> step(state_root, hooks, next, built, Map.put(attempted, attempt_key(next), true))
       end
     end
   end
 
+  defp exhausted(hooks, statuses, built) do
+    blocked = Enum.filter(statuses, &(&1.status == :blocked))
+    Enum.each(blocked, &hooks.say.("queue: blocked #{&1.slug}: #{&1.detail}\n"))
+    {:ok, summary(built, if(blocked == [], do: :empty, else: :blocked))}
+  end
+
   defp step(state_root, hooks, next, built, attempted) do
+    hooks.say.("queue: selected #{next.slug}: #{Kogen.Queue.Selection.reason(next)}\n")
     hooks.say.("building #{next.slug}\n")
 
     case hooks.build.(next.slug) do

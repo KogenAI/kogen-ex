@@ -27,10 +27,13 @@ defmodule Kogen.Queue.DrainTest do
     assert Enum.map(builds, & &1.slug) == ["early", "mid", "late"]
 
     assert Agent.get(lines, &Enum.reverse/1) == [
+             "queue: selected early: priority 0; no dependencies; ties by approval time and slug\n",
              "building early\n",
              "landed early abcdef12 (Build run-earl)\n",
+             "queue: selected mid: priority 0; no dependencies; ties by approval time and slug\n",
              "building mid\n",
              "failed mid: candidate/gate_red (Build run-mid)\n",
+             "queue: selected late: priority 0; no dependencies; ties by approval time and slug\n",
              "building late\n",
              "landed late abcdef12 (Build run-late)\n"
            ]

@@ -161,7 +161,7 @@ defmodule Kogen.Kernel.CLITest do
     assert {0, json} = CLI.execute(["status", "--project", project, "--base", "main", "--json"])
 
     assert json ==
-             ~s({"build_id":null,"landed_sha":null,"slug":"greet","status":"draft"}\n)
+             ~s({"blocks_on":[],"build_id":null,"detail":null,"landed_sha":null,"priority":0,"slug":"greet","status":"draft"}\n)
 
     assert {0, one} = CLI.execute(["status", "greet", "--json", "--project", project])
     assert :json.decode(one)["status"] == "draft"

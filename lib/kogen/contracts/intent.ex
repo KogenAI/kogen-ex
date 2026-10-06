@@ -8,7 +8,8 @@ defmodule Kogen.Contracts.Intent do
   alias Kogen.Contracts.AcceptanceItem
 
   @enforce_keys [:slug, :title, :size, :brief, :acceptance, :domains, :notes, :path, :sha256]
-  defstruct @enforce_keys ++ [request: nil, changes_gate: false, source: nil]
+  defstruct @enforce_keys ++
+              [request: nil, changes_gate: false, source: nil, blocks_on: [], priority: 0]
 
   @type size :: :small | :medium | :large
   @type t :: %__MODULE__{
@@ -21,6 +22,8 @@ defmodule Kogen.Contracts.Intent do
           domains: [String.t()],
           changes_gate: boolean(),
           source: :raw | nil,
+          blocks_on: [String.t()],
+          priority: integer(),
           notes: String.t() | nil,
           path: Path.t(),
           sha256: String.t()

@@ -43,7 +43,10 @@ defmodule Kogen.Acceptance.StatusJSONTest do
                "slug" => "status-probe",
                "status" => "draft",
                "build_id" => :null,
-               "landed_sha" => :null
+               "landed_sha" => :null,
+               "priority" => 0,
+               "blocks_on" => [],
+               "detail" => :null
              }
            ]
   end

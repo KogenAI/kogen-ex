@@ -29,6 +29,7 @@ defmodule Kogen.Kernel.StatusOutputTest do
 
     assert StatusOutput.text(%{statuses: statuses, queue: {:running, 4242}}, @now) == """
            Queue: running (pid 4242)
+           Next: approval-checks (priority 0; no dependencies; ties by approval time and slug)
            Building:
              review-full-diff  develop, 12m (Build f739c910)
            Queued:
@@ -52,7 +53,7 @@ defmodule Kogen.Kernel.StatusOutputTest do
     statuses = [status("a", :approved, approved_at: 1)]
 
     assert StatusOutput.text(%{statuses: statuses, queue: :stopped}, @now) ==
-             "Queue: stopped, 1 waiting; start it with kogen queue start\nQueued:\n  a\n"
+             "Queue: stopped, 1 waiting; start it with kogen queue start\nNext: a (priority 0; no dependencies; ties by approval time and slug)\nQueued:\n  a\n"
 
     assert StatusOutput.text(%{statuses: [], queue: :stopped}, @now) ==
              "Queue: stopped\nNo Intents.\n"
