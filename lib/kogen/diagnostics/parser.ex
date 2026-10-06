@@ -235,5 +235,4 @@ defmodule Kogen.Diagnostics.Parser do
       end
     end)
   end
-
 end

@@ -2,6 +2,7 @@ defmodule Kogen.Diagnostics do
   @moduledoc "Tool diagnostics as complete records and compact developer feedback."
   use Boundary, deps: [Kogen.Contracts], exports: []
 
+  alias Kogen.Contracts.CheckOutput
   alias Kogen.Contracts.CommandExit
   alias Kogen.Contracts.Finding
   alias Kogen.Diagnostics.Parser, as: Parser
@@ -42,16 +43,8 @@ defmodule Kogen.Diagnostics do
     |> Enum.uniq()
   end
 
-  @spec analyze(%{
-          required(:name) => String.t(),
-          required(:argv) => [String.t()],
-          required(:exit_status) => integer() | nil,
-          required(:timed_out) => boolean(),
-          required(:output) => String.t(),
-          required(:log_path) => Path.t() | nil,
-          required(:workdir) => Path.t()
-        }) :: result()
-  def analyze(%{
+  @spec analyze(CheckOutput.t() | map()) :: result()
+  def analyze(%CheckOutput{
         name: name,
         argv: argv,
         exit_status: exit_status,
@@ -83,9 +76,11 @@ defmodule Kogen.Diagnostics do
     Map.merge(base, %{exit_level: level, reason: environment_reason(base, level)})
   end
 
+  def analyze(command) when is_map(command), do: analyze(struct!(CheckOutput, command))
+
   defdelegate gate(result, spec, paths), to: Kogen.Diagnostics.GateAssessment
 
-  @spec overall_exit_level([result()]) :: 0..3
+  @spec overall_exit_level([map()]) :: 0..3
   def overall_exit_level(results) do
     levels = Enum.map(results, & &1.exit_level)
 
@@ -97,7 +92,7 @@ defmodule Kogen.Diagnostics do
     end
   end
 
-  @spec render_model_feedback([result()]) :: String.t()
+  @spec render_model_feedback([map()]) :: String.t()
   def render_model_feedback(results), do: render_model_feedback(results, [])
 
   def render_model_feedback(results, changed_ranges) when is_function(changed_ranges, 0),
@@ -106,12 +101,15 @@ defmodule Kogen.Diagnostics do
   def render_model_feedback(results, nil), do: render_model_feedback(results, [])
 
   def render_model_feedback(results, options) when is_list(options),
-    do: results |> Renderer.model(options) |> Renderer.with_changes(Keyword.get(options, :changed_ranges))
+    do:
+      results
+      |> Renderer.model(options)
+      |> Renderer.with_changes(Keyword.get(options, :changed_ranges))
 
   def dialyzer_summary(results, paths),
     do: Kogen.Diagnostics.DialyzerSummary.summarize(results, paths)
 
-  @spec render_environment_detail([result()]) :: String.t()
+  @spec render_environment_detail([map()]) :: String.t()
   def render_environment_detail(results), do: Renderer.environment(results)
 
   def write_report(results, run_dir), do: Kogen.Diagnostics.Report.write(results, run_dir)

@@ -32,7 +32,12 @@ defmodule Kogen.Checks.FailureContextTest do
     assert finding.line == 12
     feedback = Feedback.render_model_feedback([result])
     assert feedback =~ "CartTest \"calculates the cart total\""
-    assert feedback =~ "test/cart_test.exs:12:1"
+    assert feedback =~ "test/cart_test.exs:12: error:"
+    assert finding.col == nil
+    assert feedback =~ "code: assert Cart.total(cart) == 42"
+    assert feedback =~ "left: %{total: 41,"
+    assert feedback =~ "right: %{total: 42,"
+    assert feedback =~ "project: lib/cart.ex:24"
 
     assert finding.message =~
              "totals differ after applying the discount\nexpected the rounded total"
@@ -85,6 +90,8 @@ defmodule Kogen.Checks.FailureContextTest do
     assert both.message =~ "right: R"
     assert both.message =~ "code: assert Cart.total(cart) == nil"
     assert String.length(both.message) < 600
+    assert both.explanation =~ left
+    assert both.explanation =~ right
   end
 
   test "red feedback lists at most thirty ranges and green feedback omits them", %{
@@ -95,7 +102,8 @@ defmodule Kogen.Checks.FailureContextTest do
     callback = fn -> {:ok, ranges} end
     feedback = Feedback.render_model_feedback([result], callback)
     [_, changed] = String.split(feedback, "Candidate changes relative to Build base:\n", parts: 2)
-    assert length(String.split(changed, "\n")) == 30
+    assert length(Regex.scan(~r/file-\d+\.ex: base/, changed)) == 30
+    assert feedback |> String.split("\n") |> List.last() =~ "gate:"
     assert changed =~ "file-30.ex: base 2 -> candidate 2-3"
     refute changed =~ "file-31.ex"
 

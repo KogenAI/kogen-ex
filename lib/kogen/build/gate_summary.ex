@@ -21,7 +21,7 @@ defmodule Kogen.Build.GateSummary do
       warnings: Map.get(gate, :warnings, []),
       checks: Enum.map(commands, &elem(&1, 0)),
       findings_path: Map.get(gate, :findings_path),
-      dialyzer_summary: Map.get(gate, :dialyzer_summary),
+      dialyzer_summary: dialyzer_summary(Map.get(gate, :dialyzer_summary)),
       finding_count: length(findings),
       findings: Enum.take(findings, @max_findings)
     }
@@ -76,6 +76,17 @@ defmodule Kogen.Build.GateSummary do
       failing_tests: tests,
       failure_count: tests + silent
     }
+  end
+
+  defp dialyzer_summary(nil), do: nil
+
+  defp dialyzer_summary(summary) do
+    Map.update!(summary, :first, fn findings ->
+      Enum.map(findings, fn
+        %Kogen.Contracts.Finding{} = finding -> Map.from_struct(finding)
+        finding -> finding
+      end)
+    end)
   end
 
   defp red?(command), do: is_integer(Map.get(command, :exit_level)) and command.exit_level > 0

@@ -132,7 +132,9 @@ defmodule KogenChecks.GateWiringTest do
     assert configured(enabled, StringKeyAccess, [codec]) == []
   end
 
-  test "Checks can use Diagnostics while Diagnostics cannot reach back into Checks", %{enabled: enabled} do
+  test "Checks can use Diagnostics while Diagnostics cannot reach back into Checks", %{
+    enabled: enabled
+  } do
     caller =
       source(
         "def run(output), do: Kogen.Diagnostics.failed_test_ids(output, \".\")",

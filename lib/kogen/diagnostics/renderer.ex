@@ -41,9 +41,14 @@ defmodule Kogen.Diagnostics.Renderer do
   def with_changes(feedback, changed_ranges) when is_function(changed_ranges, 0) do
     case changed_ranges.() do
       {:ok, [_ | _] = ranges} ->
-        feedback <>
-          "\nCandidate changes relative to Build base:\n" <>
-          Enum.join(Enum.take(ranges, 30), "\n")
+        lines = String.split(feedback, "\n")
+        {body, [counts]} = Enum.split(lines, -1)
+
+        Enum.join(
+          body ++
+            ["Candidate changes relative to Build base:"] ++ Enum.take(ranges, 30) ++ [counts],
+          "\n"
+        )
 
       _other ->
         feedback
@@ -145,8 +150,11 @@ defmodule Kogen.Diagnostics.Renderer do
 
     symbol = if finding.symbol, do: "#{finding.symbol}: ", else: ""
 
-    "#{location}#{severity(finding.severity)}: [#{finding.tool}/#{finding.rule || "unknown"}] #{symbol}#{Common.truncate(finding.message)}#{hint(finding)}"
+    "#{location}#{severity(finding.severity)}: [#{finding.tool}/#{finding.rule || "unknown"}] #{symbol}#{message(finding)}#{hint(finding)}"
   end
+
+  defp message(%{tool: "exunit", message: message}), do: Common.truncate(message, 600)
+  defp message(finding), do: Common.truncate(finding.message)
 
   defp hint(%{hint: hint}) when is_binary(hint), do: " Hint: " <> Common.truncate(hint, 120)
   defp hint(_finding), do: ""

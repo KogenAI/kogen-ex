@@ -5,7 +5,8 @@ unavailable), `severity`, `path`, `line`, `col`, `symbol`, `message`, available 
 and `hint`, and a stable `id`. Missing locations and symbols remain null. File-only format
 failures have no invented line or column. Compiler warnings retain warning severity.
 Messages, explanations and test names are retained in full in records; text feedback
-clips the message, adds an available actionable hint, and puts counts last.
+clips the message, keeps bounded assertion details and the first project frame, adds an
+available actionable hint, and puts counts after any changed-code ranges.
 
 IDs exclude line and column. They include the tool and path; ExUnit identity uses the full
 module and test name, while other adapters use rule, known symbol and normalized message.
@@ -18,7 +19,9 @@ The done gate parses the complete captured log when available, then writes every
 and raw-log link to `gate-findings-<id>.json`. `last_gate.findings_path` in the Build JSON
 report links that file. The inline gate summary still shows at most 20 findings, with
 complete meaning for each displayed record. Full logs and the full findings file preserve
-the rest. This task does not add failing-test source context or change baseline statuses.
+the rest. ExUnit explanations retain the complete failure block even when assertion
+values in the compact message are clipped. Baseline-aware repair and flake evidence
+classification retain their existing status contracts.
 
 Diagnostics owns the adapters and rendering, keeping Checks within the domain size limit.
 `Kogen.Checks.Feedback` preserves the check-facing interface.

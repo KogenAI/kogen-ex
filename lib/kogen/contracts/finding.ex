@@ -24,7 +24,11 @@ defmodule Kogen.Contracts.Finding do
   def record(finding) do
     finding
     |> Map.put_new(:explanation, nil)
-    |> Map.put(:hint, Map.get(finding, :hint) || hint(finding.message <> "\n" <> (Map.get(finding, :explanation) || "")))
+    |> Map.put(
+      :hint,
+      Map.get(finding, :hint) ||
+        hint(finding.message <> "\n" <> (Map.get(finding, :explanation) || ""))
+    )
     |> Map.put(:id, identity(finding))
     |> then(&struct!(__MODULE__, &1))
   end

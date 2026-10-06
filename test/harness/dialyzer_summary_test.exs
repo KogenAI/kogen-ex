@@ -39,6 +39,8 @@ defmodule Kogen.Harness.DialyzerSummaryTest do
     assert text =~ "lib/a.ex:1: error: [dialyzer/pattern_match]"
     refute text =~ "lib/d.ex:4"
     assert text =~ "complete findings: #{gate.findings_path}"
+    assert text =~ "Candidate changes relative to Build base:"
+    assert text =~ "lib/changed.ex: base 20 -> candidate 20-30"
     assert text |> String.split("\n") |> List.last() =~ "gate:"
     assert length(Jason.decode!(File.read!(gate.findings_path))["findings"]) == 6
     assert File.read!(hd(gate.checks).log_path) == output
@@ -123,7 +125,8 @@ defmodule Kogen.Harness.DialyzerSummaryTest do
       provider_mod: nil,
       provider_config: nil,
       proc_mod: Kogen.Proc,
-      changed_paths: changed_paths
+      changed_paths: changed_paths,
+      changed_ranges: fn -> {:ok, ["lib/changed.ex: base 20 -> candidate 20-30"]} end
     }
 
     assert {:ok, gate} = Gate.run(opts, System.monotonic_time(:millisecond) + 30_000)

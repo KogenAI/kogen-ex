@@ -48,11 +48,14 @@ defmodule Kogen.Harness.Gate do
 
   defp failures(:pass, _commands, _summary, _path, _ranges), do: []
 
-  defp failures(:environment, commands, _summary, _path, _ranges),
-    do: [Feedback.render_environment_detail(commands)]
-
   defp failures(:fail, commands, summary, path, ranges),
-    do: [Feedback.render_model_feedback(commands, dialyzer_summary: summary, report_path: path, changed_ranges: ranges)]
+    do: [
+      Feedback.render_model_feedback(commands,
+        dialyzer_summary: summary,
+        report_path: path,
+        changed_ranges: ranges
+      )
+    ]
 
   defp quality_commands(opts, deadline) do
     opts.workdir
@@ -64,6 +67,15 @@ defmodule Kogen.Harness.Gate do
     |> Kogen.Quality.commands()
     |> Enum.map(&CheckBaseline.annotate(&1, opts.check_baseline))
   end
+
+  defp changed_paths(%Opts{changed_paths: changed_paths}) when is_function(changed_paths, 0) do
+    case changed_paths.() do
+      {:ok, paths} when is_list(paths) -> paths
+      _error -> :unknown
+    end
+  end
+
+  defp changed_paths(_opts), do: :unknown
 
   defp before_gate(nil), do: :ok
   defp before_gate(guard) when is_function(guard, 0), do: guard.()
