@@ -4,8 +4,10 @@ defmodule Kogen.Harness.Developer do
   alias Kogen.Contracts.ModelResponse
   alias Kogen.Contracts.ProviderError
   alias Kogen.Contracts.ToolCall
+  alias Kogen.Conversation
+  alias Kogen.Conversation.Budget
   alias Kogen.Harness.Codec
-  alias Kogen.Harness.Developer.Budget
+  alias Kogen.Harness.Continuation
   alias Kogen.Harness.DeveloperState
   alias Kogen.Harness.Exchange
   alias Kogen.Harness.Exchange.Request, as: ExchangeRequest
@@ -41,7 +43,8 @@ defmodule Kogen.Harness.Developer do
     started_at = System.monotonic_time(:millisecond)
 
     state = %DeveloperState{
-      items: initial_items(intent_text, plan, resume, opts.repairs_left),
+      authority: Conversation.authority(intent_text, plan, opts.repairs_left),
+      items: Conversation.initial_items(intent_text, plan, resume, opts.repairs_left),
       usage: Usage.zero(),
       turns: 0,
       empty_refusals: 0,
@@ -67,7 +70,16 @@ defmodule Kogen.Harness.Developer do
 
       true ->
         {state, system_note} = Budget.note(state, opts.limits.max_turns)
-        developer_turn(opts, prompt, state, remaining_ms, system_note)
+
+        with {:ok, state} <- Continuation.prepare(opts, state, remaining_ms) do
+          developer_turn(
+            opts,
+            prompt,
+            state,
+            max(state.deadline - System.monotonic_time(:millisecond), 0),
+            system_note
+          )
+        end
     end
   end
 
@@ -286,62 +298,6 @@ defmodule Kogen.Harness.Developer do
       {:ok, %{state | items: state.items ++ [Codec.function_output(call.id, result.output)]}}
     end
   end
-
-  defp initial_items(intent_text, plan, nil, repairs_left) do
-    [Codec.user_item(initial_user_text(intent_text, plan, repairs_left))]
-  end
-
-  defp initial_items(
-         intent_text,
-         plan,
-         %{fresh: true, previous_items: [], failure_text: failure_text},
-         repairs_left
-       )
-       when is_binary(failure_text) do
-    user_text =
-      initial_user_text(intent_text, plan, repairs_left) <>
-        "\n\nEscalation summary:\n" <> failure_text
-
-    [Codec.user_item(user_text)]
-  end
-
-  defp initial_items(
-         _intent_text,
-         _plan,
-         %{previous_items: items, failure_text: failure_text},
-         _repairs_left
-       )
-       when is_list(items) and is_binary(failure_text) do
-    items ++
-      [
-        Codec.user_item(
-          "Kogen's controller reported this failure. Continue the same session and fix it:\n\n" <>
-            failure_text
-        )
-      ]
-  end
-
-  defp initial_items(intent_text, plan, _invalid_resume, repairs_left) do
-    [Codec.user_item(initial_user_text(intent_text, plan, repairs_left))]
-  end
-
-  defp initial_user_text(intent_text, plan, repairs_left) do
-    plan_content = plan_content(plan)
-
-    String.trim("""
-    Approved Intent:
-    #{intent_text}
-
-    #{plan_content}
-
-    The controller supplied a remaining repair budget of #{repairs_left} pass(es). The Build Cycle owns that budget.
-    Begin work in the supplied worktree.
-    """)
-  end
-
-  defp plan_content(%Plan{builder_addendum: addendum}) when is_binary(addendum), do: addendum
-  defp plan_content(%Plan{text: text}), do: "Implementation plan advice:\n" <> text
-  defp plan_content(_plan), do: "Implementation plan advice:\nNo technical plan was supplied."
 
   defp developer_prompt(%Opts{builder_tools: :full}), do: {:ok, @developer_prompt}
 

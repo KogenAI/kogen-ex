@@ -55,8 +55,13 @@ defmodule Kogen.Kernel.CLI.StatusOutput do
     diff = if build.candidate_diff, do: "  candidate diff: #{build.candidate_diff}\n", else: ""
 
     "Build #{short(build.build_id)}: #{outcome}\n" <>
-      stages <> diff <> "  journal: #{build.journal}\n"
+      stages <> continuations(build.continuations) <> diff <> "  journal: #{build.journal}\n"
   end
+
+  defp continuations(0), do: ""
+
+  defp continuations(count),
+    do: "  context continuations: #{count} (same approved Build; checkpoints in journal)\n"
 
   @doc "JSON Lines: one object per Intent."
   @spec json([IntentStatus.t()]) :: String.t()

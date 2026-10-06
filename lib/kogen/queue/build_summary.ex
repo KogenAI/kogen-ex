@@ -9,7 +9,7 @@ defmodule Kogen.Queue.BuildSummary do
   alias Kogen.State.Run
 
   @enforce_keys [:build_id, :run_status, :journal]
-  defstruct @enforce_keys ++ [reason: nil, stages: [], candidate_diff: nil]
+  defstruct @enforce_keys ++ [reason: nil, stages: [], candidate_diff: nil, continuations: 0]
 
   @type t :: %__MODULE__{
           build_id: String.t(),
@@ -17,7 +17,8 @@ defmodule Kogen.Queue.BuildSummary do
           journal: Path.t(),
           reason: String.t() | nil,
           stages: [{String.t(), non_neg_integer()}],
-          candidate_diff: Path.t() | nil
+          candidate_diff: Path.t() | nil,
+          continuations: non_neg_integer()
         }
 
   @spec latest(Path.t(), String.t()) :: {:ok, t() | nil} | {:error, term()}
@@ -40,6 +41,7 @@ defmodule Kogen.Queue.BuildSummary do
          journal: run.dir,
          reason: reason(events),
          stages: stages(events),
+         continuations: Enum.count(events, &(&1.event == "context_continued")),
          candidate_diff: candidate_diff(run, events)
        }}
     end

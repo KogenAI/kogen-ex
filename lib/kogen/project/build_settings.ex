@@ -21,16 +21,23 @@ defmodule Kogen.Project.BuildSettings do
 
   def parse(value) when is_map(value) do
     unknown =
-      unknown_keys(value, ~w(recipe roles wall_minutes edge_tests model_fallback), "build")
+      unknown_keys(
+        value,
+        ~w(recipe roles wall_minutes edge_tests model_fallback context_bytes),
+        "build"
+      )
 
     {recipe, recipe_errors} = recipe(value)
     {roles, role_errors} = roles(value)
     {wall_minutes, wall_errors} = wall_minutes(value)
     {edge_tests, edge_errors} = edge_tests(value)
     {model_fallback, fallback_errors} = model_fallback(value)
+    {context_bytes, context_errors} = context_bytes(value)
 
     errors =
-      unknown ++ recipe_errors ++ role_errors ++ wall_errors ++ edge_errors ++ fallback_errors
+      unknown ++
+        recipe_errors ++
+        role_errors ++ wall_errors ++ edge_errors ++ fallback_errors ++ context_errors
 
     if errors == [],
       do:
@@ -40,7 +47,8 @@ defmodule Kogen.Project.BuildSettings do
            roles: roles,
            wall_minutes: wall_minutes,
            edge_tests: edge_tests,
-           model_fallback: model_fallback
+           model_fallback: model_fallback,
+           context_bytes: context_bytes
          }},
       else: {:error, errors}
   end
@@ -63,7 +71,8 @@ defmodule Kogen.Project.BuildSettings do
           roles: map(),
           wall_minutes: pos_integer() | nil,
           edge_tests: boolean(),
-          model_fallback: boolean()
+          model_fallback: boolean(),
+          context_bytes: pos_integer() | nil
         }
   def effective(machine, project) do
     machine = machine || %{}
@@ -81,7 +90,8 @@ defmodule Kogen.Project.BuildSettings do
       roles: roles,
       wall_minutes: Map.get(project, :wall_minutes) || Map.get(machine, :wall_minutes),
       edge_tests: edge_setting(project, machine),
-      model_fallback: fallback_setting(project, machine)
+      model_fallback: fallback_setting(project, machine),
+      context_bytes: Map.get(project, :context_bytes) || Map.get(machine, :context_bytes)
     }
   end
 
@@ -119,6 +129,14 @@ defmodule Kogen.Project.BuildSettings do
 
       :error ->
         {nil, []}
+    end
+  end
+
+  defp context_bytes(value) do
+    case Map.fetch(value, "context_bytes") do
+      {:ok, bytes} when is_integer(bytes) and bytes >= 16_000 -> {bytes, []}
+      {:ok, _other} -> {nil, [issue("build.context_bytes must be an integer of at least 16000")]}
+      :error -> {nil, []}
     end
   end
 

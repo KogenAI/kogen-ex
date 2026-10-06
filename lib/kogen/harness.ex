@@ -4,6 +4,7 @@ defmodule Kogen.Harness do
     deps: [
       Kogen.Flakes,
       Kogen.Quality,
+      Kogen.Conversation,
       Kogen.Checks,
       Kogen.Contracts,
       Kogen.Proc,

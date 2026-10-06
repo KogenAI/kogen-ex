@@ -152,6 +152,35 @@ defmodule KogenChecks.GateWiringTest do
     assert Enum.any?(configured(enabled, DomainReach, [reverse]), &(&1.exit_status > 0))
   end
 
+  test "Harness can use Conversation while Conversation remains independent", %{enabled: enabled} do
+    caller =
+      source(
+        "def run, do: Kogen.Conversation.initial_items(\"intent\", nil, nil, 2)",
+        "lib/kogen/harness/fixture.ex",
+        "Kogen.Harness.Fixture"
+      )
+
+    assert configured(enabled, DomainReach, [caller]) == []
+
+    codec =
+      source(
+        ~s{def run(data), do: Map.get(data, "key")},
+        "lib/kogen/conversation.ex",
+        "Kogen.Conversation"
+      )
+
+    assert configured(enabled, StringKeyAccess, [codec]) == []
+
+    reverse =
+      source(
+        "def run, do: Kogen.Harness.develop(nil, nil, nil, nil)",
+        "lib/kogen/conversation/fixture.ex",
+        "Kogen.Conversation.Fixture"
+      )
+
+    assert Enum.any?(configured(enabled, DomainReach, [reverse]), &(&1.exit_status > 0))
+  end
+
   defp configured(enabled, check, files) do
     case Map.fetch(enabled, check) do
       {:ok, params} -> run_check(files, check, params)

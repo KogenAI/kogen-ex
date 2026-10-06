@@ -133,6 +133,7 @@
                Kogen.Provider.ChatGPT.SIWC.TokenResponse,
                Kogen.Provider.ChatGPT.SIWCCCodec,
                Kogen.Harness.Codec,
+               Kogen.Conversation,
                Kogen.Tooling.Codec,
                Kogen.Checks.Ledger,
                Kogen.State.ApprovalBaselineCodec,
@@ -180,6 +181,7 @@
                Kogen.Flakes => [Kogen.Checks, Kogen.Workspace],
                Kogen.Harness => [
                  Kogen.Flakes,
+                 Kogen.Conversation,
                  Kogen.Quality,
                  Kogen.Checks,
                  Kogen.Proc,
@@ -188,6 +190,7 @@
                  Kogen.Resilience,
                  Kogen.Tooling
                ],
+               Kogen.Conversation => [],
                Kogen.Resilience => [],
                Kogen.Build => [Kogen.Resilience],
                Kogen.Tooling => [Kogen.Proc],
