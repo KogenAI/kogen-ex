@@ -25,6 +25,7 @@ defmodule Kogen.Harness.FinalPassTest do
     assert receipt.check == "fix/format"
     assert receipt.exit_status == 0
     assert receipt.tree == tree
+    assert receipt.duration_ms == hd(first.fixes).duration_ms
     assert {:ok, again} = Gate.run(opts, deadline())
     assert again.status == :pass
     assert File.read!(Path.join(opts.workdir, ".git/fix-calls")) == "x"
@@ -60,6 +61,7 @@ defmodule Kogen.Harness.FinalPassTest do
   test "each revision retains its own fix log and receipt", %{tmp_dir: tmp} do
     opts = options(tmp, "printf x >> .git/fix-calls; wc -c < .git/fix-calls")
     assert {:ok, [first]} = final_pass(opts)
+    assert is_integer(first.duration_ms) and first.duration_ms >= 0
     old_log = File.read!(first.log_path)
     assert String.trim(old_log) == "1"
     File.write!(Path.join(opts.workdir, "revision.txt"), "repair")
@@ -67,6 +69,8 @@ defmodule Kogen.Harness.FinalPassTest do
     assert String.trim(File.read!(second.log_path)) == "2"
     assert first.log_path != second.log_path
     assert File.read!(first.log_path) == old_log
+    assert {:ok, [receipt]} = Checks.final_pass_receipts("tree", opts.project, [first])
+    assert receipt.duration_ms == first.duration_ms
     assert {:ok, [^second]} = final_pass(opts)
     assert File.read!(Path.join(opts.workdir, ".git/fix-calls")) == "xx"
   end

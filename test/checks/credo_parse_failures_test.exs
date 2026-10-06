@@ -55,7 +55,8 @@ defmodule Kogen.Checks.CredoParseFailuresTest do
       assert result.status == {:fail, ["credo"]}
       assert result.feedback =~ rule
       assert result.feedback =~ name
-      assert [%{analysis: :incomplete, exit_status: 0}] = result.receipts
+      assert [%{analysis: :incomplete, exit_status: 0, duration_ms: duration}] = result.receipts
+      assert is_integer(duration) and duration >= 0
       assert [finding] = hd(result.checks).findings
       assert %Kogen.Contracts.Finding{rule: ^rule, line: nil, col: nil} = finding
       assert is_binary(finding.id)

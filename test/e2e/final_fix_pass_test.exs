@@ -35,6 +35,7 @@ defmodule Kogen.E2e.FinalFixPassTest do
     tree = String.trim(Git.git!(origin, ["rev-parse", "#{sha}^{tree}"]))
     check = result.events |> Enum.filter(&(&1.event == "check_result")) |> List.last()
     assert Enum.all?(check.receipts, &(&1["tree"] == tree))
+    assert Enum.all?(check.receipts, &is_integer(&1["duration_ms"]))
     assert Enum.any?(check.receipts, &(&1["check"] == "fix/format" and &1["exit_status"] == 0))
     assert {:ok, report} = Build.report(result)
     assert Enum.any?(:json.decode(report)["check_receipts"], &(&1["check"] == "fix/format"))

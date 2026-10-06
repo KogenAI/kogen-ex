@@ -32,8 +32,11 @@ defmodule Kogen.Checks.FinalPass do
       spec = %{spec | name: "fix/#{spec.name}"}
 
       case ReceiptBuilder.build(tree, spec, result.exit_status || 1, result.log_path, result) do
-        {:ok, receipt} -> {:cont, {:ok, [receipt | receipts]}}
-        {:error, reason} -> {:halt, {:error, reason}}
+        {:ok, receipt} ->
+          {:cont, {:ok, [%{receipt | duration_ms: result.duration_ms} | receipts]}}
+
+        {:error, reason} ->
+          {:halt, {:error, reason}}
       end
     end)
     |> case do
@@ -76,6 +79,7 @@ defmodule Kogen.Checks.FinalPass do
       exit_status: result.exit_status,
       timed_out: result.timed_out,
       output: result.output_tail,
+      duration_ms: result.duration_ms,
       log_path: log,
       workdir: workdir
     }
