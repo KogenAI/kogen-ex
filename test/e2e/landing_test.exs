@@ -58,12 +58,13 @@ defmodule Kogen.E2e.LandingTest do
       "landed #{sha} on main; your checkout at #{canonical(origin)} has local changes and " <>
         "was not updated; run `git reset --keep #{sha}`, or merge it yourself"
 
-    # Stderr capture is process-wide and can include concurrent shaping progress.
+    # Stderr is shared; select this checkout's warnings before asserting their exact content.
     warnings =
       stderr
       |> canonical()
       |> String.split("\n", trim: true)
       |> Enum.filter(&String.starts_with?(&1, "land: warning:"))
+      |> Enum.filter(&String.contains?(&1, canonical(origin)))
 
     assert warnings == ["land: warning: #{expected}"]
     assert ("land: warning: " <> expected) in Enum.map(build.lines, &canonical/1)
