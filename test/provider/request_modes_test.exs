@@ -84,6 +84,23 @@ defmodule Kogen.Provider.RequestModesTest do
              })
   end
 
+  test "summary visibility preserves fingerprints while request modes and controls distinguish them" do
+    for adapter <- [:responses, :lite] do
+      request = request(adapter)
+      assert {:ok, fingerprint} = Codec.request_fingerprint(request)
+
+      assert {:ok, ^fingerprint} =
+               Codec.request_fingerprint(%{request | reasoning_summary: :auto})
+
+      assert {:ok, changed} = Codec.request_fingerprint(%{request | tool_choice: :required})
+      refute changed == fingerprint
+    end
+
+    assert {:ok, responses} = Codec.request_fingerprint(request(:responses))
+    assert {:ok, lite} = Codec.request_fingerprint(request(:lite))
+    refute responses == lite
+  end
+
   defp body(request) do
     {:ok, encoded} = Codec.encode_request(request)
     :json.decode(encoded)

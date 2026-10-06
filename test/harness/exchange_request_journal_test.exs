@@ -148,10 +148,11 @@ defmodule Kogen.Harness.ExchangeRequestJournalTest do
     assert {:ok, _response} = Exchange.respond(opts, request)
     assert_receive {:fake_request, 1, body, _at}
     assert body["model"] == "gpt-6.1-sol"
-    assert body["reasoning"] == %{"effort" => "high"}
+    assert body["reasoning"] == %{"effort" => "high", "summary" => "auto"}
     refute Map.has_key?(body, "text")
     assert [record] = records(tmp_dir)
     assert record["request_settings"]["adapter"] == "responses"
+    assert record["request_settings"]["reasoning_summary"] == "auto"
     FakeResponsesServer.stop(server)
   end
 

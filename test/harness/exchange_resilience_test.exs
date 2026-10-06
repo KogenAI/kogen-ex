@@ -86,6 +86,8 @@ defmodule Kogen.Harness.ExchangeResilienceTest do
         opts = opts(tmp_dir, url, %{timeout_ms: 30_000}, %{@fast | stream_idle_ms: 2_000})
 
         assert {:ok, %{text: "alive"}} = Exchange.respond(opts, request())
+        assert_receive {:fake_request, 1, body, _at}
+        assert body["reasoning"] == %{"effort" => "max"}
         refute_received {:fake_request, 2, _body, _at}
         refute_received {:recorded, %{event: :provider_retry}}
       end
@@ -114,7 +116,7 @@ defmodule Kogen.Harness.ExchangeResilienceTest do
       started = System.monotonic_time(:millisecond)
 
       assert {:ok, %{text: "finished thinking"}} =
-               Exchange.respond(opts, %{request() | remaining_ms: 320_000})
+               Exchange.respond(opts, %{request() | model: "gpt-6.1-sol", remaining_ms: 320_000})
 
       assert System.monotonic_time(:millisecond) - started >= 300_000
       assert_receive {:fake_request, 1, body, _at}
