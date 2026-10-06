@@ -98,10 +98,18 @@ defmodule Kogen.Diagnostics do
   end
 
   @spec render_model_feedback([result()]) :: String.t()
-  def render_model_feedback(results), do: render_model_feedback(results, nil)
+  def render_model_feedback(results), do: render_model_feedback(results, [])
 
-  def render_model_feedback(results, changed_ranges),
-    do: results |> Renderer.model() |> Renderer.with_changes(changed_ranges)
+  def render_model_feedback(results, changed_ranges) when is_function(changed_ranges, 0),
+    do: render_model_feedback(results, changed_ranges: changed_ranges)
+
+  def render_model_feedback(results, nil), do: render_model_feedback(results, [])
+
+  def render_model_feedback(results, options) when is_list(options),
+    do: results |> Renderer.model(options) |> Renderer.with_changes(Keyword.get(options, :changed_ranges))
+
+  def dialyzer_summary(results, paths),
+    do: Kogen.Diagnostics.DialyzerSummary.summarize(results, paths)
 
   @spec render_environment_detail([result()]) :: String.t()
   def render_environment_detail(results), do: Renderer.environment(results)

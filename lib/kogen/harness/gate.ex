@@ -23,10 +23,7 @@ defmodule Kogen.Harness.Gate do
       commands = Enum.reject(fixes ++ checks, & &1.base_red?)
       status = if Feedback.overall_exit_level(commands) == 0, do: :pass, else: :fail
 
-      failures =
-        if status == :pass,
-          do: [],
-          else: [Feedback.render_model_feedback(commands, opts.changed_ranges)]
+      summary = Feedback.dialyzer_summary(commands, changed_paths(opts))
 
       warnings =
         Enum.flat_map(fixes ++ checks, &CheckBaseline.warning/1) ++
@@ -39,7 +36,8 @@ defmodule Kogen.Harness.Gate do
            fixes: fixes,
            checks: checks,
            findings_path: findings_path,
-           failures: failures,
+           dialyzer_summary: summary,
+           failures: failures(status, commands, summary, findings_path, opts.changed_ranges),
            warnings: warnings,
            flake_excused: flake_excused,
            failed_test_count: TestCount.failed_test_count(checks, opts.project.checks)
@@ -47,6 +45,14 @@ defmodule Kogen.Harness.Gate do
       end
     end
   end
+
+  defp failures(:pass, _commands, _summary, _path, _ranges), do: []
+
+  defp failures(:environment, commands, _summary, _path, _ranges),
+    do: [Feedback.render_environment_detail(commands)]
+
+  defp failures(:fail, commands, summary, path, ranges),
+    do: [Feedback.render_model_feedback(commands, dialyzer_summary: summary, report_path: path, changed_ranges: ranges)]
 
   defp quality_commands(opts, deadline) do
     opts.workdir

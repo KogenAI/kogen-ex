@@ -24,7 +24,14 @@ defmodule Kogen.Build.FindingReportTest do
     summary =
       GateSummary.compact(%{
         checks: [%{name: "full", exit_level: 1, findings: [finding]}],
-        findings_path: "/run/gate-findings.json"
+        findings_path: "/run/gate-findings.json",
+        dialyzer_summary: %{
+          changed: 1,
+          unchanged: 0,
+          unavailable_locations: 0,
+          unknown_scope: 0,
+          first: [finding]
+        }
       })
 
     json = summary |> Jason.encode!() |> Jason.decode!()
@@ -41,5 +48,7 @@ defmodule Kogen.Build.FindingReportTest do
 
     assert id == finding.id
     assert json["findings_path"] == "/run/gate-findings.json"
+    assert json["dialyzer_summary"]["changed"] == 1
+    assert hd(json["dialyzer_summary"]["first"])["id"] == finding.id
   end
 end

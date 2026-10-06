@@ -21,6 +21,7 @@ defmodule Kogen.Build.GateSummary do
       warnings: Map.get(gate, :warnings, []),
       checks: Enum.map(commands, &elem(&1, 0)),
       findings_path: Map.get(gate, :findings_path),
+      dialyzer_summary: Map.get(gate, :dialyzer_summary),
       finding_count: length(findings),
       findings: Enum.take(findings, @max_findings)
     }

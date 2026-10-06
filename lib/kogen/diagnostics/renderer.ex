@@ -2,6 +2,7 @@ defmodule Kogen.Diagnostics.Renderer do
   @moduledoc false
 
   alias Kogen.Diagnostics
+  alias Kogen.Diagnostics.DialyzerSummary
   alias Kogen.Diagnostics.Parser.Common
 
   @max_findings_per_tool 10
@@ -9,21 +10,23 @@ defmodule Kogen.Diagnostics.Renderer do
   @tail_lines 8
   @tail_chars 600
 
-  def model(results) do
+  def model(results, options \\ []) do
     case Diagnostics.overall_exit_level(results) do
       level when level in [1, 2] ->
         findings = results |> Enum.flat_map(& &1.findings) |> deduplicate()
-        visible = visible_findings(findings)
-        hidden = hidden_findings(findings, visible)
-        summaries = results |> Enum.flat_map(& &1.dialyzer_summaries) |> Enum.uniq()
+        dialyzer = Keyword.get(options, :dialyzer_summary)
+        visible = visible(findings, dialyzer)
+        hidden = findings |> hidden_findings(visible) |> hidden_notes(dialyzer)
+        summaries = summaries(results, dialyzer)
         logs = results |> Enum.filter(&(&1.exit_level in [1, 2])) |> log_links()
-        tail = first_tail(results)
+        tail = first_tail(tail_results(results, dialyzer))
         level = Diagnostics.overall_exit_level(results)
 
         Enum.join(
           summaries ++
             Enum.map(visible, &render_finding/1) ++
-            hidden ++ logs ++ tail ++ [summary_line(results, findings, level)],
+            hidden ++
+            report_link(options) ++ logs ++ tail ++ [summary_line(results, findings, level)],
           "\n"
         )
 
@@ -44,6 +47,39 @@ defmodule Kogen.Diagnostics.Renderer do
 
       _other ->
         feedback
+    end
+  end
+
+  defp visible(findings, nil), do: visible_findings(findings)
+
+  defp visible(findings, summary) do
+    other = findings |> Enum.reject(&(&1.tool == "dialyzer")) |> visible_findings()
+    Enum.take(summary.first ++ other, @max_findings)
+  end
+
+  defp summaries(results, nil),
+    do: results |> Enum.flat_map(& &1.dialyzer_summaries) |> Enum.uniq()
+
+  defp summaries(_results, summary), do: DialyzerSummary.lines(summary)
+
+  defp tail_results(results, nil), do: results
+
+  defp tail_results(results, _summary) do
+    Enum.reject(results, fn result ->
+      result.tool == "dialyzer" or
+        (result.findings != [] and Enum.all?(result.findings, &(&1.tool == "dialyzer")))
+    end)
+  end
+
+  defp hidden_notes(hidden, nil), do: hidden
+
+  defp hidden_notes(hidden, _summary),
+    do: Enum.map(hidden, &String.replace(&1, "(--all)", "(complete report)"))
+
+  defp report_link(options) do
+    case Keyword.get(options, :report_path) do
+      path when is_binary(path) -> ["complete findings: #{path}"]
+      _missing -> []
     end
   end
 

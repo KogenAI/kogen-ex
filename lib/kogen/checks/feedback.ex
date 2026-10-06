@@ -7,6 +7,7 @@ defmodule Kogen.Checks.Feedback do
   defdelegate overall_exit_level(results), to: Kogen.Diagnostics
   defdelegate gate(result, spec, paths), to: Kogen.Diagnostics
   defdelegate render_model_feedback(results, changed_ranges), to: Kogen.Diagnostics
+  defdelegate dialyzer_summary(results, paths), to: Kogen.Diagnostics
   defdelegate render_model_feedback(results), to: Kogen.Diagnostics
   defdelegate render_environment_detail(results), to: Kogen.Diagnostics
   defdelegate write_report(results, run_dir), to: Kogen.Diagnostics
