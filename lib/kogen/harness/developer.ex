@@ -26,9 +26,6 @@ defmodule Kogen.Harness.Developer do
   alias Kogen.Tooling.ToolResult
 
   @empty_done_message "Kogen found no changed files. Make the requested change before claiming done."
-  @developer_prompt_source Path.expand("../../../priv/prompts/developer.md", __DIR__)
-  @external_resource @developer_prompt_source
-  @developer_prompt File.read!(@developer_prompt_source)
   @protected_restore_limit 3
 
   @spec run(Opts.t(), String.t(), Plan.t() | nil, map() | nil) ::
@@ -36,7 +33,7 @@ defmodule Kogen.Harness.Developer do
   def run(%Opts{} = opts, intent_text, plan, resume) do
     with :ok <- validate_limits(opts),
          {:ok, transcript_path} <- Recording.path(opts),
-         {:ok, prompt} <- developer_prompt(opts) do
+         {:ok, prompt} <- BuilderPolicy.prompt(opts.builder_tools) do
       initialize(opts, intent_text, plan, resume, transcript_path, prompt)
     end
   end
@@ -328,22 +325,6 @@ defmodule Kogen.Harness.Developer do
            }) do
       {:ok, %{state | items: state.items ++ [Codec.function_output(call.id, result.output)]}}
     end
-  end
-
-  defp developer_prompt(%Opts{builder_tools: :full}), do: {:ok, @developer_prompt}
-
-  defp developer_prompt(%Opts{builder_tools: :shell}) do
-    {:ok,
-     @developer_prompt <>
-       "\n\nShell-only recipe: acceptance tests and the Intent files are read-only, including " <>
-       "when using shell commands or formatters. Inspect with `sed -n`, `grep -n`, or `grep -R`; do not " <>
-       "assume `rg` or a shell `apply_patch` command is installed. Make focused edits with " <>
-       "`python3 - <<'PY'`. Run Elixir commands through `mise exec -- ...` so the pinned Elixir and " <>
-       "Erlang versions are used; a direct Elixir wrapper can fail to find `erl`. Inspect only what " <>
-       "the next decision needs; combine independent related reads and keep output focused. " <>
-       "Emit the command once its arguments are ready. Make one coherent patch, inspect its " <>
-       "result, then proceed. Command text contains executable work only, never deliberation " <>
-       "or progress prose. All file changes must stay inside the worktree."}
   end
 
   defp validate_limits(opts) do
