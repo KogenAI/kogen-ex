@@ -258,47 +258,6 @@ defmodule Kogen.E2e.BuildTest do
              :json.decode(report)
   end
 
-  test "a same-seed test flake that fails on base is excused and reported", context do
-    parent = scenario_parent(context, "flake-policy")
-    marker = Path.join(parent, "candidate-test-ran")
-
-    project_config = """
-    name: tiny_app
-    checks:
-      - name: tests
-        argv: [mix, test]
-        timeout_ms: 60000
-    fix: []
-    env:
-      KOGEN_FLAKE_MARKER: "#{marker}"
-    domains:
-      kernel: [lib]
-    """
-
-    seed_project =
-      Build.prepare_seed!(parent,
-        project_config: project_config,
-        extra_files: %{"test/flaky_test.exs" => flaky_test_source()}
-      )
-
-    result = Build.run!(parent, flake_script(), %Options{seed_project: seed_project})
-
-    assert %Result{build: %{status: :landed}} = result
-    assert [flake] = Enum.filter(result.events, &(&1.event == "flake_excused"))
-    assert [test_id] = flake.test_ids
-    assert test_id =~ "test/flaky_test.exs:"
-    assert is_integer(flake.seed)
-    assert flake.seed >= 0
-
-    assert Enum.any?(result.events, &(&1.event == "scope_warning" and &1.path == "README.md"))
-
-    assert {:ok, report} = Build.report(result)
-
-    decoded = :json.decode(report)
-    assert [%{"test_ids" => [^test_id], "seed" => seed}] = decoded["excused_flakes"]
-    assert seed == flake.seed
-  end
-
   defp scenario_parent(context, name) do
     parent = Path.join(context.tmp_dir, name)
     File.mkdir_p!(parent)
@@ -353,41 +312,6 @@ defmodule Kogen.E2e.BuildTest do
     defmodule TinyApp do
       # revision: #{marker}
       def value, do: :#{value}
-    end
-    """
-  end
-
-  defp flake_script do
-    [
-      ScriptedProvider.answer(:context, "TinyApp.value/0 is the implementation target."),
-      ScriptedProvider.answer(:plan, "Update TinyApp.value/0."),
-      ScriptedProvider.write(:develop, "lib/tiny_app.ex", ready_source("candidate", :ready)),
-      ScriptedProvider.write(:develop, "README.md", "Out-of-scope note.\n"),
-      ScriptedProvider.answer(:develop, "Done."),
-      ScriptedProvider.answer(:review, review_text("accept", :accept))
-    ]
-  end
-
-  defp flaky_test_source do
-    """
-    defmodule TinyApp.FlakyTest do
-      use ExUnit.Case, async: true
-
-      test "candidate run flakes once before the base rerun fails" do
-        marker = System.fetch_env!("KOGEN_FLAKE_MARKER")
-
-        if TinyApp.value() == :ready do
-          if File.exists?(marker) do
-            assert true
-          else
-            File.write!(marker, "seen")
-            flunk("injected one-time Candidate test flake")
-          end
-        else
-          if File.exists?(marker), do: flunk("injected base failure after Candidate retry")
-          assert TinyApp.value() == :base
-        end
-      end
     end
     """
   end

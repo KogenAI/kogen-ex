@@ -1,6 +1,9 @@
 defmodule Kogen.Testkit.IntentFixture do
   @moduledoc "Builds Intent sources and parsed Intents for tests."
 
+  @spec parse(binary(), Path.t()) :: {:ok, Kogen.Contracts.Intent.t()} | {:error, term()}
+  def parse(source, path), do: Kogen.Intent.parse_binary(source, path)
+
   def source(attributes \\ %{}) do
     attributes = Map.merge(defaults(), Map.new(attributes))
     acceptance = Enum.map_join(attributes.items, "\n", fn {id, text} -> "- #{id}: #{text}" end)

@@ -8,7 +8,7 @@ defmodule Kogen.Harness.GateTest do
   alias Kogen.Harness.Gate
   alias Kogen.Harness.Opts
 
-  test "same-seed failed-test rerun is excused when the Candidate diff does not reach it", %{
+  test "same-seed failed-test rerun is excused only with matching base evidence", %{
     tmp_dir: tmp_dir
   } do
     write_test_source!(tmp_dir)
@@ -17,7 +17,7 @@ defmodule Kogen.Harness.GateTest do
     base_argv =
       fn argv, _timeout ->
         Process.put(:gate_base_argv, argv)
-        {:ok, process_result(argv, 0, "1 test, 0 failures")}
+        {:ok, process_result(argv, 1, failed_output())}
       end
 
     opts = options(tmp_dir, base_argv, fn -> {:ok, ["README.md"]} end)

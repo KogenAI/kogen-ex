@@ -42,7 +42,10 @@ defmodule Kogen.State do
   defdelegate start_run(root, approval), to: Operations
 
   @spec record(Run.t(), map()) :: :ok | {:error, term()}
-  defdelegate record(run, event), to: Operations
+  def record(run, %{event: kind} = event) when kind in [:flake_classified, :flake_excused],
+    do: Kogen.State.Flakes.record(run, event)
+
+  def record(run, event), do: Operations.record(run, event)
 
   @doc "Measures an operation and records its phase timing, including when it raises."
   @spec measure_phase(Run.t(), String.t(), String.t(), (-> result)) :: result when result: term()

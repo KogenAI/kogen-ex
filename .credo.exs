@@ -137,6 +137,7 @@
                Kogen.Checks.Ledger,
                Kogen.State.ApprovalBaselineCodec,
                Kogen.State.Json,
+               Kogen.State.Flakes.Codec,
                Kogen.Kernel.CLI.ShapeJson,
                Kogen.Runner.Auditor
              ]
@@ -176,7 +177,9 @@
                  Kogen.Workspace,
                  Kogen.Project
                ],
+               Kogen.Flakes => [Kogen.Checks, Kogen.Workspace],
                Kogen.Harness => [
+                 Kogen.Flakes,
                  Kogen.Quality,
                  Kogen.Checks,
                  Kogen.Proc,

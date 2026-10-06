@@ -5,15 +5,12 @@ defmodule Kogen.Harness.Gate do
   alias Kogen.Contracts.CheckBaseline
   alias Kogen.Contracts.CheckOutput
   alias Kogen.Contracts.CheckSpec
-  alias Kogen.Contracts.ProcResult
   alias Kogen.Harness.Gate.Arguments
   alias Kogen.Harness.Gate.CommandRunner
   alias Kogen.Harness.Gate.TestCount
   alias Kogen.Harness.GateCommand
   alias Kogen.Harness.GateResult
   alias Kogen.Harness.Opts
-
-  @max_excused_tests 2
 
   @spec run(Opts.t(), integer()) :: {:ok, GateResult.t()} | {:error, term()}
   def run(%Opts{} = opts, deadline) do
@@ -100,13 +97,7 @@ defmodule Kogen.Harness.Gate do
           if base_red_command?(opts, spec, command) do
             {command, []}
           else
-            classify_test_failure(opts, spec, %{
-              command: command,
-              argv: spec.argv,
-              deadline: deadline,
-              seed: seed,
-              test_ids: test_ids
-            })
+            classify_failure(opts, spec, command, {argv, deadline, seed, test_ids})
           end
 
         _other ->
@@ -120,137 +111,26 @@ defmodule Kogen.Harness.Gate do
   defp run_spec(opts, %CheckSpec{} = spec, deadline, kind),
     do: {run_command(opts, spec, spec.argv, deadline, kind, ""), []}
 
+  defp classify_failure(opts, spec, command, {argv, deadline, seed, test_ids}) do
+    classification = %{
+      command: command,
+      argv: argv,
+      retry_argv: Arguments.retry_argv(argv, test_ids, seed),
+      deadline: deadline,
+      seed: seed,
+      test_ids: test_ids
+    }
+
+    Kogen.Flakes.classify(opts, spec, classification, fn retry_argv, retry_deadline, suffix ->
+      run_command(opts, spec, retry_argv, retry_deadline, :check, suffix)
+    end)
+  end
+
   defp base_red_command?(opts, spec, command) do
     command
     |> assess_result(spec, opts.workdir)
     |> CheckBaseline.annotate(opts.check_baseline)
     |> Map.get(:base_red?, false)
-  end
-
-  defp classify_test_failure(opts, spec, classification) do
-    %{command: original, argv: argv, deadline: deadline, seed: seed, test_ids: test_ids} =
-      classification
-
-    retry_argv = Arguments.retry_argv(argv, test_ids, seed)
-    retry = run_command(opts, spec, retry_argv, deadline, :check, "-retry")
-
-    if command_passed?(retry) do
-      classify_on_base(
-        opts,
-        spec,
-        Map.merge(classification, %{retry: retry, retry_argv: retry_argv})
-      )
-    else
-      retry_ids = Feedback.failed_test_ids(retry.output, opts.workdir)
-
-      if same_test_ids?(test_ids, retry_ids) and
-           base_red?(opts, retry_argv, deadline, spec.timeout_ms, test_ids) do
-        detail =
-          "Environment failure (base-red): the same ExUnit failures reproduced on the clean " <>
-            "base under the configured sandbox; skipped Developer repair for " <>
-            "#{inspect(test_ids)}."
-
-        {%{original | base_red?: true, output: original.output <> "\n" <> detail}, []}
-      else
-        detail =
-          "\nSame-seed rerun still failed: #{inspect(test_ids)} (seed #{seed}).\n#{retry.output}"
-
-        {%{original | output: original.output <> detail}, []}
-      end
-    end
-  end
-
-  defp same_test_ids?(left, right) do
-    left != [] and MapSet.new(left) == MapSet.new(right)
-  end
-
-  defp base_red?(opts, argv, deadline, timeout_ms, test_ids) do
-    case run_base_test(opts, argv, deadline, timeout_ms) do
-      {:ok, %ProcResult{exit_status: status, timed_out: false, output_tail: output}}
-      when is_integer(status) and status != 0 ->
-        base_failed_ids = Feedback.failed_test_ids(output, opts.workdir)
-        same_test_ids?(test_ids, base_failed_ids)
-
-      _other ->
-        false
-    end
-  end
-
-  defp classify_on_base(opts, spec, classification) do
-    %{
-      command: original,
-      deadline: deadline,
-      seed: seed,
-      test_ids: test_ids,
-      retry: retry,
-      retry_argv: retry_argv
-    } = classification
-
-    base_result = run_base_test(opts, retry_argv, deadline, spec.timeout_ms)
-    base_failed_ids = base_failure_ids(base_result, opts.workdir)
-    changed_paths = changed_paths(opts)
-
-    eligible =
-      Enum.filter(test_ids, fn test_id ->
-        test_id in base_failed_ids or
-          not Kogen.Quality.TestReach.reached?(opts, test_id, changed_paths)
-      end)
-
-    excused = fit_excusal_cap(eligible, opts.flake_excused_test_ids)
-    real_failures = test_ids -- excused
-    event = if excused == [], do: [], else: [%{test_ids: excused, seed: seed}]
-
-    if real_failures == [] do
-      detail =
-        "\nSame-seed rerun passed for #{inspect(test_ids)}; base/unreached tests excused " <>
-          "with seed #{seed}.\n#{retry.output}"
-
-      {%{original | exit_status: 0, timed_out: false, output: original.output <> detail}, event}
-    else
-      detail =
-        "\nSame-seed rerun passed, but these tests remain Candidate failures: " <>
-          "#{inspect(real_failures)} (seed #{seed}).\n#{retry.output}"
-
-      {%{original | output: original.output <> detail}, event}
-    end
-  end
-
-  defp run_base_test(%Opts{base_test: base_test}, argv, deadline, timeout_ms)
-       when is_function(base_test, 2) do
-    remaining_ms = max(deadline - System.monotonic_time(:millisecond), 0)
-
-    if remaining_ms == 0 do
-      {:error, :deadline_reached}
-    else
-      base_test.(argv, min(timeout_ms, remaining_ms))
-    end
-  end
-
-  defp run_base_test(_opts, _argv, _deadline, _timeout_ms), do: {:error, :base_test_unavailable}
-
-  defp base_failure_ids(
-         {:ok, %ProcResult{output_tail: output, exit_status: status, timed_out: timed_out}},
-         workdir
-       )
-       when timed_out or status != 0, do: Feedback.failed_test_ids(output, workdir)
-
-  defp base_failure_ids(_result, _workdir), do: []
-
-  defp changed_paths(%Opts{changed_paths: changed_paths}) when is_function(changed_paths, 0) do
-    case changed_paths.() do
-      {:ok, paths} when is_list(paths) -> paths
-      _error -> :unknown
-    end
-  end
-
-  defp changed_paths(_opts), do: :unknown
-
-  defp fit_excusal_cap(eligible, previously_excused) do
-    previous = MapSet.new(previously_excused)
-    repeat = Enum.filter(eligible, &MapSet.member?(previous, &1))
-    new = Enum.reject(eligible, &MapSet.member?(previous, &1))
-    available = max(@max_excused_tests - MapSet.size(previous), 0)
-    repeat ++ Enum.take(new, available)
   end
 
   defp mix_test?([executable, "test" | _args]), do: Path.basename(executable) == "mix"
@@ -296,7 +176,4 @@ defmodule Kogen.Harness.Gate do
   defp run_argv(opts, spec, argv, timeout_ms, kind, suffix) do
     CommandRunner.run(opts, spec, argv, timeout_ms, kind, suffix)
   end
-
-  defp command_passed?(%GateCommand{exit_status: 0, timed_out: false}), do: true
-  defp command_passed?(_command), do: false
 end

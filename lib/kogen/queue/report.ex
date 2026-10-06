@@ -76,6 +76,16 @@ defmodule Kogen.Queue.Report do
       {"acceptance_results", event_payload(events, "acceptance_result", :ledger, [])},
       {"check_receipts", event_payload(events, "check_result", :receipts, [])},
       {"excused_flakes", excused_flakes(events)},
+      {"flake_evidence",
+       for(event <- events, event.event == "flake_classified", do: event.detail)},
+      {"flake_metrics", event_payload(events, "flake_metrics", :metrics, %{})},
+      {"flake_fix_failures",
+       for(event <- events, event.event == "flake_fix_failed", do: event.reason)},
+      {"flake_fix_intents",
+       (
+         for_result = for(event <- events, event.event == "flake_fix_drafted", do: event.path)
+         Enum.uniq(for_result)
+       )},
       {"candidate_diffs", candidate_diffs(run, events)},
       {"red_checks", latest_candidate_value(events, :red_checks, [])},
       {"acceptance_items", latest_candidate_value(events, :acceptance_items, [])},
@@ -289,7 +299,11 @@ defmodule Kogen.Queue.Report do
 
   defp excused_flakes(events) do
     for %Event{event: "flake_excused"} = event <- events do
-      json_object([{"test_ids", event.test_ids}, {"seed", event.seed}])
+      json_object([
+        {"test_ids", event.test_ids},
+        {"seed", event.seed},
+        {"evidence", event.detail || :null}
+      ])
     end
   end
 

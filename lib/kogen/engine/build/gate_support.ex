@@ -241,9 +241,8 @@ defmodule Kogen.Engine.Build.GateSupport do
   def record_gate_flakes(%Session{} = session, gate) when is_map(gate) do
     gate
     |> Map.get(:flake_excused, [])
-    |> Enum.reduce_while({:ok, []}, fn %{test_ids: test_ids, seed: seed} = flake,
-                                       {:ok, recorded} ->
-      case State.record(session.run, %{event: :flake_excused, test_ids: test_ids, seed: seed}) do
+    |> Enum.reduce_while({:ok, []}, fn flake, {:ok, recorded} ->
+      case State.record(session.run, Map.put(flake, :event, :flake_excused)) do
         :ok -> {:cont, {:ok, [flake | recorded]}}
         {:error, reason} -> {:halt, {:error, reason}}
       end
