@@ -33,6 +33,7 @@ defmodule Kogen.Quality.Analysis do
 
       [
         Suppressions.run(request, sources),
+        Kogen.Quality.Mutation.run(request, paths),
         optional(:ex_dna, dependencies, fn -> Clones.run(request, sources) end),
         optional(:reach, dependencies, fn -> Reach.run(request, paths) end)
       ]

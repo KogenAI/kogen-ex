@@ -2,7 +2,7 @@ defmodule Kogen.Quality do
   @moduledoc "Deterministic Elixir gate checks and optional advice scoped to a Build's base."
   use Boundary,
     deps: [Kogen.Contracts, Kogen.Proc, Kogen.Workspace],
-    exports: [Request, Source.ExternalResource, Source.MapShapes]
+    exports: [TestReach, Request, Source.ExternalResource, Source.MapShapes]
 
   alias Kogen.Contracts.CheckBaseline
   alias Kogen.Quality.Analysis

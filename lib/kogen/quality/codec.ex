@@ -24,6 +24,9 @@ defmodule Kogen.Quality.Codec do
   alias Kogen.Quality.Clone
   alias Kogen.Quality.Fragment
 
+  @spec test_env(map()) :: map()
+  def test_env(env), do: Map.put(env, "MIX_ENV", "test")
+
   @spec clones(map()) :: [Clone.t()]
   def clones(%{"clones" => clones}) when is_list(clones) do
     Enum.map(clones, fn %{"type" => type, "snippets" => snippets, "fragments" => fragments} ->

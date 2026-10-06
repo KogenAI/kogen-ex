@@ -239,6 +239,7 @@ defmodule Kogen.Harness.Developer do
               :environment -> :gate_environment
             end
 
+          state = Kogen.Harness.MutationAdvice.deliver(opts, gate, state)
           {:ok, result(outcome, gate, state)}
         end
 
