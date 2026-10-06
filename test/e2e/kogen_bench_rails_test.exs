@@ -50,15 +50,14 @@ defmodule Kogen.E2e.KogenBenchRailsTest do
     home = Path.join(root, "home")
     File.mkdir_p!(home)
     runtime = RailsFixture.runtime!(work, home)
-    fake_mise!(runtime.mise, runtime.base_env["PATH"])
-    # runtime's fixture-only shim is ignored by Git and forwards actual Ruby commands.
+    ruby_bin = runtime.base_env["PATH"] |> String.split(":") |> hd()
     fake = Path.join(root, "fake-kogen")
     File.write!(fake, fake_kogen())
     File.chmod!(fake, 0o755)
 
     env =
       Map.merge(runtime.base_env, %{
-        "PATH" => Path.dirname(runtime.mise) <> ":" <> runtime.base_env["PATH"],
+        "PATH" => ruby_bin <> ":/usr/bin:/bin",
         "KOGEN_BIN" => fake,
         "KOGEN_BENCH_CAPTURE" => capture,
         "KOGEN_BENCH_INTENT_SOURCE" => "raw",
@@ -85,6 +84,7 @@ defmodule Kogen.E2e.KogenBenchRailsTest do
     assert Enum.map(project.checks, & &1.name) == ["tests"]
     assert "rails" in hd(project.checks).argv
     refute "mix" in hd(project.checks).argv
+    refute "mise" in hd(project.checks).argv
     assert Enum.any?(project.setup, &(&1.name == "bundle-install"))
     assert project.setup_outputs == []
     assert project.env["GEM_HOME"] == Path.join(root, "gem-home")
@@ -93,21 +93,6 @@ defmodule Kogen.E2e.KogenBenchRailsTest do
     assert File.read!(Path.join(capture, "rails-tests.log")) =~ "0 failures, 0 errors"
     assert Git.git!(work, ["status", "--porcelain"]) == ""
     assert File.read!(Path.join(work, "config/fixture.txt")) == "before\n"
-  end
-
-  defp fake_mise!(path, tools_path) do
-    File.write!(path, """
-    #!/bin/sh
-    if [ "$1" = exec ]; then
-      shift
-      [ "$1" != -- ] || shift
-      exec "$@"
-    elif [ "$1" = env ]; then
-      printf '%s\\n' '#{%{"PATH" => tools_path} |> :json.encode() |> IO.iodata_to_binary()}'
-    else
-      exit 64
-    fi
-    """)
   end
 
   defp fake_kogen do

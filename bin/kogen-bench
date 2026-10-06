@@ -351,11 +351,12 @@ if mise_config:
         raise SystemExit("KOGEN_BENCH_MISE_CONFIG requires mise on PATH")
     env["MISE_CONFIG_FILE"] = mise_config
 
-prefix = ["mise", "exec", "--"] if mise_path else []
-if not prefix and not (env.get("PATH") and shutil.which("mix", path=env["PATH"])):
-    prefix = ["mise", "exec", "--"]
 project_root = os.path.dirname(os.path.dirname(target_path))
 rails = os.path.isfile(os.path.join(project_root, "Gemfile")) and os.path.isfile(os.path.join(project_root, "config/application.rb"))
+prefix = ["mise", "exec", "--"] if mise_path else []
+runtime_available = shutil.which("ruby", path=env.get("PATH") or os.environ.get("PATH")) if rails else env.get("PATH") and shutil.which("mix", path=env["PATH"])
+if not prefix and not runtime_available:
+    prefix = ["mise", "exec", "--"]
 raw_setup = document.get("setup")
 if rails:
     # The public environment patch is part of the task base, before approval hashes it.

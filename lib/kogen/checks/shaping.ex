@@ -168,10 +168,10 @@ defmodule Kogen.Checks.Shaping do
   end
 
   defp stage_test(workdir, slug, contents) do
-    path = Path.join(workdir, Stack.acceptance_test(workdir, slug))
-
     with :ok <- valid_stage_target(workdir, slug),
          {:ok, created_dirs} <- ensure_directories(workdir) do
+      path = Path.join(workdir, Stack.acceptance_test(workdir, slug))
+
       case write_stage(path, contents) do
         {:ok, restore} ->
           {:ok, %StageFile{path: path, restore: restore, created_dirs: created_dirs}}
