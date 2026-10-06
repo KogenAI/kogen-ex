@@ -79,7 +79,16 @@ defmodule Kogen.Testkit.Rails do
     )
 
     File.write!(Path.join(root, ".mise.toml"), "[tools]\nruby = \"3.4.8\"\n")
+    write_ignores(root)
 
+    Git.git!(root, ["init", "--quiet", "--template="])
+    Git.git!(root, ["add", "--all"])
+    Git.git!(root, ["commit", "--quiet", "-m", "Seed offline Rails application"])
+    Git.git!(root, ["branch", "-M", "main"])
+    root
+  end
+
+  defp write_ignores(root) do
     File.write!(
       Path.join(root, ".gitignore"),
       root
@@ -88,12 +97,6 @@ defmodule Kogen.Testkit.Rails do
       |> String.replace(["vendor/bundle/\n", ".kogen/bundle/\n"], "")
       |> Kernel.<>("deps/\n_build/\n.test-bin/\n")
     )
-
-    Git.git!(root, ["init", "--quiet", "--template="])
-    Git.git!(root, ["add", "--all"])
-    Git.git!(root, ["commit", "--quiet", "-m", "Seed offline Rails application"])
-    Git.git!(root, ["branch", "-M", "main"])
-    root
   end
 
   defp ruby_path do
