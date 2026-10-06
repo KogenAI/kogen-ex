@@ -172,8 +172,18 @@ defmodule Kogen.Harness.ContinuationTest do
           {{:ok, tool("printf fixed > result.txt", "edit")}, %{state | investigations: 13}}
 
         true ->
-          {{:ok, message("Done")}, %{state | investigations: 12}}
+          {{:ok, finish()}, %{state | investigations: 12}}
       end
+    end
+
+    defp finish do
+      %ModelResponse{
+        id: "finish",
+        text: "",
+        tool_calls: [%ToolCall{id: "finish", name: "finish", arguments: %{}}],
+        usage: %{},
+        raw_items: []
+      }
     end
 
     defp checkpoint_reply(state) do

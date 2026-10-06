@@ -22,13 +22,13 @@ defmodule Kogen.E2e.CheckLearningTest do
       ScriptedProvider.answer(:context, "TinyApp.value/0 is the target."),
       ScriptedProvider.answer(:plan, "Implement the approved ready value."),
       ScriptedProvider.write(:develop, "lib/tiny_app.ex", source("first")),
-      ScriptedProvider.answer(:develop, "Done."),
+      ScriptedProvider.finish(),
       ScriptedProvider.answer(:review, revise),
       ScriptedProvider.write(:develop, "lib/tiny_app.ex", source("second")),
-      ScriptedProvider.answer(:develop, "Done after first repair."),
+      ScriptedProvider.finish(),
       ScriptedProvider.answer(:review, revise),
       ScriptedProvider.write(:develop, "lib/tiny_app.ex", source("third")),
-      ScriptedProvider.answer(:develop, "Done after second repair."),
+      ScriptedProvider.finish(),
       ScriptedProvider.answer(:review, ~s({"verdict":"accept","findings":[]}))
     ]
 

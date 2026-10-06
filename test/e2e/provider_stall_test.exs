@@ -26,7 +26,7 @@ defmodule Kogen.E2e.ProviderStallTest do
       ScriptedProvider.stall(:develop),
       ScriptedProvider.write(:develop, "lib/tiny_app.ex", source),
       ScriptedProvider.stall(:develop),
-      ScriptedProvider.answer(:develop, "Done.")
+      ScriptedProvider.finish()
     ]
 
     result =
@@ -87,6 +87,6 @@ defmodule Kogen.E2e.ProviderStallTest do
     |> File.read!()
     |> String.split("\n", trim: true)
     |> Enum.map(&:json.decode/1)
-    |> Enum.filter(&(&1["record_kind"] == "model_request"))
+    |> Enum.filter(&(&1["record_kind"] == "model_request" and is_integer(&1["started_at"])))
   end
 end

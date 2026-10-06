@@ -252,7 +252,7 @@ defmodule Kogen.E2e.LandingTest do
       ScriptedProvider.answer(:context, "TinyApp.value/0 is the implementation target."),
       ScriptedProvider.answer(:plan, "Update TinyApp.value/0."),
       ScriptedProvider.write(:develop, "lib/tiny_app.ex", ready_source()),
-      ScriptedProvider.answer(:develop, "Done."),
+      ScriptedProvider.finish(),
       ScriptedProvider.answer(:review, ~s({"verdict":"accept","findings":[]}))
     ]
   end

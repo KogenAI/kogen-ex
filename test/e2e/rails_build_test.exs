@@ -44,7 +44,7 @@ defmodule Kogen.E2e.RailsBuildTest do
           {".kogen/acceptance/#{@slug}_test.rb", acceptance()}
         ]),
         ScriptedProvider.write(:develop, @controller, source),
-        ScriptedProvider.answer(:develop, "Done.")
+        ScriptedProvider.finish()
       ])
 
     on_exit(fn -> if Process.alive?(server), do: GenServer.stop(server) end)

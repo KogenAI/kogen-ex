@@ -17,7 +17,7 @@ defmodule Kogen.E2e.BaseCheckBaselineTest do
 
     script = [
       ScriptedProvider.write(:develop, "lib/tiny_app.ex", ready_source()),
-      ScriptedProvider.answer(:develop, "Done.")
+      ScriptedProvider.finish()
     ]
 
     result =

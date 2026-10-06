@@ -65,6 +65,9 @@ defmodule Kogen.E2e.ScriptedProvider do
   def answer(stage, text) when stage in @known_stages and is_binary(text),
     do: %Step{stage: stage, text: text, calls: []}
 
+  @spec finish() :: Step.t()
+  def finish, do: tool_step(:develop, "finish", %{})
+
   @doc "Answers the stage's request with a provider error of `class`."
   @spec fail(Step.stage(), ProviderError.class()) :: Step.t()
   def fail(stage, class) when stage in @known_stages and is_atom(class),
@@ -201,10 +204,10 @@ defmodule Kogen.E2e.ScriptedProvider do
       String.contains?(instructions, "advisory code reviewer") ->
         {:ok, :review}
 
-      tool_names == ["shell", "tool_output"] ->
+      tool_names == ["shell", "tool_output", "finish"] ->
         {:ok, :develop}
 
-      tool_names == ["read", "search", "edit", "write", "shell", "tool_output"] ->
+      tool_names == ["read", "search", "edit", "write", "shell", "tool_output", "finish"] ->
         {:ok, :develop}
 
       true ->

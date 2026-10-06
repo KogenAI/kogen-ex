@@ -38,7 +38,7 @@ defmodule Kogen.E2e.Ladder do
   def shell(command), do: ScriptedProvider.call(:develop, "shell", %{"cmd" => command})
 
   @spec done() :: ScriptedProvider.Step.t()
-  def done, do: ScriptedProvider.answer(:develop, "Done.")
+  def done, do: ScriptedProvider.finish()
 
   @spec events(Result.t(), String.t()) :: [Event.t()]
   def events(result, name), do: Enum.filter(result.events, &(&1.event == name))

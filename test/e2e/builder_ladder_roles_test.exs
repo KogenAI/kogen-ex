@@ -186,6 +186,6 @@ defmodule Kogen.E2e.BuilderLadderRolesTest do
     |> File.read!()
     |> String.split("\n", trim: true)
     |> Enum.map(&:json.decode/1)
-    |> Enum.filter(&(&1["record_kind"] == "model_request"))
+    |> Enum.filter(&(&1["record_kind"] == "model_request" and is_integer(&1["started_at"])))
   end
 end

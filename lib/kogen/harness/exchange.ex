@@ -31,6 +31,7 @@ defmodule Kogen.Harness.Exchange do
   alias Kogen.Contracts.ModelRequest
   alias Kogen.Contracts.ModelResponse
   alias Kogen.Contracts.ProviderError
+  alias Kogen.Conversation.BuilderPolicy
   alias Kogen.Harness.Codec
   alias Kogen.Harness.Exchange.Request
   alias Kogen.Harness.Opts
@@ -100,6 +101,10 @@ defmodule Kogen.Harness.Exchange do
         tags: opts.request_tags,
         settings: request_settings(opts, request)
       })
+      |> Map.put(
+        :request_shape,
+        BuilderPolicy.request_metrics(exchange_request.tool_names, result)
+      )
 
     with {:ok, transcript_path} <- Recording.path(opts) do
       case RequestLog.append(

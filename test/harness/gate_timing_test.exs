@@ -102,7 +102,7 @@ defmodule Kogen.Harness.GateTimingTest do
         %Kogen.Contracts.ModelResponse{
           id: "done",
           text: "Done.",
-          tool_calls: [],
+          tool_calls: [%Kogen.Contracts.ToolCall{id: "finish", name: "finish", arguments: %{}}],
           usage: %{},
           raw_items: []
         }

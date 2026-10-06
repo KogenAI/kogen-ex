@@ -87,7 +87,13 @@ defmodule Kogen.Harness.MutationQualificationTest do
 
     provider =
       HarnessScriptedProvider.start([
-        %ModelResponse{id: "fixture", text: "Done.", tool_calls: [], raw_items: [], usage: %{}},
+        %ModelResponse{
+          id: "fixture",
+          text: "",
+          tool_calls: [%Kogen.Contracts.ToolCall{id: "finish", name: "finish", arguments: %{}}],
+          raw_items: [],
+          usage: %{}
+        },
         %ModelResponse{
           id: "fixture",
           text: "Add a zero boundary assertion.",

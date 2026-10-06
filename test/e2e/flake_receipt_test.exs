@@ -80,7 +80,7 @@ defmodule Kogen.E2e.FlakeReceiptTest do
         "defmodule TinyApp do\n  def value, do: :ready\nend\n"
       ),
       ScriptedProvider.write(:develop, "README.md", "Out-of-scope note.\n"),
-      ScriptedProvider.answer(:develop, "Done."),
+      ScriptedProvider.finish(),
       ScriptedProvider.answer(:review, ~s({"verdict":"accept","findings":[]}))
     ]
   end

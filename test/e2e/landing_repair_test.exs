@@ -63,7 +63,7 @@ defmodule Kogen.E2e.LandingRepairTest do
         script() ++
           [
             ScriptedProvider.write(:develop, "repaired.txt", "fixed\n"),
-            ScriptedProvider.answer(:develop, "Repaired the moved-base check."),
+            ScriptedProvider.finish(),
             ScriptedProvider.answer(:review, ~s({"verdict":"accept","findings":[]}))
           ],
         %Options{seed_project: seed, move_base_on: move_file("moved.txt", "new base\n")}
@@ -255,7 +255,7 @@ defmodule Kogen.E2e.LandingRepairTest do
       ScriptedProvider.answer(:context, "Update TinyApp.value/0."),
       ScriptedProvider.answer(:plan, "Return ready."),
       ScriptedProvider.write(:develop, "lib/tiny_app.ex", source(:ready)),
-      ScriptedProvider.answer(:develop, "Done."),
+      ScriptedProvider.finish(),
       ScriptedProvider.answer(:review, ~s({"verdict":"accept","findings":[]}))
     ]
   end
@@ -263,7 +263,7 @@ defmodule Kogen.E2e.LandingRepairTest do
   defp repair do
     [
       ScriptedProvider.write(:develop, "lib/tiny_app.ex", source(:ready)),
-      ScriptedProvider.answer(:develop, "Resolved the conflict."),
+      ScriptedProvider.finish(),
       ScriptedProvider.answer(:review, ~s({"verdict":"accept","findings":[]}))
     ]
   end

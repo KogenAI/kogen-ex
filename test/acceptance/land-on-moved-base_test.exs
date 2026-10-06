@@ -63,7 +63,7 @@ defmodule Kogen.Acceptance.LandOnMovedBaseTest do
         "lib/tiny_app.ex",
         "defmodule TinyApp do\n  # revision: candidate\n  def value, do: :ready\nend\n"
       ),
-      ScriptedProvider.answer(:develop, "Done."),
+      ScriptedProvider.finish(),
       ScriptedProvider.answer(:review, ~s({"verdict":"accept","findings":[]}))
     ]
   end

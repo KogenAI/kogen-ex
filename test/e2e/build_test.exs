@@ -41,7 +41,7 @@ defmodule Kogen.E2e.BuildTest do
 
     script = [
       ScriptedProvider.write(:develop, "lib/tiny_app.ex", ready_source("direct", :ready)),
-      ScriptedProvider.answer(:develop, "Done.")
+      ScriptedProvider.finish()
     ]
 
     result =
@@ -68,7 +68,7 @@ defmodule Kogen.E2e.BuildTest do
 
     script = [
       ScriptedProvider.call(:develop, "shell", %{"cmd" => shell_edit}),
-      ScriptedProvider.answer(:develop, "Done.")
+      ScriptedProvider.finish()
     ]
 
     result =
@@ -86,7 +86,7 @@ defmodule Kogen.E2e.BuildTest do
     assert develop.stage == "develop"
 
     [request, _done_request] = result.provider_requests
-    assert Enum.map(request.tools, & &1["name"]) == ["shell", "tool_output"]
+    assert Enum.map(request.tools, & &1["name"]) == ["shell", "tool_output", "finish"]
     assert request.instructions =~ "sed -n"
     landed_source = Git.git!(result.fixture.origin, ["show", "#{landed_sha}:lib/tiny_app.ex"])
     assert landed_source =~ "def value, do: :ready"
@@ -232,7 +232,7 @@ defmodule Kogen.E2e.BuildTest do
       ScriptedProvider.answer(:plan, "Update TinyApp.value/0."),
       ScriptedProvider.write(:develop, "lib/tiny_app.ex", ready_source("candidate", :ready)),
       ScriptedProvider.write(:develop, "README.md", "Out-of-scope note.\n"),
-      ScriptedProvider.answer(:develop, "Done."),
+      ScriptedProvider.finish(),
       ScriptedProvider.answer(:review, review_text("accept", :accept))
     ]
 
@@ -271,7 +271,7 @@ defmodule Kogen.E2e.BuildTest do
       ScriptedProvider.answer(:context, "TinyApp.value/0 is the implementation target."),
       ScriptedProvider.answer(:plan, "Update TinyApp.value/0."),
       ScriptedProvider.write(:develop, "lib/tiny_app.ex", ready_source("candidate", :ready)),
-      ScriptedProvider.answer(:develop, "Done."),
+      ScriptedProvider.finish(),
       ScriptedProvider.answer(:review, review_text("accept", :accept))
     ]
   end
@@ -281,7 +281,7 @@ defmodule Kogen.E2e.BuildTest do
       ScriptedProvider.answer(:context, "TinyApp.value/0 is the implementation target."),
       ScriptedProvider.answer(:plan, "Update TinyApp.value/0."),
       ScriptedProvider.write(:develop, "lib/tiny_app.ex", ready_source("candidate", :ready)),
-      ScriptedProvider.answer(:develop, "Done."),
+      ScriptedProvider.finish(),
       ScriptedProvider.answer(:review, review_text("revise once", :revise)),
       ScriptedProvider.edit(
         :develop,
@@ -289,7 +289,7 @@ defmodule Kogen.E2e.BuildTest do
         "# revision: candidate",
         "# revision: reviewed"
       ),
-      ScriptedProvider.answer(:develop, "Done after repair."),
+      ScriptedProvider.finish(),
       ScriptedProvider.answer(:review, review_text("accept", :accept))
     ]
   end
@@ -299,11 +299,11 @@ defmodule Kogen.E2e.BuildTest do
       ScriptedProvider.answer(:context, "TinyApp.value/0 is the implementation target."),
       ScriptedProvider.answer(:plan, "Update TinyApp.value/0."),
       ScriptedProvider.write(:develop, "lib/tiny_app.ex", ready_source("zero", :wrong)),
-      ScriptedProvider.answer(:develop, "Done."),
+      ScriptedProvider.finish(),
       ScriptedProvider.edit(:develop, "lib/tiny_app.ex", "revision: zero", "revision: one"),
-      ScriptedProvider.answer(:develop, "Done after repair one."),
+      ScriptedProvider.finish(),
       ScriptedProvider.edit(:develop, "lib/tiny_app.ex", "revision: one", "revision: two"),
-      ScriptedProvider.answer(:develop, "Done after repair two.")
+      ScriptedProvider.finish()
     ]
   end
 

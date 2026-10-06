@@ -21,8 +21,8 @@ defmodule Kogen.E2e.DirectEscalationTest do
 
     script = [
       ScriptedProvider.write(:develop, "lib/tiny_app.ex", source("luna", :wrong)),
-      ScriptedProvider.answer(:develop, "Done."),
-      ScriptedProvider.answer(:develop, "Done.")
+      ScriptedProvider.finish(),
+      ScriptedProvider.finish()
     ]
 
     result =
@@ -92,11 +92,11 @@ defmodule Kogen.E2e.DirectEscalationTest do
 
     script = [
       ScriptedProvider.write(:develop, "lib/tiny_app.ex", source("luna", :wrong)),
-      ScriptedProvider.answer(:develop, "Done."),
-      ScriptedProvider.answer(:develop, "Done."),
+      ScriptedProvider.finish(),
+      ScriptedProvider.finish(),
       ScriptedProvider.write(:develop, "lib/tiny_app.ex", source("sol", :still_wrong)),
-      ScriptedProvider.answer(:develop, "Done."),
-      ScriptedProvider.answer(:develop, "Done.")
+      ScriptedProvider.finish(),
+      ScriptedProvider.finish()
     ]
 
     result =
@@ -133,10 +133,10 @@ defmodule Kogen.E2e.DirectEscalationTest do
 
     script = [
       ScriptedProvider.write(:develop, "lib/tiny_app.ex", source("luna", :wrong)),
-      ScriptedProvider.answer(:develop, "Done."),
-      ScriptedProvider.answer(:develop, "Done."),
+      ScriptedProvider.finish(),
+      ScriptedProvider.finish(),
       ScriptedProvider.write(:develop, "lib/tiny_app.ex", source("sol", :ready)),
-      ScriptedProvider.answer(:develop, "Done.")
+      ScriptedProvider.finish()
     ]
 
     result =
@@ -205,10 +205,10 @@ defmodule Kogen.E2e.DirectEscalationTest do
 
     script = [
       shell_edit("luna", :wrong),
-      ScriptedProvider.answer(:develop, "Done."),
-      ScriptedProvider.answer(:develop, "Done."),
+      ScriptedProvider.finish(),
+      ScriptedProvider.finish(),
       shell_edit("sol", :ready),
-      ScriptedProvider.answer(:develop, "Done.")
+      ScriptedProvider.finish()
     ]
 
     result =
@@ -226,7 +226,8 @@ defmodule Kogen.E2e.DirectEscalationTest do
 
     assert Enum.all?(
              result.provider_requests,
-             &(Enum.map(&1.tools, fn tool -> tool["name"] end) == ["shell", "tool_output"])
+             &(Enum.map(&1.tools, fn tool -> tool["name"] end) ==
+                 ["shell", "tool_output", "finish"])
            )
 
     assert [escalation] = Enum.filter(result.events, &(&1.event == "escalation_started"))

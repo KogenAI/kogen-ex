@@ -24,7 +24,7 @@ defmodule Kogen.E2e.PlanShellTest do
     script = [
       ScriptedProvider.answer(:plan, plan_text),
       ScriptedProvider.call(:develop, "shell", %{"cmd" => shell_edit}),
-      ScriptedProvider.answer(:develop, "Done.")
+      ScriptedProvider.finish()
     ]
 
     options = %Options{
@@ -77,7 +77,7 @@ defmodule Kogen.E2e.PlanShellTest do
            ) == 1
 
     assert {builder_edit.model, builder_edit.effort} == {"gpt-6-luna", "max"}
-    assert Enum.map(builder_edit.tools, & &1["name"]) == ["shell", "tool_output"]
+    assert Enum.map(builder_edit.tools, & &1["name"]) == ["shell", "tool_output", "finish"]
 
     builder_text = user_text(builder_edit)
     assert builder_text =~ "Approved Intent:\n#{intent}"

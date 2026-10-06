@@ -9,7 +9,7 @@ defmodule Kogen.Harness.Codec do
   alias Kogen.Tooling.Codec, as: ToolingCodec
   alias Kogen.Tooling.ToolArgs
 
-  @type tool_name :: ToolingCodec.tool_name()
+  @type tool_name :: ToolingCodec.tool_name() | :finish
   @type builder_tool_set :: ToolingCodec.builder_tool_set()
 
   @spec request(String.t(), String.t(), String.t(), [map()], [tool_name()]) :: ModelRequest.t()
@@ -19,7 +19,7 @@ defmodule Kogen.Harness.Codec do
       effort: effort,
       instructions: instructions,
       input: input,
-      tools: ToolingCodec.tool_specs(tool_names),
+      tools: tool_specs(tool_names),
       previous_response_id: nil
     }
   end
@@ -37,10 +37,33 @@ defmodule Kogen.Harness.Codec do
     do: %{"type" => "function_call_output", "call_id" => call_id, "output" => output}
 
   @spec tool_names(:developer | :context | :shaper) :: [tool_name()]
+  def tool_names(:developer), do: tool_names(:developer, :full)
   def tool_names(stage), do: ToolingCodec.tool_names(stage)
 
   @spec tool_names(:developer, builder_tool_set()) :: [tool_name()]
-  def tool_names(:developer, tool_set), do: ToolingCodec.tool_names(:developer, tool_set)
+  def tool_names(:developer, tool_set),
+    do: ToolingCodec.tool_names(:developer, tool_set) ++ [:finish]
+
+  defp finish_spec do
+    %{
+      "type" => "function",
+      "name" => "finish",
+      "description" =>
+        "Request Kogen's completion gate after implementing the entire approved Intent. Call alone with empty arguments. A failed gate resumes the Build.",
+      "parameters" => %{
+        "type" => "object",
+        "properties" => %{},
+        "required" => [],
+        "additionalProperties" => false
+      },
+      "strict" => true
+    }
+  end
+
+  defp tool_specs(names) do
+    ToolingCodec.tool_specs(names) ++
+      if(:finish in names, do: [finish_spec()], else: [])
+  end
 
   @spec decode_tool_call(ToolCall.t()) :: {:ok, ToolArgs.t()} | {:error, :invalid_arguments}
   def decode_tool_call(call), do: ToolingCodec.decode_tool_call(call)

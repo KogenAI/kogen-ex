@@ -51,7 +51,7 @@ defmodule Kogen.Acceptance.ReviewFullDiffTest do
         "lib/tiny_app/added.ex",
         "defmodule TinyApp.Added do\n  # ADDED_FILE_MARKER\n  def ok, do: :ok\nend\n"
       ),
-      ScriptedProvider.answer(:develop, "Done."),
+      ScriptedProvider.finish(),
       ScriptedProvider.answer(:review, ~s({"verdict":"accept","findings":[]}))
     ]
   end

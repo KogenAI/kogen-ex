@@ -90,7 +90,7 @@ defmodule Kogen.E2e.FinalFixPassTest do
         "lib/tiny_app.ex",
         "defmodule TinyApp do\n def value, do: :ready\nend\n"
       ),
-      ScriptedProvider.answer(:develop, "Done."),
+      ScriptedProvider.finish(),
       ScriptedProvider.answer(:review, ~s({"verdict":"accept","findings":[]}))
     ]
   end

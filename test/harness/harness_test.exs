@@ -30,7 +30,9 @@ defmodule Kogen.Harness.Tests do
   """
 
   test "Developer edits through a tool and finishes at a green gate", %{tmp_dir: tmp_dir} do
-    provider = ScriptedProvider.start([edit_call("fixture", "built"), message("Done.")])
+    provider =
+      ScriptedProvider.start([edit_call("fixture", "built"), tool_call("finish", %{}, "finish")])
+
     opts = options(tmp_dir, provider)
 
     assert {:ok, result} = Harness.develop(opts, @intent, nil, nil)
@@ -52,7 +54,7 @@ defmodule Kogen.Harness.Tests do
       ScriptedProvider.start([
         read_call("README.md"),
         read_call("README.md"),
-        message("Done.")
+        tool_call("finish", %{}, "finish")
       ])
 
     opts = options(tmp_dir, provider)
@@ -105,7 +107,7 @@ defmodule Kogen.Harness.Tests do
         tool_call("read", %{"path" => "../secret.txt"}, "escape-parent"),
         tool_call("read", %{"path" => "leak.txt"}, "escape-link"),
         edit_call("fixture", "safe"),
-        message("Done.")
+        tool_call("finish", %{}, "finish")
       ])
 
     opts = options(tmp_dir, provider)
@@ -128,7 +130,7 @@ defmodule Kogen.Harness.Tests do
         tool_call("edit", edit_args("README.md", "absent", "x"), "zero"),
         tool_call("edit", edit_args("duplicates.txt", "dup", "x"), "many"),
         edit_call("fixture", "changed"),
-        message("Done.")
+        tool_call("finish", %{}, "finish")
       ])
 
     opts = options(tmp_dir, provider)
@@ -157,9 +159,9 @@ defmodule Kogen.Harness.Tests do
     provider =
       ScriptedProvider.start([
         edit_call("fixture", "attempt"),
-        message("I am done."),
+        tool_call("finish", %{}, "finish"),
         edit_call("attempt", "ready"),
-        message("Fixed and done.")
+        tool_call("finish", %{}, "finish")
       ])
 
     opts = options(tmp_dir, provider, [ready_check])
@@ -179,9 +181,9 @@ defmodule Kogen.Harness.Tests do
   test "the first empty done claim is refused in the same session", %{tmp_dir: tmp_dir} do
     provider =
       ScriptedProvider.start([
-        message("Done without edits."),
+        tool_call("finish", %{}, "finish"),
         edit_call("fixture", "done"),
-        message("Done.")
+        tool_call("finish", %{}, "finish")
       ])
 
     opts = options(tmp_dir, provider)
@@ -210,7 +212,7 @@ defmodule Kogen.Harness.Tests do
           "1. Update README.md with the requested behavior.\n2. Inspect test/other/thing.exs.\n3. Add Jason dependency to mix.exs."
         ),
         edit_call("fixture", "implemented"),
-        message("Done."),
+        tool_call("finish", %{}, "finish"),
         message(~s({"verdict":"accept","findings":[]}))
       ])
 
@@ -246,7 +248,8 @@ defmodule Kogen.Harness.Tests do
              "edit",
              "write",
              "shell",
-             "tool_output"
+             "tool_output",
+             "finish"
            ]
 
     assert done_request.model == "gpt-6-luna"
@@ -258,10 +261,10 @@ defmodule Kogen.Harness.Tests do
     provider =
       ScriptedProvider.start([
         edit_call("fixture", "draft"),
-        message("Done."),
+        tool_call("finish", %{}, "finish"),
         message(~s({"verdict":"revise","findings":["A1 does not match the requested value."]})),
         tool_call("edit", edit_args("README.md", "draft", "final"), "repair-edit"),
-        message("Repaired and done."),
+        tool_call("finish", %{}, "finish"),
         message(~s({"verdict":"accept","findings":[]}))
       ])
 

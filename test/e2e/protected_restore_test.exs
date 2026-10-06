@@ -32,7 +32,7 @@ defmodule Kogen.E2e.ProtectedRestoreTest do
         [
           ScriptedProvider.call(:develop, "shell", %{"cmd" => shell_edit}),
           ScriptedProvider.call(:develop, "shell", %{"cmd" => implementation_fix}),
-          ScriptedProvider.answer(:develop, "Done after the protected paths were restored.")
+          ScriptedProvider.finish()
         ],
         %Options{seed_project: seed_project, recipe: "direct-shell"}
       )

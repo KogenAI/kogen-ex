@@ -6,6 +6,7 @@ defmodule Kogen.Harness.Developer do
   alias Kogen.Contracts.ToolCall
   alias Kogen.Conversation
   alias Kogen.Conversation.Budget
+  alias Kogen.Conversation.BuilderPolicy
   alias Kogen.Harness.Codec
   alias Kogen.Harness.Continuation
   alias Kogen.Harness.DeveloperState
@@ -20,6 +21,7 @@ defmodule Kogen.Harness.Developer do
   alias Kogen.Harness.Tools
   alias Kogen.Harness.Usage
   alias Kogen.Resilience.Policy
+  alias Kogen.Resilience.RequestLog
   alias Kogen.Tooling.Error
   alias Kogen.Tooling.ToolResult
 
@@ -127,13 +129,20 @@ defmodule Kogen.Harness.Developer do
     }
   end
 
-  defp handle_response(opts, prompt, state, %ModelResponse{tool_calls: []}),
-    do: done_claim(opts, prompt, state)
+  defp handle_response(opts, prompt, state, %ModelResponse{tool_calls: []}) do
+    next = %{state | items: state.items ++ [Codec.user_item(BuilderPolicy.progress_note())]}
+    developer_loop(opts, prompt, next)
+  end
 
-  defp handle_response(opts, prompt, state, %ModelResponse{tool_calls: calls}) do
-    with {:ok, next} <- run_tool_calls(opts, state, calls),
-         {:ok, next, _restored?} <- restore_protected(opts, next) do
-      developer_loop(opts, prompt, next)
+  defp handle_response(opts, prompt, state, %ModelResponse{tool_calls: calls} = response) do
+    with {:ok, next} <- run_tool_calls(opts, state, calls, BuilderPolicy.disposition(response)) do
+      if BuilderPolicy.disposition(response) == :finish do
+        done_claim(opts, prompt, next)
+      else
+        with {:ok, next, _restored?} <- restore_protected(opts, next) do
+          developer_loop(opts, prompt, next)
+        end
+      end
     end
   end
 
@@ -243,7 +252,16 @@ defmodule Kogen.Harness.Developer do
 
     case result do
       {:ok, gate} ->
-        with :ok <- Recording.append(opts, :gate, :develop, state.turns, gate) do
+        with :ok <- Recording.append(opts, :gate, :develop, state.turns, gate),
+             :ok <-
+               RequestLog.append(Path.dirname(state.transcript_path), %{
+                 event: :builder_gate,
+                 stage: :develop,
+                 turn: state.turns,
+                 tags: opts.request_tags,
+                 gate_status: gate.status,
+                 at: System.system_time(:millisecond)
+               }) do
           outcome =
             case gate.status do
               :pass -> :done
@@ -273,18 +291,29 @@ defmodule Kogen.Harness.Developer do
     end
   end
 
-  defp run_tool_calls(opts, state, calls) do
+  defp run_tool_calls(opts, state, calls, disposition) do
     Enum.reduce_while(calls, {:ok, state}, fn %ToolCall{} = call, {:ok, current} ->
-      case run_tool_call(opts, current, call) do
+      case run_tool_call(opts, current, call, disposition) do
         {:ok, next} -> {:cont, {:ok, next}}
         {:error, reason} -> {:halt, {:error, reason}}
       end
     end)
   end
 
-  defp run_tool_call(opts, state, call) do
+  defp run_tool_call(opts, state, call, disposition) do
     with :ok <- Recording.append(opts, :tool_call, :develop, state.turns, call) do
-      result = Tools.run(opts, call, Codec.tool_names(:developer, opts.builder_tools))
+      result =
+        case {call.name, disposition} do
+          {"finish", :finish} ->
+            %ToolResult{output: BuilderPolicy.finish_result(), is_error: false, paths: []}
+
+          {"finish", _other} ->
+            %ToolResult{output: BuilderPolicy.invalid_finish_result(), is_error: true, paths: []}
+
+          _other ->
+            Tools.run(opts, call, Codec.tool_names(:developer, opts.builder_tools) -- [:finish])
+        end
+
       append_tool_result(opts, state, call, result)
     end
   end
@@ -308,8 +337,11 @@ defmodule Kogen.Harness.Developer do
        "when using shell commands or formatters. Inspect with `sed -n`, `grep -n`, or `grep -R`; do not " <>
        "assume `rg` or a shell `apply_patch` command is installed. Make focused edits with " <>
        "`python3 - <<'PY'`. Run Elixir commands through `mise exec -- ...` so the pinned Elixir and " <>
-       "Erlang versions are used; a direct Elixir wrapper can fail to find `erl`. Combine related reads " <>
-       "and keep command output focused. All file changes must stay inside the worktree."}
+       "Erlang versions are used; a direct Elixir wrapper can fail to find `erl`. Inspect only what " <>
+       "the next decision needs; combine independent related reads and keep output focused. " <>
+       "Emit the command once its arguments are ready. Make one coherent patch, inspect its " <>
+       "result, then proceed. Command text contains executable work only, never deliberation " <>
+       "or progress prose. All file changes must stay inside the worktree."}
   end
 
   defp validate_limits(opts) do

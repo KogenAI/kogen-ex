@@ -31,7 +31,7 @@ defmodule Kogen.Harness.DeveloperToolSetTest do
     provider =
       ScriptedProvider.start([
         tool_call("shell", %{"cmd" => "printf 'shell-built\\n' > README.md"}, "shell-edit"),
-        message("Done.")
+        tool_call("finish", %{}, "finish")
       ])
 
     opts = options(tmp_dir, provider, :shell)
@@ -41,7 +41,7 @@ defmodule Kogen.Harness.DeveloperToolSetTest do
     assert File.read!(Path.join(opts.workdir, "README.md")) == "shell-built\n"
 
     [request, _done_request] = ScriptedProvider.requests(provider)
-    assert Enum.map(request.tools, & &1["name"]) == ["shell", "tool_output"]
+    assert Enum.map(request.tools, & &1["name"]) == ["shell", "tool_output", "finish"]
     assert request.instructions =~ "sed -n"
     assert request.instructions =~ "python3"
   end
@@ -78,6 +78,49 @@ defmodule Kogen.Harness.DeveloperToolSetTest do
 
     assert note_request.instructions =~
              "Run the targeted tests now and finish the smallest complete change."
+  end
+
+  test "progress and invalid finish calls never run the gate", %{tmp_dir: tmp_dir} do
+    invalid = tool_call("finish", %{"progress" => "still working"}, "invalid")
+    mixed = tool_call("finish", %{}, "mixed")
+    mixed = %{mixed | tool_calls: mixed.tool_calls ++ invalid.tool_calls}
+
+    provider =
+      ScriptedProvider.start([
+        message("Inspecting the next file."),
+        invalid,
+        mixed,
+        tool_call("shell", %{"cmd" => "printf 'complete\\n' > README.md"}, "patch"),
+        tool_call("finish", %{}, "complete")
+      ])
+
+    opts = options(tmp_dir, provider, :shell)
+    marker = Path.join(opts.workdir, "gate-runs.txt")
+    opts = %{opts | before_gate: fn -> File.write(marker, "gate\n", [:append]) end}
+
+    assert {:ok, result} = Harness.develop(opts, @intent, nil, nil)
+    assert result.outcome == :done
+    assert result.turns == 5
+    assert File.read!(marker) == "gate\n"
+    assert File.read!(Path.join(opts.workdir, "README.md")) == "complete\n"
+
+    records =
+      opts.run_dir
+      |> Path.join("requests.jsonl")
+      |> File.read!()
+      |> String.split("\n", trim: true)
+      |> Enum.map(&:json.decode/1)
+
+    attempts = Enum.filter(records, &Map.has_key?(&1, "started_at"))
+
+    assert Enum.map(attempts, & &1["response_kind"]) ==
+             ["progress", "invalid_finish", "invalid_finish", "tools", "finish"]
+
+    assert Enum.all?(attempts, &(&1["builder_policy"] == "incremental-v1"))
+    assert [%{"gate_status" => "pass"}] = Enum.filter(records, &(&1["event"] == "builder_gate"))
+
+    replay = provider |> ScriptedProvider.requests() |> List.last() |> Map.fetch!(:input)
+    assert Enum.any?(replay, &String.contains?(Map.get(&1, "output", ""), "empty object"))
   end
 
   defp options(tmp_dir, provider, builder_tools \\ :full) do

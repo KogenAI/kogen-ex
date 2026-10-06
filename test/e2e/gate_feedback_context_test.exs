@@ -16,9 +16,9 @@ defmodule Kogen.E2e.GateFeedbackContextTest do
 
     steps = [
       ScriptedProvider.write(:develop, "lib/tiny_app.ex", broken),
-      ScriptedProvider.answer(:develop, "Done."),
+      ScriptedProvider.finish(),
       ScriptedProvider.write(:develop, "lib/tiny_app.ex", repaired),
-      ScriptedProvider.answer(:develop, "Done.")
+      ScriptedProvider.finish()
     ]
 
     result = Build.run!(tmp_dir, steps, %Options{seed_project: seed, recipe: "direct"})

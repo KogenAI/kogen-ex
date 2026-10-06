@@ -24,17 +24,18 @@ defmodule Kogen.Resilience.RequestLog do
   @type t :: %__MODULE__{started_at: integer(), progress: :atomics.atomics_ref()}
   @type meta :: %{
           optional(:settings) => map(),
-          stage: atom(),
-          turn: non_neg_integer(),
-          model: String.t(),
-          effort: String.t(),
-          retries: non_neg_integer(),
-          history: %{
+          required(:stage) => atom(),
+          required(:turn) => non_neg_integer(),
+          required(:model) => String.t(),
+          required(:effort) => String.t(),
+          required(:retries) => non_neg_integer(),
+          required(:history) => %{
             items: non_neg_integer(),
             bytes: non_neg_integer(),
             tool_output_bytes: non_neg_integer()
           },
-          tags: map()
+          required(:tags) => map(),
+          optional(:request_shape) => map()
         }
 
   @spec settings(ModelRequest.t(), term()) :: map()
@@ -82,30 +83,33 @@ defmodule Kogen.Resilience.RequestLog do
     ended_at = now()
     last_byte_at = progress(probe, 2)
 
-    %{
-      record_kind: :model_request,
-      stage: meta.stage,
-      turn: meta.turn,
-      attempt: nullable(Map.get(meta.tags, :attempt)),
-      rung: nullable(Map.get(meta.tags, :rung)),
-      model: meta.model,
-      effort: meta.effort,
-      started_at: probe.started_at,
-      first_byte_at: progress(probe, 1),
-      last_byte_at: last_byte_at,
-      ended_at: ended_at,
-      outcome: outcome,
-      response_id: response_id(result),
-      incomplete_reason: incomplete_reason(result),
-      usage_status: usage_status(tokens, outcome),
-      idle_ms: idle_ms(outcome, last_byte_at, ended_at),
-      retries: meta.retries,
-      tokens: tokens,
-      history_items: meta.history.items,
-      history_bytes: meta.history.bytes,
-      tool_output_bytes: meta.history.tool_output_bytes,
-      request_settings: Map.get(meta, :settings, %{})
-    }
+    Map.merge(
+      %{
+        record_kind: :model_request,
+        stage: meta.stage,
+        turn: meta.turn,
+        attempt: nullable(Map.get(meta.tags, :attempt)),
+        rung: nullable(Map.get(meta.tags, :rung)),
+        model: meta.model,
+        effort: meta.effort,
+        started_at: probe.started_at,
+        first_byte_at: progress(probe, 1),
+        last_byte_at: last_byte_at,
+        ended_at: ended_at,
+        outcome: outcome,
+        response_id: response_id(result),
+        incomplete_reason: incomplete_reason(result),
+        usage_status: usage_status(tokens, outcome),
+        idle_ms: idle_ms(outcome, last_byte_at, ended_at),
+        retries: meta.retries,
+        tokens: tokens,
+        history_items: meta.history.items,
+        history_bytes: meta.history.bytes,
+        tool_output_bytes: meta.history.tool_output_bytes,
+        request_settings: Map.get(meta, :settings, %{})
+      },
+      Map.get(meta, :request_shape, %{})
+    )
   end
 
   @doc "Appends `record` to the request journal in `run_dir`."

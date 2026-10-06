@@ -26,7 +26,7 @@ defmodule Kogen.E2e.ProviderFallbackTest do
           ScriptedProvider.call(:develop, "shell", %{
             "cmd" => "cat > lib/tiny_app.ex <<'EOF'\n" <> ready_source() <> "EOF"
           }),
-          ScriptedProvider.answer(:develop, "Done.")
+          ScriptedProvider.finish()
         ]
 
     result = Build.run!(context.tmp_dir, script, options(context.seed))
@@ -88,6 +88,6 @@ defmodule Kogen.E2e.ProviderFallbackTest do
     |> File.read!()
     |> String.split("\n", trim: true)
     |> Enum.map(&:json.decode/1)
-    |> Enum.filter(&(&1["record_kind"] == "model_request"))
+    |> Enum.filter(&(&1["record_kind"] == "model_request" and is_integer(&1["started_at"])))
   end
 end
