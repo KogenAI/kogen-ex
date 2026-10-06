@@ -73,6 +73,7 @@ defmodule Kogen.Queue.Report do
 
   defp outcome(run, events) do
     [
+      {"progress", Kogen.Queue.Progress.from_events(events)},
       {"acceptance_results", event_payload(events, "acceptance_result", :ledger, [])},
       {"check_receipts", event_payload(events, "check_result", :receipts, [])},
       {"excused_flakes", excused_flakes(events)},

@@ -63,6 +63,11 @@ defmodule Kogen.State do
     to: PhaseTiming,
     as: :record
 
+  @doc false
+  defdelegate acceptance_items(rows), to: Json
+  @doc false
+  defdelegate acceptance_ledger(rows), to: Json
+
   @spec decode_event(binary()) :: {:ok, Event.t()} | {:error, :invalid_event}
   defdelegate decode_event(binary), to: Json
 

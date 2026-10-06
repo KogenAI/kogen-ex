@@ -7,17 +7,26 @@ defmodule Kogen.Engine.Build.RunEvents do
   alias Kogen.State.Approval
   alias Kogen.State.Run
 
-  @spec started(Run.t(), Request.t(), Approval.t(), String.t(), String.t()) ::
+  @spec started(
+          Run.t(),
+          Request.t(),
+          Approval.t(),
+          String.t(),
+          String.t(),
+          Kogen.Contracts.Intent.t()
+        ) ::
           :ok | {:error, term()}
   def started(
         %Run{} = run,
         %Request{} = request,
         %Approval{} = approval,
         approval_commit,
-        base_sha
+        base_sha,
+        intent
       ) do
     State.record(run, %{
       event: :started,
+      acceptance_items: Enum.map(intent.acceptance, &%{id: &1.id, status: nil}),
       approval_commit: approval_commit,
       approved_by: approval.by,
       base_sha: base_sha,

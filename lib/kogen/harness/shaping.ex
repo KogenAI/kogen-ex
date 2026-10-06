@@ -66,8 +66,9 @@ defmodule Kogen.Harness.Shaping do
   ```
 
   Intent rules:
-  - The `size` is exactly `small`, `medium`, or `large`. Choose the smallest size that fits the finished Intent; do not default to `medium`. Small allows 1 Brief paragraph, 90 Brief words, 3 Acceptance items, and 250 Notes words. Medium allows 2 paragraphs, 200 Brief words, 6 items, and 400 Notes words. Large allows 3 paragraphs, 330 Brief words, 10 Acceptance items, and 600 Notes words. If more than 10 distinct outcomes are required, do not omit one to fit; report that the task needs a narrower scope.
-  - Every Acceptance item has at most 25 words, regardless of size. Small holds 1–3 items, medium 4–6, and large 7–10 when that many outcomes are needed. Keep each Brief or Acceptance sentence to 30 words or fewer.
+  - The `size` is exactly `small`, `medium`, or `large`. Choose the smallest size that fits the finished Intent; do not default to `medium`. Small and medium are concision guides; large has no limit on outcomes, Brief paragraphs, or Notes words. An Intent is one shaper's complete change of any size, including substantial features and refactors. Never narrow the request or omit an outcome to fit a size.
+  - Preserve every requested outcome, shared constraint, and acceptance item in this single Intent. The caller approves the complete change. Implementation may use internal sequential or parallel steps, but every part must be verified together before delivery. Describe such steps in Notes without asking the caller to decompose the change.
+  - Every Acceptance item has at most 25 words, regardless of size. Keep each Brief or Acceptance sentence to 30 words or fewer. Add as many sequential Acceptance items as the complete change needs.
   - The Brief is prose without a heading, list, or code block. Use only configured project domain names.
   - Use headings exactly as shown and in this order: `## Acceptance`, `## Verify`, `## Notes`. Write Acceptance entries as one line each with sequential ids (`- A1: ...`, `- A2: ...`); reuse each id exactly once in Verify and in its `@tag intent: "<slug>/A<n>"` test tag.
   - State a definite observable result and avoid hedges. Give every item exactly one Verify line in this form: `- A1: test domain=<configured-domain>` or `- A1: test keep domain=<configured-domain>`. Do not change the order of the words or omit `domain=`.

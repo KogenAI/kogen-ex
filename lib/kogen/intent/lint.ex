@@ -7,7 +7,12 @@ defmodule Kogen.Intent.Lint do
   @sizes %{
     small: %{paragraphs: 1, brief_words: 90, items: 3, notes_words: 250},
     medium: %{paragraphs: 2, brief_words: 200, items: 6, notes_words: 400},
-    large: %{paragraphs: 3, brief_words: 330, items: 10, notes_words: 600}
+    large: %{
+      paragraphs: :infinity,
+      brief_words: :infinity,
+      items: :infinity,
+      notes_words: :infinity
+    }
   }
   @banned_words ~w(
     ensure ensures ensuring robust robustly seamless seamlessly leverage leverages leveraging
@@ -92,14 +97,14 @@ defmodule Kogen.Intent.Lint do
         if(String.contains?(brief, ["```", "~~~"]),
           do: issue(:code_block_in_brief, "the Brief cannot contain code blocks")
         ),
-        if(sized? and length(paragraphs(brief)) > size_limit(intent.size, :paragraphs),
+        if(sized? and exceeds?(length(paragraphs(brief)), size_limit(intent.size, :paragraphs)),
           do:
             issue(
               :brief_paragraphs,
               "#{intent.size} Intents allow at most #{size_limit(intent.size, :paragraphs)} Brief paragraphs"
             )
         ),
-        if(sized? and word_count(brief) > size_limit(intent.size, :brief_words),
+        if(sized? and exceeds?(word_count(brief), size_limit(intent.size, :brief_words)),
           do:
             issue(
               :brief_too_long,
@@ -124,14 +129,14 @@ defmodule Kogen.Intent.Lint do
         if(intent.acceptance == [] and intent.source != :raw,
           do: issue(:acceptance_count, "Acceptance needs at least one item")
         ),
-        if(length(intent.acceptance) > max_items,
+        if(exceeds?(length(intent.acceptance), max_items),
           do:
             issue(
               :acceptance_count,
               "#{intent.size} Intents allow at most #{max_items} Acceptance items"
             )
         ),
-        if(notes_words > size_limit(intent.size, :notes_words),
+        if(exceeds?(notes_words, size_limit(intent.size, :notes_words)),
           do:
             issue(
               :notes_too_long,
@@ -157,8 +162,8 @@ defmodule Kogen.Intent.Lint do
         if(not Regex.match?(~r/^[a-z0-9][a-z0-9-]{2,47}$/, intent.slug),
           do: issue(:bad_slug, "slug must use 3 to 48 lowercase letters, digits, or dashes")
         ),
-        if(length(intent.domains) not in 1..4,
-          do: issue(:domain_count, "declare between one and four domains")
+        if(intent.domains == [],
+          do: issue(:domain_count, "declare at least one domain")
         ),
         if(duplicate_ids != [], do: issue(:duplicate_id, "Acceptance ids must be unique")),
         if(ids != expected,
@@ -304,6 +309,9 @@ defmodule Kogen.Intent.Lint do
   defp paragraphs(text), do: String.split(text, ~r/\n\s*\n/, trim: true)
   defp sentences(text), do: Regex.split(~r/(?<=[.!?])\s+/, text, trim: true)
   defp word_count(text), do: text |> String.split(~r/\s+/, trim: true) |> length()
+
+  defp exceeds?(_count, :infinity), do: false
+  defp exceeds?(count, limit), do: count > limit
 
   defp size_limit(size, key) do
     case Map.fetch(@sizes, size) do

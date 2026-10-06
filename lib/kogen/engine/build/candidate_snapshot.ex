@@ -158,6 +158,7 @@ defmodule Kogen.Engine.Build.CandidateSnapshot do
   end
 
   defp persist(%Session{} = session, reason, extra) do
+    session = Kogen.Engine.Build.AcceptanceProgress.capture(session)
     excluded_paths = excluded_paths(session)
     filename = candidate_filename(session.attempt)
     path = Path.join(session.run_dir, filename)

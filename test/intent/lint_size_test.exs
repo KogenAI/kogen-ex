@@ -9,21 +9,21 @@ defmodule Kogen.Intent.LintSizeTest do
     end
   end
 
-  for {size, words} <- [{"small", 91}, {"medium", 201}, {"large", 331}] do
+  for {size, words} <- [{"small", 91}, {"medium", 201}] do
     test "enforces the #{size} Brief word cap" do
       brief = Enum.map_join(1..unquote(words), " ", fn _ -> "clear." end)
       assert :brief_too_long in rules(size: unquote(size), brief: brief)
     end
   end
 
-  for {size, paragraphs} <- [{"small", 2}, {"medium", 3}, {"large", 4}] do
+  for {size, paragraphs} <- [{"small", 2}, {"medium", 3}] do
     test "enforces the #{size} Brief paragraph cap" do
       brief = Enum.map_join(1..unquote(paragraphs), "\n\n", &"Paragraph #{&1} ends.")
       assert :brief_paragraphs in rules(size: unquote(size), brief: brief)
     end
   end
 
-  for {size, count} <- [{"small", 4}, {"medium", 7}, {"large", 11}] do
+  for {size, count} <- [{"small", 4}, {"medium", 7}] do
     test "enforces the #{size} Acceptance count" do
       items = Enum.map(1..unquote(count), &{"A#{&1}", "Item #{&1} returns a value."})
       verify = Enum.map(items, fn {id, _text} -> {id, "test"} end)
@@ -31,7 +31,7 @@ defmodule Kogen.Intent.LintSizeTest do
     end
   end
 
-  for {size, words} <- [{"small", 251}, {"medium", 401}, {"large", 601}] do
+  for {size, words} <- [{"small", 251}, {"medium", 401}] do
     test "enforces the #{size} Notes word cap" do
       notes = Enum.map_join(1..unquote(words), " ", fn _ -> "note" end)
       assert :notes_too_long in rules(size: unquote(size), notes: notes)

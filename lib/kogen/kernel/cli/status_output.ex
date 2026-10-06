@@ -55,7 +55,16 @@ defmodule Kogen.Kernel.CLI.StatusOutput do
     diff = if build.candidate_diff, do: "  candidate diff: #{build.candidate_diff}\n", else: ""
 
     "Build #{short(build.build_id)}: #{outcome}\n" <>
-      stages <> continuations(build.continuations) <> diff <> "  journal: #{build.journal}\n"
+      stages <>
+      continuations(build.continuations) <>
+      progress_text(build.progress) <> diff <> "  journal: #{build.journal}\n"
+  end
+
+  defp progress_text(nil), do: ""
+
+  defp progress_text(%{verified: verified, remaining: remaining}) do
+    "  acceptance verified: #{Enum.join(verified, ", ")}\n" <>
+      "  acceptance remaining: #{Enum.join(remaining, ", ")}\n"
   end
 
   defp continuations(0), do: ""

@@ -223,3 +223,5 @@ script = [
 ```
 
 `fixture` exposes `project_root`, `origin`, `approved_base`, `approval_commit`, and `git_env` for Git and lifecycle assertions. The result also has the persisted `run_status` and whether the Build claim could be reacquired. Use `Kogen.E2e.ScriptedProvider.edit/4` to make repair turns; a response step tagged `:review` can revise once and a later `:review` step can accept.
+
+An Intent approves one complete change of any size. `large` has no capacity limit on outcomes, Brief paragraphs, or Notes; all configured domains involved in a refactor may be declared. Keep requested outcomes and shared constraints together. The current controller builds and verifies the complete Intent in one Build and lands one commit; internal implementation steps do not replace or narrow its acceptance gate. `kogen status <slug>` and the report show verified and remaining acceptance ids from the complete contract.

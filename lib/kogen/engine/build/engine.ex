@@ -65,7 +65,8 @@ defmodule Kogen.Engine.Build.Engine do
                prepared.request,
                prepared.approval,
                prepared.approval_commit,
-               prepared.base_sha
+               prepared.base_sha,
+               prepared.intent
              ) do
           :ok ->
             setup_workspace(prepared)

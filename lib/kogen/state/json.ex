@@ -27,6 +27,17 @@ defmodule Kogen.State.Json do
   )a
   @event_fields Enum.map(@event_field_names, &{&1, Atom.to_string(&1)})
 
+  def acceptance_items(rows), do: Enum.map(rows, &{Map.fetch!(&1, "id"), Map.get(&1, "status")})
+
+  def acceptance_ledger(rows) do
+    rows
+    |> Enum.filter(&(&1 |> Map.fetch!("tag") |> String.split("/") |> length() == 2))
+    |> Enum.group_by(&(&1 |> Map.fetch!("tag") |> String.split("/") |> List.last()))
+    |> Map.new(fn {id, tests} ->
+      {id, if(Enum.all?(tests, &(Map.fetch!(&1, "status") == "passed")), do: "passed")}
+    end)
+  end
+
   @spec encode_approval(Approval.t()) :: {:ok, binary()} | {:error, :invalid_json_value}
   def encode_approval(%Approval{} = approval) do
     encode(%{

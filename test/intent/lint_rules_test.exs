@@ -92,7 +92,7 @@ defmodule Kogen.Intent.LintRulesTest do
     assert :title_too_long in rules(title: String.duplicate("x", 73))
     assert :unknown_size in rules(size: "huge")
     assert :bad_slug in rules(slug: "Bad_slug")
-    assert :domain_count in rules(domains: ["one", "two", "three", "four", "five"])
+    assert :domain_count in rules(domains: [])
   end
 
   @tag intent: "valid-intent/A1"
