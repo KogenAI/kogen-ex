@@ -39,7 +39,7 @@ defmodule Kogen.Checks do
     deps: [
       Kogen.Quality,
       Kogen.Contracts,
-      Kogen.Feedback,
+      Kogen.Diagnostics,
       Kogen.Proc,
       Kogen.Workspace,
       Kogen.Project

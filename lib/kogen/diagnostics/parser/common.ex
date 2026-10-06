@@ -1,4 +1,4 @@
-defmodule Kogen.Feedback.Parser.Common do
+defmodule Kogen.Diagnostics.Parser.Common do
   @moduledoc false
   alias Kogen.Contracts.Finding
 
@@ -38,7 +38,7 @@ defmodule Kogen.Feedback.Parser.Common do
   end
 
   defp location(path, line, col, tail) do
-    {:ok, path, int(line), int(col || "1"), String.trim(tail || "")}
+    {:ok, path, int(line), int(col), String.trim(tail || "")}
   end
 
   def normalize_path(path, workdir) do
@@ -80,7 +80,7 @@ defmodule Kogen.Feedback.Parser.Common do
         "FileSize"
 
       true ->
-        "finding"
+        nil
     end
   end
 
@@ -118,7 +118,7 @@ defmodule Kogen.Feedback.Parser.Common do
       line: line,
       col: col,
       symbol: symbol,
-      message: truncate(String.replace(message, ~r/\s+/, " "))
+      message: String.trim(message)
     }
   end
 
@@ -139,7 +139,7 @@ defmodule Kogen.Feedback.Parser.Common do
   def clean(_output), do: ""
 
   def lines(output), do: String.split(output, "\n")
-  def int(value) when value in [nil, ""], do: 1
+  def int(value) when value in [nil, ""], do: nil
   def int(value), do: String.to_integer(value)
 
   def truncate(value, limit \\ @message_chars) do

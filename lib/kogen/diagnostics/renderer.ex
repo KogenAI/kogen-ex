@@ -1,7 +1,8 @@
-defmodule Kogen.Feedback.Renderer do
+defmodule Kogen.Diagnostics.Renderer do
   @moduledoc false
 
-  alias Kogen.Feedback
+  alias Kogen.Diagnostics
+  alias Kogen.Diagnostics.Parser.Common
 
   @max_findings_per_tool 10
   @max_findings 20
@@ -9,7 +10,7 @@ defmodule Kogen.Feedback.Renderer do
   @tail_chars 600
 
   def model(results) do
-    case Feedback.overall_exit_level(results) do
+    case Diagnostics.overall_exit_level(results) do
       level when level in [1, 2] ->
         findings = results |> Enum.flat_map(& &1.findings) |> deduplicate()
         visible = visible_findings(findings)
@@ -17,7 +18,7 @@ defmodule Kogen.Feedback.Renderer do
         summaries = results |> Enum.flat_map(& &1.dialyzer_summaries) |> Enum.uniq()
         logs = results |> Enum.filter(&(&1.exit_level in [1, 2])) |> log_links()
         tail = first_tail(results)
-        level = Feedback.overall_exit_level(results)
+        level = Diagnostics.overall_exit_level(results)
 
         Enum.join(
           summaries ++
@@ -96,14 +97,23 @@ defmodule Kogen.Feedback.Renderer do
         {path, line, col} when is_binary(path) and is_integer(line) and is_integer(col) ->
           "#{path}:#{line}:#{col}: "
 
+        {path, line, _col} when is_binary(path) and is_integer(line) ->
+          "#{path}:#{line}: "
+
+        {path, _line, _col} when is_binary(path) ->
+          "#{path}: "
+
         _other ->
-          ""
+          "location unavailable: "
       end
 
     symbol = if finding.symbol, do: "#{finding.symbol}: ", else: ""
 
-    "#{location}#{severity(finding.severity)}: [#{finding.tool}/#{finding.rule}] #{symbol}#{finding.message}"
+    "#{location}#{severity(finding.severity)}: [#{finding.tool}/#{finding.rule || "unknown"}] #{symbol}#{Common.truncate(finding.message)}#{hint(finding)}"
   end
+
+  defp hint(%{hint: hint}) when is_binary(hint), do: " Hint: " <> Common.truncate(hint, 120)
+  defp hint(_finding), do: ""
 
   defp summary_line(results, findings, level) do
     errors = Enum.count(findings, &(&1.severity == :error))

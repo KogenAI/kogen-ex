@@ -91,7 +91,7 @@ defmodule Kogen.Harness.SourceChecksTest do
     assert {:ok, gate} = Gate.run(opts, deadline())
     assert gate.status == :pass
     assert length(gate.warnings) == 3
-    assert Enum.join(gate.warnings) =~ "lib/a.ex:2:1"
+    assert Enum.join(gate.warnings) =~ "lib/a.ex:2: warning:"
     assert Enum.join(gate.warnings) =~ "RepeatedMapShape"
     assert Enum.join(gate.warnings) =~ "struct"
 

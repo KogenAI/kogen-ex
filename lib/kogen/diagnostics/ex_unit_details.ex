@@ -1,7 +1,7 @@
-defmodule Kogen.Feedback.ExUnitDetails do
+defmodule Kogen.Diagnostics.ExUnitDetails do
   @moduledoc false
 
-  alias Kogen.Feedback.Parser.Common
+  alias Kogen.Diagnostics.Parser.Common
 
   @labels ~r/^(?:code|left|right|stacktrace):/
   @headline ~r/Assertion|match \(=\) failed|^\*\* \(|Expected truthy/

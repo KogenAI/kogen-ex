@@ -69,12 +69,12 @@ defmodule Kogen.Checks.FeedbackTest do
     feedback = Feedback.render_model_feedback([result])
 
     assert feedback =~
-             "test/acceptance/bench-provided-intent_test.exs:12:1: error: [exunit/assertion]"
+             "test/acceptance/bench-provided-intent_test.exs:12: error: [exunit/assertion]"
 
     assert feedback =~
-             "test/acceptance/bench-provided-intent_test.exs:26:1: error: [exunit/assertion]"
+             "test/acceptance/bench-provided-intent_test.exs:26: error: [exunit/assertion]"
 
-    assert feedback =~ "test/kernel/install_local_test.exs:9:1: warning: [exunit/environment]"
+    assert feedback =~ "test/kernel/install_local_test.exs:9: warning: [exunit/environment]"
     assert feedback =~ "exit 1"
     refute feedback =~ "could not check"
   end
@@ -128,7 +128,7 @@ defmodule Kogen.Checks.FeedbackTest do
     assert result.exit_level == 1
 
     assert feedback =~
-             "test/acceptance/syn-14-bug-sla-business-hours_test.exs:7:1: error: [exunit/assertion]"
+             "test/acceptance/syn-14-bug-sla-business-hours_test.exs:7: error: [exunit/assertion]"
 
     assert feedback =~ "left: ~U[2025-04-07 12:00:00.000000Z]"
     assert feedback =~ "right: ~U[2025-04-07 12:00:00Z]"

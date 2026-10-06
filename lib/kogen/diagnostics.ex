@@ -1,13 +1,12 @@
-defmodule Kogen.Feedback do
-  @moduledoc "Parses verification output and renders compact Builder feedback."
+defmodule Kogen.Diagnostics do
+  @moduledoc "Tool diagnostics as complete records and compact developer feedback."
   use Boundary, deps: [Kogen.Contracts], exports: []
 
-  alias Kogen.Contracts.CheckOutput
   alias Kogen.Contracts.CommandExit
   alias Kogen.Contracts.Finding
-  alias Kogen.Feedback.Parser, as: Parser
-  alias Kogen.Feedback.Parser.Common
-  alias Kogen.Feedback.Renderer
+  alias Kogen.Diagnostics.Parser, as: Parser
+  alias Kogen.Diagnostics.Parser.Common
+  alias Kogen.Diagnostics.Renderer
 
   @failed_test_location ~r/(?:\A|\n)\s*\d+\)\s+test\b[^\n]*\n\s*([^\s]+\.exs:\d+)/
 
@@ -43,8 +42,16 @@ defmodule Kogen.Feedback do
     |> Enum.uniq()
   end
 
-  @spec analyze(CheckOutput.t()) :: result()
-  def analyze(%CheckOutput{
+  @spec analyze(%{
+          required(:name) => String.t(),
+          required(:argv) => [String.t()],
+          required(:exit_status) => integer() | nil,
+          required(:timed_out) => boolean(),
+          required(:output) => String.t(),
+          required(:log_path) => Path.t() | nil,
+          required(:workdir) => Path.t()
+        }) :: result()
+  def analyze(%{
         name: name,
         argv: argv,
         exit_status: exit_status,
@@ -53,11 +60,11 @@ defmodule Kogen.Feedback do
         log_path: log_path,
         workdir: workdir
       }) do
-    output = Common.clean(output)
+    output = Common.clean(full_output(output, log_path))
     tool = tool(argv, output)
     findings = Parser.findings(output, tool, workdir)
     findings = if findings == [], do: fallback_findings(tool, exit_status, output), else: findings
-    findings = deduplicate(findings)
+    findings = findings |> Enum.map(&Finding.record/1) |> deduplicate()
     summaries = Parser.dialyzer_summaries(output)
 
     base = %{
@@ -76,9 +83,9 @@ defmodule Kogen.Feedback do
     Map.merge(base, %{exit_level: level, reason: environment_reason(base, level)})
   end
 
-  defdelegate gate(result, spec, paths), to: Kogen.Feedback.GateAssessment
+  defdelegate gate(result, spec, paths), to: Kogen.Diagnostics.GateAssessment
 
-  @spec overall_exit_level([map()]) :: 0..3
+  @spec overall_exit_level([result()]) :: 0..3
   def overall_exit_level(results) do
     levels = Enum.map(results, & &1.exit_level)
 
@@ -90,15 +97,33 @@ defmodule Kogen.Feedback do
     end
   end
 
-  @spec render_model_feedback([map()]) :: String.t()
+  @spec render_model_feedback([result()]) :: String.t()
   def render_model_feedback(results), do: render_model_feedback(results, nil)
 
-  @spec render_model_feedback([map()], function() | nil) :: String.t()
   def render_model_feedback(results, changed_ranges),
     do: results |> Renderer.model() |> Renderer.with_changes(changed_ranges)
 
-  @spec render_environment_detail([map()]) :: String.t()
+  @spec render_environment_detail([result()]) :: String.t()
   def render_environment_detail(results), do: Renderer.environment(results)
+
+  def write_report(results, run_dir), do: Kogen.Diagnostics.Report.write(results, run_dir)
+
+  def gate_status(results) do
+    case overall_exit_level(results) do
+      0 -> :pass
+      3 -> :environment
+      _level -> :fail
+    end
+  end
+
+  defp full_output(output, path) when is_binary(path) do
+    case File.read(path) do
+      {:ok, contents} -> contents
+      {:error, _reason} -> output
+    end
+  end
+
+  defp full_output(output, _path), do: output
 
   defp normalize_test_id(location, workdir) do
     case String.split(location, ":", parts: 2) do

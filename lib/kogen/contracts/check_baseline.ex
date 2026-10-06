@@ -106,7 +106,7 @@ defmodule Kogen.Contracts.CheckBaseline do
     {kind, id} =
       if finding.tool == "exunit",
         do: {:test, finding.symbol || finding.rule},
-        else: {:rule, finding.rule}
+        else: {:rule, finding.rule || Map.get(finding, :id) || finding.message}
 
     %{
       path: finding.path,
@@ -117,17 +117,20 @@ defmodule Kogen.Contracts.CheckBaseline do
     }
   end
 
-  defp identity(%{path: path, kind: :test, id: id}) when is_binary(path) and is_binary(id),
-    do: {path, :test, id}
+  defp identity(%{path: path, kind: :test, id: id, tool: tool})
+       when is_binary(path) and is_binary(id), do: {tool, path, :test, id}
 
-  defp identity(%{path: path, kind: :rule, id: id}) when is_binary(path) and is_binary(id),
-    do: {path, :rule, id}
+  defp identity(%{path: path, kind: :rule, id: id, tool: tool})
+       when is_binary(path) and is_binary(id), do: {tool, path, :rule, id}
 
   defp identity(%{path: path, tool: "exunit", symbol: symbol})
-       when is_binary(path) and is_binary(symbol), do: {path, :test, symbol}
+       when is_binary(path) and is_binary(symbol), do: {"exunit", path, :test, symbol}
 
-  defp identity(%{path: path, rule: rule}) when is_binary(path) and is_binary(rule),
-    do: {path, :rule, rule}
+  defp identity(%{path: path, rule: rule, tool: tool}) when is_binary(path) and is_binary(rule),
+    do: {tool, path, :rule, rule}
+
+  defp identity(%{path: path, rule: nil, tool: tool, id: id})
+       when is_binary(path) and is_binary(id), do: {tool, path, :rule, id}
 
   defp identity(_finding), do: nil
 

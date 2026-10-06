@@ -226,7 +226,7 @@ defmodule Kogen.Harness.GateResult do
   alias Kogen.Harness.GateCommand
 
   @enforce_keys [:status, :fixes, :checks, :failures, :flake_excused, :failed_test_count]
-  defstruct @enforce_keys ++ [warnings: []]
+  defstruct @enforce_keys ++ [warnings: [], findings_path: nil]
 
   @type t :: %__MODULE__{
           status: :pass | :fail | :environment,
@@ -234,6 +234,7 @@ defmodule Kogen.Harness.GateResult do
           checks: [GateCommand.t()],
           failures: [String.t()],
           warnings: [String.t()],
+          findings_path: Path.t() | nil,
           flake_excused: [%{test_ids: [String.t()], seed: non_neg_integer()}],
           failed_test_count: non_neg_integer() | nil
         }

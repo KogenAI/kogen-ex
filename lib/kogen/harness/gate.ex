@@ -11,10 +11,12 @@ defmodule Kogen.Harness.Gate do
   alias Kogen.Harness.GateCommand
   alias Kogen.Harness.GateResult
   alias Kogen.Harness.Opts
+  alias Kogen.Harness.Recording
 
   @spec run(Opts.t(), integer()) :: {:ok, GateResult.t()} | {:error, term()}
   def run(%Opts{} = opts, deadline) do
     with :ok <- before_gate(opts.before_gate),
+         {:ok, _transcript_path} <- Recording.path(opts),
          {:ok, fixes, _fix_flakes} <- run_specs(opts, opts.project.fix, deadline, :fix),
          {:ok, checks, flake_excused} <- run_specs(opts, opts.project.checks, deadline, :check) do
       checks = checks ++ quality_commands(opts, deadline)
@@ -30,16 +32,19 @@ defmodule Kogen.Harness.Gate do
         Enum.flat_map(fixes ++ checks, &CheckBaseline.warning/1) ++
           Enum.flat_map(checks, &Map.get(&1, :warnings, []))
 
-      {:ok,
-       %GateResult{
-         status: status,
-         fixes: fixes,
-         checks: checks,
-         failures: failures,
-         warnings: warnings,
-         flake_excused: flake_excused,
-         failed_test_count: TestCount.failed_test_count(checks, opts.project.checks)
-       }}
+      with {:ok, findings_path} <- Feedback.write_report(fixes ++ checks, opts.run_dir) do
+        {:ok,
+         %GateResult{
+           status: status,
+           fixes: fixes,
+           checks: checks,
+           findings_path: findings_path,
+           failures: failures,
+           warnings: warnings,
+           flake_excused: flake_excused,
+           failed_test_count: TestCount.failed_test_count(checks, opts.project.checks)
+         }}
+      end
     end
   end
 

@@ -47,4 +47,22 @@ defmodule Kogen.Contracts.CheckBaselineTest do
     assert %{base_red?: false} =
              CheckBaseline.annotate(%{name: "format", exit_level: 3, findings: []}, baseline)
   end
+
+  test "a matching rule from another tool is not the same finding" do
+    finding = %{
+      tool: "credo",
+      rule: "unused",
+      path: "lib/sample.ex",
+      symbol: nil,
+      message: "unused value"
+    }
+
+    baseline =
+      CheckBaseline.from_assessments([%{name: "full", exit_level: 1, findings: [finding]}])
+
+    other = %{finding | tool: "compile"}
+
+    assert %{base_red?: false} =
+             CheckBaseline.annotate(%{name: "full", exit_level: 1, findings: [other]}, baseline)
+  end
 end

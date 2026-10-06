@@ -132,10 +132,10 @@ defmodule KogenChecks.GateWiringTest do
     assert configured(enabled, StringKeyAccess, [codec]) == []
   end
 
-  test "Checks can use Feedback while Feedback cannot reach back into Checks", %{enabled: enabled} do
+  test "Checks can use Diagnostics while Diagnostics cannot reach back into Checks", %{enabled: enabled} do
     caller =
       source(
-        "def run(output), do: Kogen.Feedback.failed_test_ids(output, \".\")",
+        "def run(output), do: Kogen.Diagnostics.failed_test_ids(output, \".\")",
         "lib/kogen/checks/fixture.ex",
         "Kogen.Checks.Fixture"
       )
@@ -145,8 +145,8 @@ defmodule KogenChecks.GateWiringTest do
     reverse =
       source(
         "def run, do: Kogen.Checks.Runner.run([])",
-        "lib/kogen/feedback/fixture.ex",
-        "Kogen.Feedback.Fixture"
+        "lib/kogen/diagnostics/fixture.ex",
+        "Kogen.Diagnostics.Fixture"
       )
 
     assert Enum.any?(configured(enabled, DomainReach, [reverse]), &(&1.exit_status > 0))

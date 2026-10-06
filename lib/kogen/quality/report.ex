@@ -6,7 +6,7 @@ defmodule Kogen.Quality.Report do
   @spec finding(String.t(), String.t(), String.t() | nil, integer() | nil, String.t(), atom()) ::
           Finding.t()
   def finding(tool, rule, path, line, message, severity \\ :warning) do
-    %Finding{
+    Finding.record(%Finding{
       tool: tool,
       rule: rule,
       path: path,
@@ -15,7 +15,7 @@ defmodule Kogen.Quality.Report do
       symbol: nil,
       severity: severity,
       message: message
-    }
+    })
   end
 
   @spec command(String.t(), [Finding.t()]) :: map()

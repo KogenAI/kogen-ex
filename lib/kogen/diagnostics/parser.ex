@@ -1,6 +1,6 @@
-defmodule Kogen.Feedback.Parser do
+defmodule Kogen.Diagnostics.Parser do
   @moduledoc false
-  import Kogen.Feedback.Parser.Common,
+  import Kogen.Diagnostics.Parser.Common,
     only: [
       location: 1,
       normalize_path: 2,
@@ -8,14 +8,14 @@ defmodule Kogen.Feedback.Parser do
       credo_rule: 1,
       credo_severity: 1,
       finding: 5,
-      truncate: 1,
       cli_line: 1,
       lines: 1,
       environment_text?: 1
     ]
 
-  alias Kogen.Feedback.ExUnitDetails
-  alias Kogen.Feedback.Parser.Compile
+  alias Kogen.Diagnostics.ExUnitDetails
+  alias Kogen.Diagnostics.Parser.Compile
+  alias Kogen.Diagnostics.Parser.Dialyzer
 
   @file_path ~r{((?:\$WORKDIR/|/)?[A-Za-z0-9_.$-]+(?:/[A-Za-z0-9_.$-]+)*\.exs?)\s*$}
   @credo_head ~r/^\[([FWCRD])\]\s*(?:[↗↘→]+\s*)?(.*)$/u
@@ -23,21 +23,21 @@ defmodule Kogen.Feedback.Parser do
   @exunit_setup ~r/^\s*\d+\)\s+([A-Z][A-Za-z0-9_.]+): failure on setup_all callback/
   def findings(output, "mixed", workdir) do
     parse_credo(output, workdir) ++
-      parse_dialyzer(output, workdir) ++
+      Dialyzer.findings(output, workdir) ++
       parse_format(output, workdir) ++
       parse_exunit(output, workdir) ++
       Compile.findings(output, workdir)
   end
 
   def findings(output, "credo", workdir), do: parse_credo(output, workdir)
-  def findings(output, "dialyzer", workdir), do: parse_dialyzer(output, workdir)
+  def findings(output, "dialyzer", workdir), do: Dialyzer.findings(output, workdir)
   def findings(output, "format", workdir), do: parse_format(output, workdir)
   def findings(output, "exunit", workdir), do: parse_exunit(output, workdir)
   def findings(output, "compile", workdir), do: Compile.findings(output, workdir)
 
   def findings(output, _tool, workdir) do
     parse_credo(output, workdir) ++
-      parse_dialyzer(output, workdir) ++
+      Dialyzer.findings(output, workdir) ++
       parse_format(output, workdir) ++
       parse_exunit(output, workdir) ++
       Compile.findings(output, workdir)
@@ -99,7 +99,7 @@ defmodule Kogen.Feedback.Parser do
   defp credo_finding(current, workdir), do: credo_finding(current, workdir, nil, nil)
 
   defp credo_finding(current, _workdir, line, col) do
-    message = current.message |> Enum.join(" ") |> String.replace(~r/\s+/, " ") |> truncate()
+    message = current.message |> Enum.join(" ") |> String.replace(~r/\s+/, " ") |> String.trim()
 
     %{
       tool: "credo",
@@ -113,66 +113,6 @@ defmodule Kogen.Feedback.Parser do
     }
   end
 
-  defp parse_dialyzer(output, workdir) do
-    output
-    |> lines()
-    |> Enum.with_index()
-    |> Enum.flat_map(fn {line, index} ->
-      case diagnostic_location(cli_line(line)) do
-        {:ok, path, line_number, col, rule} ->
-          message = diagnostic_message(output, index, rule)
-
-          [
-            "dialyzer"
-            |> finding(rule, {path, line_number, col}, nil, message)
-            |> Map.put(:path, normalize_path(path, workdir))
-          ]
-
-        :error ->
-          []
-      end
-    end)
-    |> Enum.sort_by(&{&1.path || "", &1.line || 0, &1.col || 0})
-  end
-
-  defp diagnostic_location(line) do
-    case if(Regex.match?(~r/\.exs?:\d+:\d+:/, line), do: location(line), else: :error) do
-      {:ok, path, line_number, col, tail} when col > 0 and tail != "" ->
-        case String.split(String.trim(tail), ~r/\s+/, parts: 2) do
-          [rule | _rest] ->
-            if Regex.match?(~r/^[a-z][a-z0-9_]*$/, rule),
-              do: {:ok, path, line_number, col, rule},
-              else: :error
-
-          [] ->
-            :error
-        end
-
-      _other ->
-        :error
-    end
-  end
-
-  defp diagnostic_message(output, index, rule) do
-    output
-    |> lines()
-    |> Enum.drop(index + 1)
-    |> Enum.take_while(fn line ->
-      clean_line = cli_line(line)
-
-      String.trim(clean_line) != "" and not String.contains?(clean_line, "Total errors:") and
-        diagnostic_location(clean_line) == :error
-    end)
-    |> Enum.take(2)
-    |> Enum.map(&String.trim(cli_line(&1)))
-    |> Enum.reject(&(&1 == ""))
-    |> case do
-      [] -> rule
-      message -> Enum.join(message, " ")
-    end
-    |> truncate()
-  end
-
   defp parse_format(output, workdir) do
     if Regex.match?(~r/mix format failed|files are not formatted/i, output) do
       output
@@ -184,7 +124,7 @@ defmodule Kogen.Feedback.Parser do
               finding(
                 "format",
                 "unformatted",
-                {normalize_path(path, workdir), 1, 1},
+                {normalize_path(path, workdir), nil, nil},
                 nil,
                 "run mix format <path>"
               )
@@ -256,6 +196,7 @@ defmodule Kogen.Feedback.Parser do
     environmental? = block |> Enum.join("\n") |> environment_text?()
 
     %{
+      explanation: Enum.join(block, "\n"),
       tool: "exunit",
       rule: exunit_rule(environmental?, assertion?(left, right, headline)),
       severity: if(environmental?, do: :warning, else: :error),
@@ -294,4 +235,5 @@ defmodule Kogen.Feedback.Parser do
       end
     end)
   end
+
 end

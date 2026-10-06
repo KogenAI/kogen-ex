@@ -4,7 +4,6 @@ defmodule Kogen.Build.GateSummary do
   alias Kogen.Build.GateMetrics
 
   @max_findings 20
-  @message_limit 240
 
   @spec compact(map() | nil) :: map() | nil
   def compact(nil), do: nil
@@ -21,6 +20,7 @@ defmodule Kogen.Build.GateSummary do
       failed_test_count: Map.get(gate, :failed_test_count),
       warnings: Map.get(gate, :warnings, []),
       checks: Enum.map(commands, &elem(&1, 0)),
+      findings_path: Map.get(gate, :findings_path),
       finding_count: length(findings),
       findings: Enum.take(findings, @max_findings)
     }
@@ -110,30 +110,22 @@ defmodule Kogen.Build.GateSummary do
     line = Map.get(finding, :line)
 
     %{
+      id: Map.get(finding, :id),
       check: check,
       tool: Map.get(finding, :tool),
       rule: Map.get(finding, :rule),
       severity: Map.get(finding, :severity),
       path: path,
       line: line,
+      col: Map.get(finding, :col),
       location: location(path, line),
       symbol: Map.get(finding, :symbol),
-      message: short_message(Map.get(finding, :message))
+      message: Map.get(finding, :message),
+      explanation: Map.get(finding, :explanation),
+      hint: Map.get(finding, :hint)
     }
   end
 
   defp location(path, line) when is_binary(path) and is_integer(line), do: "#{path}:#{line}"
   defp location(_path, _line), do: nil
-
-  defp short_message(message) when is_binary(message) do
-    message = message |> String.replace(~r/\s+/, " ") |> String.trim()
-
-    if String.length(message) > @message_limit do
-      String.slice(message, 0, @message_limit - 3) <> "..."
-    else
-      message
-    end
-  end
-
-  defp short_message(_message), do: nil
 end

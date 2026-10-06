@@ -1,6 +1,6 @@
-defmodule Kogen.Feedback.Parser.Compile do
+defmodule Kogen.Diagnostics.Parser.Compile do
   @moduledoc false
-  import Kogen.Feedback.Parser.Common,
+  import Kogen.Diagnostics.Parser.Common,
     only: [
       location: 1,
       normalize_path: 2,
@@ -47,12 +47,16 @@ defmodule Kogen.Feedback.Parser.Compile do
         {:ok, path, line_number, col, message} when message != "" ->
           if Regex.match?(~r/\b(?:error|warning):/i, message),
             do: [
-              finding(
-                "compile",
+              "compile"
+              |> finding(
                 compile_rule(message),
                 {normalize_path(path, workdir), line_number, col},
                 symbol(message),
                 message
+              )
+              |> Map.put(
+                :severity,
+                severity(message)
               )
             ],
             else: []
@@ -75,25 +79,48 @@ defmodule Kogen.Feedback.Parser.Compile do
     lines
     |> Enum.drop(index + 1)
     |> Enum.take(12)
-    |> Enum.find_value([], fn line ->
+    |> Enum.find_value(unlocated_diagnostic(diagnostic, prefix, lines, index), fn line ->
       case location(cli_line(line)) do
         {:ok, path, line_number, col, tail} ->
           message = if diagnostic == "", do: tail, else: diagnostic
 
           [
-            finding(
-              "compile",
+            "compile"
+            |> finding(
               compile_rule(message),
               {normalize_path(path, workdir), line_number, col},
               diagnostic_symbol(message, tail),
               message
             )
+            |> Map.put(:severity, severity(prefix))
+            |> Map.put(:explanation, diagnostic_details(lines, index))
           ]
 
         _other ->
           nil
       end
     end)
+  end
+
+  defp unlocated_diagnostic(message, prefix, lines, index) do
+    [
+      "compile"
+      |> finding(compile_rule(message), {nil, nil, nil}, symbol(message), message)
+      |> Map.put(:severity, severity(prefix))
+      |> Map.put(:explanation, diagnostic_details(lines, index))
+    ]
+  end
+
+  defp severity(text), do: if(String.contains?(text, "warning:"), do: :warning, else: :error)
+
+  defp diagnostic_details(lines, index) do
+    lines
+    |> Enum.drop(index + 1)
+    |> Enum.take_while(fn line ->
+      not Regex.match?(~r/^\s*(?:warning:|error:|\*\* \(|== Compilation|make(?:\[\d+\])?:)/, line)
+    end)
+    |> Enum.join("\n")
+    |> String.trim()
   end
 
   defp diagnostic_symbol(message, tail) do
@@ -133,7 +160,7 @@ defmodule Kogen.Feedback.Parser.Compile do
               finding(
                 "compile",
                 "compile_error",
-                {normalize_path(path, workdir), 1, 1},
+                {normalize_path(path, workdir), nil, nil},
                 nil,
                 String.trim(line)
               )

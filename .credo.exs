@@ -170,10 +170,10 @@
                Kogen.Provider => [Kogen.Http, Kogen.Proc],
                Kogen.State => [Kogen.Workspace],
                Kogen.Quality => [Kogen.Proc, Kogen.Workspace],
-               Kogen.Feedback => [],
+               Kogen.Diagnostics => [],
                Kogen.Checks => [
                  Kogen.Quality,
-                 Kogen.Feedback,
+                 Kogen.Diagnostics,
                  Kogen.Proc,
                  Kogen.Workspace,
                  Kogen.Project
