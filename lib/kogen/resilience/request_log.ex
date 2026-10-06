@@ -22,6 +22,7 @@ defmodule Kogen.Resilience.RequestLog do
 
   @type t :: %__MODULE__{started_at: integer(), progress: :atomics.atomics_ref()}
   @type meta :: %{
+          optional(:settings) => map(),
           stage: atom(),
           turn: non_neg_integer(),
           model: String.t(),
@@ -73,7 +74,8 @@ defmodule Kogen.Resilience.RequestLog do
       tokens: tokens,
       history_items: meta.history.items,
       history_bytes: meta.history.bytes,
-      tool_output_bytes: meta.history.tool_output_bytes
+      tool_output_bytes: meta.history.tool_output_bytes,
+      request_settings: Map.get(meta, :settings, %{})
     }
   end
 

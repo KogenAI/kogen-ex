@@ -93,7 +93,10 @@ defmodule Kogen.Provider.ChatGPT do
           {:ok, ModelResponse.t()} | {:error, ProviderError.t()}
   def respond(%Config{} = config, %ModelRequest{} = request) do
     if valid_config?(config) do
-      respond_with_refresh(config, request)
+      case Codec.encode_request(request, encoding_mode(config)) do
+        {:ok, _body} -> respond_with_refresh(config, request)
+        {:error, error} -> {:error, error}
+      end
     else
       provider_error(:malformed, "ChatGPT provider configuration is invalid.")
     end
@@ -106,7 +109,8 @@ defmodule Kogen.Provider.ChatGPT do
   @spec respond_with_transcript(Config.t(), ModelRequest.t()) ::
           {:ok, ModelResponse.t(), binary()} | {:error, ProviderError.t()}
   def respond_with_transcript(%Config{} = config, %ModelRequest{} = request) do
-    with {:ok, token, account_id} <- credential_for_request(config) do
+    with {:ok, _body} <- Codec.encode_request(request, encoding_mode(config)),
+         {:ok, token, account_id} <- credential_for_request(config) do
       execute(config, request, token, account_id)
     end
   end
@@ -181,13 +185,13 @@ defmodule Kogen.Provider.ChatGPT do
   end
 
   defp execute(config, request, token, account_id) do
-    mode = if config.source == :kogen_owned, do: :siwc, else: :codex
+    mode = encoding_mode(config)
 
     with {:ok, body} <- Codec.encode_request(request, mode),
          {:ok, response} <-
            Transport.post_stream(
              config.endpoint,
-             headers(config, token, account_id),
+             request_headers(config, request, token, account_id),
              body,
              config.timeout_ms,
              proxy_env: config.proxy_env,
@@ -205,6 +209,20 @@ defmodule Kogen.Provider.ChatGPT do
 
       {:error, %ProviderError{} = error} ->
         {:error, error}
+    end
+  end
+
+  defp encoding_mode(%Config{source: :kogen_owned}), do: :siwc
+  defp encoding_mode(_config), do: :codex
+
+  defp request_headers(config, request, token, account_id) do
+    base = headers(config, token, account_id)
+
+    if request.adapter == :lite do
+      base ++
+        [{"x-openai-internal-codex-responses-lite", "true"}, {"session_id", request.session_id}]
+    else
+      base
     end
   end
 

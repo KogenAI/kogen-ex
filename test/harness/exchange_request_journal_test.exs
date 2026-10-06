@@ -36,6 +36,20 @@ defmodule Kogen.Harness.ExchangeRequestJournalTest do
              "tokens" => %{"input" => 1, "cached_input" => 0, "output" => 1}
            } = record
 
+    assert record["request_settings"] == %{
+             "adapter" => "responses",
+             "adapter_version" => "codex-0.160.0/kogen-1",
+             "text_verbosity" => "low",
+             "reasoning_summary" => "none",
+             "reasoning_context" => :null,
+             "tool_choice" => "auto",
+             "parallel_tool_calls" => false,
+             "session_id" => record["request_settings"]["session_id"]
+           }
+
+    assert_receive {:fake_request, 1, body, _at}
+    assert body["text"] == %{"verbosity" => "low"}
+    assert body["reasoning"] == %{"effort" => "max"}
     assert record["history_bytes"] > record["tool_output_bytes"]
     assert record["started_at"] <= record["first_byte_at"]
     assert record["first_byte_at"] <= record["ended_at"]
@@ -101,6 +115,41 @@ defmodule Kogen.Harness.ExchangeRequestJournalTest do
              Exchange.respond(opts, %{request() | remaining_ms: 2_000})
 
     assert [%{"outcome" => "timeout", "first_byte_at" => :null}] = records(tmp_dir)
+    FakeResponsesServer.stop(server)
+  end
+
+  test "Lite selection is measured and stable across identical builder attempts", %{
+    tmp_dir: tmp_dir
+  } do
+    {url, server} = FakeResponsesServer.start([{:ok, "done"}])
+    opts = opts(tmp_dir, url, %{}, @fast)
+    opts = %{opts | project: %{opts.project | build: %{luna_provider_mode: :lite}}}
+    assert {:ok, _response} = Exchange.respond(opts, request())
+    assert {:ok, _response} = Exchange.respond(opts, request())
+    assert_receive {:fake_request, 1, first, _at}
+    assert_receive {:fake_request, 2, second, _at}
+    assert first == second
+    assert first["reasoning"] == %{"effort" => "max", "context" => "all_turns"}
+    assert first["instructions"] == ""
+    refute Map.has_key?(first, "tools")
+    assert [record, again] = records(tmp_dir)
+    assert record["request_settings"] == again["request_settings"]
+    assert record["request_settings"]["adapter"] == "lite"
+    FakeResponsesServer.stop(server)
+  end
+
+  test "Sol-high planning preserves its conventional request settings", %{tmp_dir: tmp_dir} do
+    {url, server} = FakeResponsesServer.start([{:ok, "plan"}])
+    opts = opts(tmp_dir, url, %{}, @fast)
+    opts = %{opts | project: %{opts.project | build: %{luna_provider_mode: :lite}}}
+    request = %{request() | model: "gpt-6.1-sol", effort: "high", stage: :plan}
+    assert {:ok, _response} = Exchange.respond(opts, request)
+    assert_receive {:fake_request, 1, body, _at}
+    assert body["model"] == "gpt-6.1-sol"
+    assert body["reasoning"] == %{"effort" => "high"}
+    refute Map.has_key?(body, "text")
+    assert [record] = records(tmp_dir)
+    assert record["request_settings"]["adapter"] == "responses"
     FakeResponsesServer.stop(server)
   end
 

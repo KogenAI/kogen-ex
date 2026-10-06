@@ -1,0 +1,1 @@
+{"include":["reasoning.encrypted_content"],"input":[{"content":[{"text":"Fix it.","type":"input_text"}],"role":"user"}],"instructions":"Build it.","model":"gpt-6-luna","parallel_tool_calls":false,"reasoning":{"effort":"max"},"store":false,"stream":true,"text":{"verbosity":"low"},"tool_choice":"auto","tools":[{"name":"shell","parameters":{"type":"object"},"type":"function"}]}

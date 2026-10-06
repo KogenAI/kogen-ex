@@ -23,7 +23,7 @@ defmodule Kogen.Project.BuildSettings do
     unknown =
       unknown_keys(
         value,
-        ~w(recipe roles wall_minutes edge_tests model_fallback context_bytes),
+        ~w(recipe roles wall_minutes edge_tests model_fallback context_bytes luna_provider_mode),
         "build"
       )
 
@@ -33,11 +33,13 @@ defmodule Kogen.Project.BuildSettings do
     {edge_tests, edge_errors} = edge_tests(value)
     {model_fallback, fallback_errors} = model_fallback(value)
     {context_bytes, context_errors} = context_bytes(value)
+    {luna_mode, luna_errors} = luna_provider_mode(value)
 
     errors =
       unknown ++
         recipe_errors ++
-        role_errors ++ wall_errors ++ edge_errors ++ fallback_errors ++ context_errors
+        role_errors ++
+        wall_errors ++ edge_errors ++ fallback_errors ++ context_errors ++ luna_errors
 
     if errors == [],
       do:
@@ -48,7 +50,8 @@ defmodule Kogen.Project.BuildSettings do
            wall_minutes: wall_minutes,
            edge_tests: edge_tests,
            model_fallback: model_fallback,
-           context_bytes: context_bytes
+           context_bytes: context_bytes,
+           luna_provider_mode: luna_mode
          }},
       else: {:error, errors}
   end
@@ -72,7 +75,8 @@ defmodule Kogen.Project.BuildSettings do
           wall_minutes: pos_integer() | nil,
           edge_tests: boolean(),
           model_fallback: boolean(),
-          context_bytes: pos_integer() | nil
+          context_bytes: pos_integer() | nil,
+          luna_provider_mode: :responses | :lite
         }
   def effective(machine, project) do
     machine = machine || %{}
@@ -91,7 +95,10 @@ defmodule Kogen.Project.BuildSettings do
       wall_minutes: Map.get(project, :wall_minutes) || Map.get(machine, :wall_minutes),
       edge_tests: edge_setting(project, machine),
       model_fallback: fallback_setting(project, machine),
-      context_bytes: Map.get(project, :context_bytes) || Map.get(machine, :context_bytes)
+      context_bytes: Map.get(project, :context_bytes) || Map.get(machine, :context_bytes),
+      luna_provider_mode:
+        Map.get(project, :luna_provider_mode) || Map.get(machine, :luna_provider_mode) ||
+          :responses
     }
   end
 
@@ -129,6 +136,15 @@ defmodule Kogen.Project.BuildSettings do
 
       :error ->
         {nil, []}
+    end
+  end
+
+  defp luna_provider_mode(value) do
+    case Map.fetch(value, "luna_provider_mode") do
+      {:ok, "responses"} -> {:responses, []}
+      {:ok, "lite"} -> {:lite, []}
+      :error -> {nil, []}
+      _invalid -> {nil, [issue("build.luna_provider_mode must be responses or lite")]}
     end
   end
 

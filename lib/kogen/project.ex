@@ -21,7 +21,8 @@ defmodule Kogen.Project do
           wall_minutes: pos_integer() | nil,
           edge_tests: boolean(),
           model_fallback: boolean(),
-          context_bytes: pos_integer() | nil
+          context_bytes: pos_integer() | nil,
+          luna_provider_mode: :responses | :lite
         }
   def effective_build_settings(machine, project), do: BuildSettings.effective(machine, project)
 

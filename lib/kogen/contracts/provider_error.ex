@@ -8,6 +8,13 @@ defmodule Kogen.Contracts.ProviderError do
   defstruct @enforce_keys
 
   @type class ::
-          :login | :usage_limit | :overload | :timeout | :stall | :malformed | :transport
+          :login
+          | :usage_limit
+          | :overload
+          | :timeout
+          | :stall
+          | :malformed
+          | :transport
+          | :unsupported
   @type t :: %__MODULE__{class: class(), message: String.t()}
 end

@@ -8,8 +8,8 @@ defmodule Kogen.Provider.ChatGPT.Codec do
   alias Kogen.Provider.ChatGPT.Codec.Errors
   alias Kogen.Provider.ChatGPT.Codec.Recording
   alias Kogen.Provider.ChatGPT.Codec.Stream
-  alias Kogen.Provider.ChatGPT.SIWCCCodec
   alias Kogen.Provider.ChatGPT.SSE
+  alias Kogen.ResponseProtocol.Codec, as: RequestCodec
 
   @type credentials :: {String.t(), String.t()}
   @type recording :: {String.t(), String.t(), [binary()]}
@@ -17,9 +17,19 @@ defmodule Kogen.Provider.ChatGPT.Codec do
           {:ok, binary()} | {:error, ProviderError.t()}
   def encode_request(%ModelRequest{} = request, mode \\ :codex) when mode in [:codex, :siwc] do
     if valid_request?(request) do
-      case mode do
-        :codex -> request |> request_body() |> encode_json()
-        :siwc -> SIWCCCodec.encode_request(request)
+      case {mode, request.adapter} do
+        {:codex, :responses} ->
+          request |> request_body() |> encode_json()
+
+        {:codex, :lite} ->
+          RequestCodec.encode_lite(request)
+
+        {:siwc, :responses} ->
+          RequestCodec.encode_request(request)
+
+        _unsupported ->
+          {:error,
+           %ProviderError{class: :unsupported, message: "Lite requires the Codex backend."}}
       end
     else
       Errors.malformed()
@@ -61,11 +71,8 @@ defmodule Kogen.Provider.ChatGPT.Codec do
   def request_fingerprint(%ModelRequest{} = request) do
     with true <- valid_request?(request),
          {:ok, encoded} <-
-           request
-           |> Map.put(:prompt_cache_key, nil)
-           |> request_body()
-           |> Map.update!("reasoning", &Map.delete(&1, "summary"))
-           |> encode_json() do
+           request |> Map.put(:prompt_cache_key, nil) |> encode_request() do
+      encoded = RequestCodec.fingerprint_body(encoded, request.adapter)
       digest = :sha256 |> :crypto.hash(encoded) |> Base.encode16(case: :lower)
       {:ok, digest}
     else
@@ -106,7 +113,8 @@ defmodule Kogen.Provider.ChatGPT.Codec do
       request.effort != "" and is_binary(request.instructions) and is_list(request.input) and
       is_list(request.tools) and
       (is_nil(request.previous_response_id) or is_binary(request.previous_response_id)) and
-      (is_nil(request.prompt_cache_key) or is_binary(request.prompt_cache_key))
+      (is_nil(request.prompt_cache_key) or is_binary(request.prompt_cache_key)) and
+      RequestCodec.valid_controls?(request)
   end
 
   defp request_body(request) do
@@ -127,7 +135,9 @@ defmodule Kogen.Provider.ChatGPT.Codec do
         response_id -> Map.put(body, "previous_response_id", response_id)
       end
 
-    maybe_put_prompt_cache_key(case_result, request.prompt_cache_key)
+    case_result
+    |> RequestCodec.controls(request)
+    |> maybe_put_prompt_cache_key(request.prompt_cache_key)
   end
 
   defp maybe_put_prompt_cache_key(body, cache_key) when is_binary(cache_key),
