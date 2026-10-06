@@ -4,6 +4,7 @@ defmodule Kogen.Kernel.CLI.Runner do
   alias Kogen.Cli.Args
   alias Kogen.Cli.Version
   alias Kogen.Kernel.Approval
+  alias Kogen.Kernel.CLI.CheckProposals
   alias Kogen.Kernel.CLI.ErrorOutput
   alias Kogen.Kernel.CLI.IntentRemoval
   alias Kogen.Kernel.CLI.QueueCommand
@@ -14,6 +15,10 @@ defmodule Kogen.Kernel.CLI.Runner do
 
   @spec run(Args.t()) :: {non_neg_integer(), String.t()}
   def run(%Args{command: :version}), do: {0, "kogen #{Version.display(Kogen.Kernel.version())}\n"}
+
+  def run(%Args{command: :checks_effect} = args), do: CheckProposals.run(args)
+
+  def run(%Args{command: :checks_sample} = args), do: CheckProposals.run(args)
 
   def run(%Args{command: :status} = args), do: StatusCommand.run(args)
   def run(%Args{command: :intent_shape} = args), do: intent_shape(args)

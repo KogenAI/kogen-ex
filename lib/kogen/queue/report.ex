@@ -89,6 +89,7 @@ defmodule Kogen.Queue.Report do
          Enum.uniq(for_result)
        )},
       {"candidate_diffs", candidate_diffs(run, events)},
+      {"check_proposals", check_proposals(events)},
       {"red_checks", latest_candidate_value(events, :red_checks, [])},
       {"acceptance_items", latest_candidate_value(events, :acceptance_items, [])},
       {"model_stages", model_stages(events)},
@@ -125,6 +126,13 @@ defmodule Kogen.Queue.Report do
       timing -> Map.from_struct(timing)
     end
   end
+
+  defp check_proposals(events),
+    do:
+      (
+        for_result = for(event <- events, event.event == "check_proposal_drafted", do: event.path)
+        Enum.uniq(for_result)
+      )
 
   defp model_stages(events) do
     for %Event{event: "model_stage"} = event <- events do

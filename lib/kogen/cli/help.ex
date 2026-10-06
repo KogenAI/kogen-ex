@@ -9,6 +9,7 @@ defmodule Kogen.Cli.Help do
     status     Show the queue, Builds and Intents
     intent     Shape, approve or remove an Intent
     queue      Build approved Intents one at a time
+    checks     Qualify candidate checks from recurring Build failures
     provider   Manage Kogen's provider logins
     version    Show the Kogen version
     help       Show help for a command
@@ -30,6 +31,24 @@ defmodule Kogen.Cli.Help do
 
   def render(["help"]),
     do: "Usage: kogen help [<command> [<subcommand>]]\n\nShows help for a command.\n"
+
+  def render(["checks"]),
+    do:
+      "Usage: kogen checks <command>\n\nCommands:\n  sample <proposal.json> <sample.json>   Measure precision and draft adoption\n  effect <qualification.json> <before-run> <checked-run>   Retain measured Build comparisons\n"
+
+  def render(["checks", "effect"]),
+    do:
+      "Usage: kogen checks effect <qualification.json> <before-run> <checked-run>\nRecords measured model time, repairs, outcome and base/model identities for the same approved Intent.\n"
+
+  def render(["checks", "sample"]) do
+    """
+    Usage: kogen checks sample <proposal.json> <sample.json> [--project <checkout>]
+
+    Runs a candidate checker over planted, contrasting and labeled real-code examples.
+    Records precision and cost. Passing samples produce a draft adoption Intent for
+    caller approval in kogen_credo (quality) or optimum_credo (style). Enables no gate.
+    """
+  end
 
   def render(["status"]) do
     """

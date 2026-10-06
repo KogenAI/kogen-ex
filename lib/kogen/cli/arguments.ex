@@ -11,10 +11,13 @@ defmodule Kogen.Cli.Arguments do
 
   @project_flags [project: :string, origin: :string, base: :string]
 
-  @groups ~w(intent queue provider)
+  @groups ~w(intent queue provider checks)
 
   # path => {command, required positionals, optional positionals, command flags, project?}
   @commands %{
+    ["checks", "effect"] =>
+      {:checks_effect, ["<qualification.json>", "<before-run>", "<checked-run>"], [], [], true},
+    ["checks", "sample"] => {:checks_sample, ["<proposal.json>", "<sample.json>"], [], [], true},
     ["status"] => {:status, [], ["<slug>"], [json: :boolean, watch: :boolean], true},
     ["intent", "shape"] => {:intent_shape, ["<slug>", "<file|->"], [], [json: :boolean], true},
     ["intent", "approve"] => {:intent_approve, ["<slug>"], ["<hash>"], [by: :string], true},

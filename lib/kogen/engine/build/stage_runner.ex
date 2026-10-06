@@ -6,6 +6,7 @@ defmodule Kogen.Engine.Build.StageRunner do
   alias Kogen.Contracts.Failure
   alias Kogen.Contracts.ProviderError
   alias Kogen.Contracts.Stack
+  alias Kogen.Engine.Build.CheckProposals
   alias Kogen.Engine.Build.CheckStage
   alias Kogen.Engine.Build.Commit
   alias Kogen.Engine.Build.GateSupport
@@ -186,6 +187,7 @@ defmodule Kogen.Engine.Build.StageRunner do
 
   defp finish_develop_result(session, result, tree, gate_flakes) do
     {failure, detail} = GateSupport.gate_failure(result)
+    CheckProposals.observe(session, failure, :repair)
     failed_test_count = Map.get(result.gate || %{}, :failed_test_count)
 
     session = %{
@@ -315,6 +317,8 @@ defmodule Kogen.Engine.Build.StageRunner do
   defp record(session, event), do: State.record(session.run, event)
 
   defp fail(session, stage, %Failure{} = failure) do
+    if stage == :check, do: CheckProposals.observe(session, failure, :repair)
+
     event = %{
       event: :stage_failure,
       stage: stage,

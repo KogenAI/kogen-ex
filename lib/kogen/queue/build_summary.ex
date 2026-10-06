@@ -18,7 +18,8 @@ defmodule Kogen.Queue.BuildSummary do
                 continuations: 0,
                 progress: nil,
                 gate_timing: nil,
-                setup: nil
+                setup: nil,
+                check_proposals: []
               ]
 
   @type t :: %__MODULE__{
@@ -31,7 +32,8 @@ defmodule Kogen.Queue.BuildSummary do
           progress: map() | nil,
           candidate_diff: Path.t() | nil,
           continuations: non_neg_integer(),
-          setup: map() | nil
+          setup: map() | nil,
+          check_proposals: [Path.t()]
         }
 
   @spec latest(Path.t(), String.t()) :: {:ok, t() | nil} | {:error, term()}
@@ -55,6 +57,13 @@ defmodule Kogen.Queue.BuildSummary do
          reason: reason(events),
          stages: stages(events),
          setup: setup(events),
+         check_proposals:
+           (
+             for_result =
+               for(event <- events, event.event == "check_proposal_drafted", do: event.path)
+
+             Enum.uniq(for_result)
+           ),
          continuations: Enum.count(events, &(&1.event == "context_continued")),
          gate_timing: Codec.latest(events),
          progress: Kogen.Queue.Progress.from_events(events),

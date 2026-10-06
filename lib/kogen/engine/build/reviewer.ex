@@ -36,6 +36,7 @@ defmodule Kogen.Engine.Build.Reviewer do
     if result.verdict == :revise do
       detail = Enum.join(result.findings, "\n")
       failure = %Failure{class: :candidate, reason: :review_revise, detail: detail}
+      Kogen.Engine.Build.CheckProposals.observe(session, failure, :review)
       session = %{session | failure: failure, failure_text: detail}
       {:ok, session, [{:review, result.verdict, result.findings}]}
     else

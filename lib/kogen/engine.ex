@@ -2,11 +2,13 @@ defmodule Kogen.Engine do
   @moduledoc "Runs approved Builds inside isolated Candidate workspaces."
   use Boundary,
     deps: [
+      Logger,
       Kogen.Contracts,
       Kogen.Proc,
       Kogen.Project,
       Kogen.Intent,
       Kogen.Shaping,
+      Kogen.CheckLearning,
       Kogen.Provider,
       Kogen.Build,
       Kogen.Workspace,

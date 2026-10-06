@@ -121,6 +121,7 @@
                Kogen.Proc.Request,
                Kogen.Project.Loader,
                Kogen.Intent.ShapingCodec,
+               Kogen.CheckLearning.Codec,
                Kogen.Project.BuildSettings,
                Kogen.Workspace.Git,
                Kogen.Contracts.MiseEnvironment,
@@ -172,6 +173,7 @@
                Kogen.Workspace => [Kogen.Proc],
                Kogen.Provider => [Kogen.Http, Kogen.Proc],
                Kogen.State => [Kogen.Workspace],
+               Kogen.CheckLearning => [Kogen.Proc, Kogen.State, Kogen.Workspace],
                Kogen.Shaping => [Kogen.Workspace, Kogen.State],
                Kogen.Quality => [Kogen.Proc, Kogen.Workspace],
                Kogen.Diagnostics => [],
@@ -207,6 +209,7 @@
                  Kogen.State
                ],
                Kogen.Engine => [
+                 Kogen.CheckLearning,
                  Kogen.Shaping,
                  Kogen.Proc,
                  Kogen.Project,
@@ -220,6 +223,7 @@
                  Kogen.Resilience
                ],
                Kogen.Kernel => [
+                 Kogen.CheckLearning,
                  Kogen.Shaping,
                  Kogen.Proc,
                  Kogen.Project,

@@ -27,7 +27,10 @@ defmodule Kogen.Kernel.CLITest do
     ["provider", "login"],
     ["provider", "logout"],
     ["provider", "use"],
-    ["version"]
+    ["version"],
+    ["checks"],
+    ["checks", "sample"],
+    ["checks", "effect"]
   ]
 
   test "every help page matches its golden file, by every route" do

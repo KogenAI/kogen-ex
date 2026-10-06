@@ -1,0 +1,2 @@
+Usage: kogen checks effect <qualification.json> <before-run> <checked-run>
+Records measured model time, repairs, outcome and base/model identities for the same approved Intent.

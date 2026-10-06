@@ -57,6 +57,7 @@ defmodule Kogen.Kernel.CLI.StatusOutput do
 
     "Build #{short(build.build_id)}: #{outcome}\n" <>
       stages <>
+      check_proposals(build.check_proposals) <>
       setup(build.setup) <>
       continuations(build.continuations) <>
       timing_text(build.gate_timing) <>
@@ -76,6 +77,11 @@ defmodule Kogen.Kernel.CLI.StatusOutput do
     "  acceptance verified: #{Enum.join(verified, ", ")}\n" <>
       "  acceptance remaining: #{Enum.join(remaining, ", ")}\n"
   end
+
+  defp check_proposals([]), do: ""
+
+  defp check_proposals(paths),
+    do: "  candidate checks (caller approval required): " <> Enum.join(paths, ", ") <> "\n"
 
   defp setup(nil), do: ""
   defp setup(%{reused?: true, wall_ms: ms}), do: "  setup: reused (saved preparation #{ms} ms)\n"
