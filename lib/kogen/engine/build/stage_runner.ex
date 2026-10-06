@@ -5,6 +5,7 @@ defmodule Kogen.Engine.Build.StageRunner do
   alias Kogen.Build.Recipe
   alias Kogen.Contracts.Failure
   alias Kogen.Contracts.ProviderError
+  alias Kogen.Contracts.Stack
   alias Kogen.Engine.Build.CheckStage
   alias Kogen.Engine.Build.Commit
   alias Kogen.Engine.Build.GateSupport
@@ -196,7 +197,11 @@ defmodule Kogen.Engine.Build.StageRunner do
         acceptance_failures: []
     }
 
-    metrics = GateSummary.metrics(result.gate, "test/acceptance/#{session.intent.slug}_test.exs")
+    metrics =
+      GateSummary.metrics(
+        result.gate,
+        Stack.acceptance_test(session.project.root, session.intent.slug)
+      )
 
     if result.outcome == :gate_environment do
       fail(session, :develop, failure || environment_failure())

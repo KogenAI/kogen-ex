@@ -190,7 +190,18 @@ defmodule Kogen.Diagnostics do
       "format" -> "format"
       "test" -> if(compilation_output?(output), do: "compile", else: "exunit")
       "dialyzer" -> "dialyzer"
-      _other -> output_tool(output)
+      _other -> ruby_tool(argv) || output_tool(output)
+    end
+  end
+
+  defp ruby_tool(argv) do
+    commands = Enum.map(argv, &Path.basename/1)
+
+    cond do
+      "rails" in commands and "test" in commands -> "minitest"
+      "rubocop" in commands -> "rubocop"
+      "standardrb" in commands -> "standard"
+      true -> nil
     end
   end
 
@@ -323,8 +334,22 @@ defmodule Kogen.Diagnostics do
 
   defp nothing_ran?(output),
     do:
-      Regex.match?(~r/nothing collected|no tests? (?:were )?collected|no tests? to run/i, output)
+      Regex.match?(
+        ~r/nothing collected|no tests? (?:were )?collected|no tests? to run|\b0 runs, 0 assertions/i,
+        output
+      )
 
   defp recognized_tool?(tool),
-    do: tool in ["compile", "credo", "format", "exunit", "dialyzer", "mixed"]
+    do:
+      tool in [
+        "compile",
+        "credo",
+        "format",
+        "exunit",
+        "dialyzer",
+        "mixed",
+        "minitest",
+        "rubocop",
+        "standard"
+      ]
 end

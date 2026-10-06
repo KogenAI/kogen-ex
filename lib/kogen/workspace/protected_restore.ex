@@ -1,6 +1,7 @@
 defmodule Kogen.Workspace.ProtectedRestore do
   @moduledoc false
 
+  alias Kogen.Contracts.Stack
   alias Kogen.Workspace
 
   @typedoc "A Candidate checkout plus the approved bytes its protected paths must keep."
@@ -98,20 +99,21 @@ defmodule Kogen.Workspace.ProtectedRestore do
 
   defp approved_bytes(checkout, path) do
     intent_path = ".kogen/intents/#{checkout.slug}/intent.md"
-    acceptance_path = ".kogen/acceptance/#{checkout.slug}_test.exs"
-    candidate_path = "test/acceptance/#{checkout.slug}_test.exs"
 
-    case path do
-      ^intent_path ->
+    approved =
+      Enum.find(checkout.acceptance_files, fn {source, _bytes} ->
+        path == source or
+          path == String.replace_prefix(source, ".kogen/acceptance/", "test/acceptance/")
+      end)
+
+    case {path, approved} do
+      {^intent_path, _acceptance} ->
         {:ok, checkout.intent_bytes}
 
-      ^acceptance_path ->
-        acceptance_bytes(checkout, acceptance_path)
+      {_path, {_source, bytes}} ->
+        {:ok, bytes}
 
-      ^candidate_path ->
-        acceptance_bytes(checkout, acceptance_path)
-
-      other ->
+      {other, nil} ->
         Workspace.read_file_at(checkout.origin, checkout.base_sha, other, checkout.git_env)
     end
   end
@@ -119,7 +121,7 @@ defmodule Kogen.Workspace.ProtectedRestore do
   # Non-Intent protected paths are approved from the base tree, so restoring bytes that hash
   # differently would corrupt the Candidate; report a controller bug instead of writing them.
   defp ensure_consistent(checkout, path, bytes, approved_sha) do
-    if intent_path?(checkout.slug, path) or sha256(bytes) == approved_sha do
+    if intent_path?(checkout, path) or sha256(bytes) == approved_sha do
       :ok
     else
       {:error,
@@ -129,15 +131,10 @@ defmodule Kogen.Workspace.ProtectedRestore do
     end
   end
 
-  defp intent_path?(slug, path),
-    do: path in [".kogen/intents/#{slug}/intent.md", "test/acceptance/#{slug}_test.exs"]
-
-  defp acceptance_bytes(%{acceptance_files: files}, path) do
-    case Map.fetch(files, path) do
-      {:ok, bytes} -> {:ok, bytes}
-      :error -> {:error, :approved_acceptance_bytes_missing}
-    end
-  end
+  defp intent_path?(checkout, path),
+    do:
+      path == ".kogen/intents/#{checkout.slug}/intent.md" or
+        Map.has_key?(Stack.installed_files(checkout.acceptance_files), path)
 
   defp parent_state(root, path) do
     path

@@ -1,5 +1,5 @@
 defmodule Kogen.Checks.LedgerRow do
-  @moduledoc "One ExUnit acceptance test result written by the controller formatter."
+  @moduledoc "One acceptance test result written by the controller formatter."
 
   @enforce_keys [:tag, :test, :status]
   defstruct [:tag, :test, :status]

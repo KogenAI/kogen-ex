@@ -4,6 +4,7 @@ defmodule Kogen.Engine.Build.Guard do
   alias Kogen.Contracts.Failure
   alias Kogen.Contracts.Intent
   alias Kogen.Contracts.Project
+  alias Kogen.Contracts.Stack
   alias Kogen.Workspace
 
   @spec check(Path.t(), String.t(), Intent.t(), Project.t(), map(), map()) ::
@@ -32,7 +33,7 @@ defmodule Kogen.Engine.Build.Guard do
       {:ok, changed} ->
         prefixes =
           Enum.flat_map(intent.domains, &Map.get(project.domains, &1, [])) ++
-            allowed_extra(intent)
+            allowed_extra(intent, project.root)
 
         domains = Enum.sort(intent.domains)
 
@@ -70,10 +71,10 @@ defmodule Kogen.Engine.Build.Guard do
         path == prefix or String.starts_with?(path, String.trim_trailing(prefix, "/") <> "/")
       end)
 
-  defp allowed_extra(%Intent{slug: slug}),
+  defp allowed_extra(%Intent{slug: slug}, root),
     do: [
       ".kogen/intents/#{slug}"
-      | Enum.map([".kogen/acceptance/", "test/acceptance/"], &(&1 <> slug <> "_test.exs"))
+      | [Stack.acceptance_source(root, slug), Stack.acceptance_test(root, slug)]
     ]
 
   defp failure(reason, detail, class \\ :candidate),

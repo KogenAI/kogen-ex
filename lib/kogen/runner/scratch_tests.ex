@@ -6,6 +6,7 @@ defmodule Kogen.Runner.ScratchTests do
   # edge probe.
 
   alias Kogen.Contracts.ProcResult
+  alias Kogen.Contracts.Stack
   alias Kogen.Engine.Build.GateSupport
   alias Kogen.Engine.Build.Session
 
@@ -15,7 +16,7 @@ defmodule Kogen.Runner.ScratchTests do
   @doc "The project's gate check that runs `mix test`."
   @spec test_command(Session.t()) :: {:ok, map()} | {:error, :no_test_command}
   def test_command(%Session{project: %{checks: checks}}) do
-    case Enum.find(checks, &(mix_test_index(&1.argv) != nil)) do
+    case Enum.find(checks, &(Stack.test_command_index(&1.argv) != nil)) do
       nil -> {:error, :no_test_command}
       spec -> {:ok, spec}
     end
@@ -56,12 +57,27 @@ defmodule Kogen.Runner.ScratchTests do
         {tests, max(tests - String.to_integer(failures), 0)}
 
       {[], []} ->
+        ruby_summary(output)
+    end
+  end
+
+  defp ruby_summary(output) do
+    case Regex.scan(
+           ~r/(\d+) runs, \d+ assertions, (\d+) failures, (\d+) errors, (\d+) skips/,
+           output
+         ) do
+      [] ->
         nil
+
+      matches ->
+        [_line | counts] = List.last(matches)
+        [tests, failures, errors, skips] = Enum.map(counts, &String.to_integer/1)
+        {tests, max(tests - failures - errors - skips, 0)}
     end
   end
 
   @spec test_file?(String.t()) :: boolean()
-  def test_file?(path), do: String.ends_with?(path, "_test.exs")
+  def test_file?(path), do: String.ends_with?(path, ["_test.exs", "_test.rb"])
 
   @doc "How many warnings the member's last gate reported."
   @spec warnings(Session.t()) :: non_neg_integer()
@@ -76,23 +92,15 @@ defmodule Kogen.Runner.ScratchTests do
 
   # The gate's test command limited to the given files, with a fixed seed.
   defp argv(argv, files, extra) do
-    {command, args} = Enum.split(argv, mix_test_index(argv) + 2)
+    {command, args} = Enum.split(argv, Stack.test_command_index(argv) + 2)
     command ++ files ++ drop_selectors(args) ++ extra ++ ["--seed", "0"]
-  end
-
-  defp mix_test_index(argv) do
-    argv
-    |> Enum.chunk_every(2, 1, :discard)
-    |> Enum.find_index(fn [executable, command] ->
-      Path.basename(executable) == "mix" and command == "test"
-    end)
   end
 
   defp drop_selectors(["--seed", _value | rest]), do: drop_selectors(rest)
   defp drop_selectors(["--seed=" <> _value | rest]), do: drop_selectors(rest)
 
   defp drop_selectors([arg | rest]) do
-    if String.ends_with?(arg, ".exs") or Regex.match?(~r/\.exs:\d+\z/, arg),
+    if String.ends_with?(arg, [".exs", ".rb"]) or Regex.match?(~r/\.(?:exs|rb):\d+\z/, arg),
       do: drop_selectors(rest),
       else: [arg | drop_selectors(rest)]
   end

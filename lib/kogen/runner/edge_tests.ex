@@ -5,6 +5,9 @@ defmodule Kogen.Runner.EdgeTests do
   # writer sees only the verbatim Request and the project's module names: never the Intent's
   # Acceptance items, the plan, or a Candidate's code.
 
+  alias Kogen.Contracts.Stack
+  alias Kogen.Runner.RailsEdgeTests
+
   @max_tests 20
   @extra_tag "kogen_edge_extra"
   @module_limit 300
@@ -20,6 +23,8 @@ defmodule Kogen.Runner.EdgeTests do
 
   @spec instructions() :: String.t()
   def instructions, do: @instructions
+  def instructions(:elixir), do: @instructions
+  def instructions(:rails), do: RailsEdgeTests.instructions(@instructions)
 
   @spec max_tests() :: pos_integer()
   def max_tests, do: @max_tests
@@ -40,17 +45,26 @@ defmodule Kogen.Runner.EdgeTests do
   @spec module_names(Path.t()) :: [String.t()]
   def module_names(root) do
     paths =
-      Enum.flat_map(["lib/**/*.ex", "test/support/**/*.ex"], &Path.wildcard(Path.join(root, &1)))
+      Enum.flat_map(source_globs(Stack.detect(root)), &Path.wildcard(Path.join(root, &1)))
 
     for_result =
       for path <- Enum.sort(paths),
           {:ok, source} <- [File.read(path)],
-          [name] <- Regex.scan(~r/^\s*defmodule\s+([\w.]+)/m, source, capture: :all_but_first) do
+          [name] <-
+            Regex.scan(module_pattern(Stack.detect(root)), source, capture: :all_but_first) do
         name
       end
 
     Enum.uniq(for_result)
   end
+
+  defp source_globs(:elixir), do: ["lib/**/*.ex", "test/support/**/*.ex"]
+  defp source_globs(:rails), do: ["app/**/*.rb", "lib/**/*.rb", "test/support/**/*.rb"]
+  defp module_pattern(:elixir), do: ~r/^\s*defmodule\s+([\w.]+)/m
+  defp module_pattern(:rails), do: ~r/^\s*(?:class|module)\s+([\w:]+)/m
+
+  def parse(text, :elixir), do: parse(text)
+  def parse(text, :rails), do: RailsEdgeTests.parse(text)
 
   @doc """
   The test file from the writer's reply. Tests past the 20th are tagged so the run excludes
@@ -71,6 +85,8 @@ defmodule Kogen.Runner.EdgeTests do
   @doc "The arguments that leave out tests past the cap."
   @spec run_arguments() :: [String.t()]
   def run_arguments, do: ["--exclude", @extra_tag]
+  def run_arguments(:elixir), do: run_arguments()
+  def run_arguments(:rails), do: []
 
   @doc """
   The names among `names` that failed in `output`; every name when the run did not finish with
@@ -85,7 +101,8 @@ defmodule Kogen.Runner.EdgeTests do
       names
     else
       headers = Regex.scan(@failure_header, output, capture: :all_but_first)
-      failing = Enum.map(headers, &hd/1)
+      ruby = ~r/#(test_[^\s\[]+)/ |> Regex.scan(output, capture: :all_but_first) |> List.flatten()
+      failing = Enum.map(headers, &hd/1) ++ ruby
       Enum.filter(names, fn name -> Enum.any?(failing, &failed_name?(&1, name)) end)
     end
   end

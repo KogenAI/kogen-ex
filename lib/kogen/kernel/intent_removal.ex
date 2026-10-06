@@ -1,6 +1,7 @@
 defmodule Kogen.Kernel.IntentRemoval do
   @moduledoc false
 
+  alias Kogen.Contracts.Stack
   alias Kogen.Engine.Runtime
   alias Kogen.Kernel.ProjectContext
   alias Kogen.Kernel.Workspaces
@@ -50,9 +51,9 @@ defmodule Kogen.Kernel.IntentRemoval do
   defp remove_files(slug, project_root, origin, status, force, git_env) do
     intent_directory = Path.join([project_root, ".kogen", "intents", slug])
     intent_file = Path.join(intent_directory, "intent.md")
-    acceptance_file = Path.join([project_root, ".kogen", "acceptance", slug <> "_test.exs"])
+    acceptance_file = Path.join(project_root, Stack.acceptance_source(project_root, slug))
     intent_pathspec = ".kogen/intents/#{slug}"
-    acceptance_pathspec = ".kogen/acceptance/#{slug}_test.exs"
+    acceptance_pathspec = Stack.acceptance_source(project_root, slug)
 
     with :ok <- intent_exists(intent_file),
          :ok <- not_building(status),

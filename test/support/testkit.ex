@@ -10,6 +10,7 @@ defmodule Kogen.Testkit do
       Git,
       HarnessScriptedProvider,
       IntentFixture,
+      Rails,
       Temp
     ]
 end

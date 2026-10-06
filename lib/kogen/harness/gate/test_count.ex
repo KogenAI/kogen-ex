@@ -1,10 +1,13 @@
 defmodule Kogen.Harness.Gate.TestCount do
   @moduledoc false
 
+  alias Kogen.Contracts.Stack
+
   @spec failed_test_count([map()], [Kogen.Contracts.CheckSpec.t()]) ::
           non_neg_integer() | nil
   def failed_test_count(commands, specs) do
-    test_names = specs |> Enum.filter(&mix_test?(&1.argv)) |> MapSet.new(& &1.name)
+    test_names =
+      specs |> Enum.filter(&(Stack.test_command_index(&1.argv) != nil)) |> MapSet.new(& &1.name)
 
     test_commands =
       Enum.filter(commands, &(MapSet.member?(test_names, &1.name) and not &1.base_red?))
@@ -15,20 +18,19 @@ defmodule Kogen.Harness.Gate.TestCount do
         %{exit_level: 1, findings: findings} -> findings
         _passed -> []
       end)
-      |> Enum.filter(&(&1.tool == "exunit" and is_binary(&1.symbol)))
+      |> Enum.filter(&(&1.tool in ["exunit", "minitest"] and is_binary(&1.symbol)))
       |> Enum.map(& &1.symbol)
       |> Enum.uniq()
       |> length()
     end
   end
 
-  defp test_count_known?(%{tool: "exunit", exit_level: 0}), do: true
+  defp test_count_known?(%{tool: tool, exit_level: 0}) when tool in ["exunit", "minitest"],
+    do: true
 
-  defp test_count_known?(%{tool: "exunit", exit_level: 1, findings: findings}),
-    do: Enum.any?(findings, &(&1.tool == "exunit" and is_binary(&1.symbol)))
+  defp test_count_known?(%{tool: tool, exit_level: 1, findings: findings})
+       when tool in ["exunit", "minitest"],
+       do: Enum.any?(findings, &(&1.tool in ["exunit", "minitest"] and is_binary(&1.symbol)))
 
   defp test_count_known?(_command), do: false
-
-  defp mix_test?([executable, "test" | _args]), do: Path.basename(executable) == "mix"
-  defp mix_test?(_argv), do: false
 end

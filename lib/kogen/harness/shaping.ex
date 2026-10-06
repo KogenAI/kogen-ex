@@ -20,6 +20,7 @@ defmodule Kogen.Harness.Shaping do
   @moduledoc false
 
   alias Kogen.Contracts.ModelResponse
+  alias Kogen.Contracts.Stack
   alias Kogen.Contracts.ToolCall
   alias Kogen.Harness.Codec
   alias Kogen.Harness.Exchange
@@ -140,7 +141,7 @@ defmodule Kogen.Harness.Shaping do
       turn: state.turns + 1,
       model: model,
       effort: effort,
-      instructions: @instructions,
+      instructions: instructions(state.opts.workdir),
       items: state.items,
       tool_names: Codec.tool_names(:shaper),
       remaining_ms: remaining_ms
@@ -208,7 +209,8 @@ defmodule Kogen.Harness.Shaping do
 
   defp run_tool(%State{} = state, %ToolCall{} = call) do
     with :ok <- record(state, :tool_call, call),
-         %ToolResult{} = result <- ShaperTools.run(state.opts, call, output_paths(state.slug)),
+         %ToolResult{} = result <-
+           ShaperTools.run(state.opts, call, output_paths(state.slug, state.opts.workdir)),
          :ok <- record(state, :tool_result, %{call: call, result: result}) do
       output = Codec.function_output(call.id, result.output)
       written_paths = if call.name == "write" and not result.is_error, do: result.paths, else: []
@@ -217,7 +219,7 @@ defmodule Kogen.Harness.Shaping do
   end
 
   defp continue_loop({:ok, %State{} = state, written_paths}, %ModelResponse{} = response) do
-    if Enum.any?(written_paths, &(&1 in output_paths(state.slug))) do
+    if Enum.any?(written_paths, &(&1 in output_paths(state.slug, state.opts.workdir))) do
       complete(state, response, written_paths)
     else
       shape_loop(state)
@@ -231,7 +233,7 @@ defmodule Kogen.Harness.Shaping do
     gate_paths = opts.project |> GatePaths.effective() |> Enum.map_join(", ", &"`#{&1}`")
 
     text =
-      "Slug: #{slug}\n\nConfigured project domains: #{configured_domains}. Use only these names in the Intent and Verify lines.\n\nEffective gate paths: #{gate_paths}. Set `changes_gate: true` only when the task or planned changes require modifying one of these paths. Omit it for unrelated changes; running or inspecting checks alone does not count.\n\nTask statement:\n#{task}\n\nWrite the Intent to `.kogen/intents/#{slug}/intent.md` and its acceptance test to `.kogen/acceptance/#{slug}_test.exs`."
+      "Slug: #{slug}\n\nConfigured project domains: #{configured_domains}. Use only these names in the Intent and Verify lines.\n\nEffective gate paths: #{gate_paths}. Set `changes_gate: true` only when the task or planned changes require modifying one of these paths. Omit it for unrelated changes; running or inspecting checks alone does not count.\n\nTask statement:\n#{task}\n\nWrite the Intent to `.kogen/intents/#{slug}/intent.md` and its acceptance test to `#{Stack.acceptance_source(opts.workdir, slug)}`."
 
     {:ok, [Codec.user_item(text)]}
   end
@@ -242,7 +244,7 @@ defmodule Kogen.Harness.Shaping do
 
     paths =
       slug
-      |> output_paths()
+      |> output_paths(workdir)
       |> Enum.map_join("\n", fn path ->
         case File.lstat(Path.join(workdir, path)) do
           {:ok, %File.Stat{type: :regular}} ->
@@ -319,8 +321,15 @@ defmodule Kogen.Harness.Shaping do
   defp record_model_usage(state, %ShapeCall{} = call),
     do: Recording.append(state.opts, :model_usage, :shape, state.turns + 1, call)
 
-  defp output_paths(slug),
-    do: [".kogen/intents/#{slug}/intent.md", ".kogen/acceptance/#{slug}_test.exs"]
+  defp output_paths(slug, root),
+    do: [".kogen/intents/#{slug}/intent.md", Stack.acceptance_source(root, slug)]
+
+  defp instructions(root) do
+    case Stack.detect(root) do
+      :elixir -> @instructions
+      :rails -> Kogen.Harness.RailsShaping.instructions(@instructions)
+    end
+  end
 
   defp elapsed(started), do: max(System.monotonic_time(:millisecond) - started, 0)
 

@@ -5,6 +5,8 @@ defmodule Kogen.Proc.Sandbox do
   macOS uses `sandbox-exec`. Linux remains unrestricted until a bubblewrap policy is designed.
   """
 
+  alias Kogen.Contracts.Stack
+
   @marker "KOGEN_SANDBOXED"
 
   @enforce_keys [:enabled, :home, :project_root, :origin, :workspace, :run_dir, :tmp_dir]
@@ -98,7 +100,7 @@ defmodule Kogen.Proc.Sandbox do
   defp writable_paths(sandbox, home) do
     paths =
       [sandbox.workspace, sandbox.run_dir, sandbox.tmp_dir, shared_tmp()] ++
-        cache_paths(home)
+        Stack.sandbox_caches(Stack.detect(sandbox.project_root), home, sandbox.workspace)
 
     canonical_paths(paths)
   end
@@ -119,15 +121,6 @@ defmodule Kogen.Proc.Sandbox do
       {:ok, resolved} -> {:ok, Enum.reverse(resolved)}
       error -> error
     end
-  end
-
-  defp cache_paths(home) do
-    [
-      Path.join([home, ".cache", "mise"]),
-      Path.join(home, ".hex"),
-      Path.join([home, ".cache", "rebar3"]),
-      Path.join(home, ".npm")
-    ]
   end
 
   defp credential_paths(home) do

@@ -16,6 +16,7 @@ defmodule Kogen.Runner.EdgeProbe do
   alias Kogen.Contracts.ProcResult
   alias Kogen.Contracts.ProviderError
   alias Kogen.Contracts.RolePrompt
+  alias Kogen.Contracts.Stack
   alias Kogen.Engine.Build.GateSupport
   alias Kogen.Engine.Build.Session
   alias Kogen.Harness
@@ -24,7 +25,6 @@ defmodule Kogen.Runner.EdgeProbe do
   alias Kogen.State
 
   @default_budget_ms 180_000
-  @test_path "test/kogen_edge/edge_probe_test.exs"
 
   @type pair :: {map(), Session.t()}
   @typedoc "Runs one repair round on a copy of a green pair with the given findings."
@@ -82,7 +82,7 @@ defmodule Kogen.Runner.EdgeProbe do
     call = %RolePrompt{
       stage: :edge,
       role: :edge_writer,
-      instructions: EdgeTests.instructions(),
+      instructions: EdgeTests.instructions(Stack.detect(session.project.root)),
       text: text
     }
 
@@ -98,7 +98,7 @@ defmodule Kogen.Runner.EdgeProbe do
           wall_ms: now() - started
         })
 
-        EdgeTests.parse(reply)
+        EdgeTests.parse(reply, Stack.detect(session.project.root))
 
       {:error, %ProviderError{} = error} ->
         {:error, {:provider, error.class}}
@@ -114,10 +114,13 @@ defmodule Kogen.Runner.EdgeProbe do
     if remaining <= 0 do
       %{result: :timeout, failed: suite.names, output: ""}
     else
+      stack = Stack.detect(member.project.root)
+      test_path = "test/kogen_edge/edge_probe_test" <> Stack.extension(stack)
+
       member
-      |> ScratchTests.run(spec, %{@test_path => suite.source}, [@test_path],
+      |> ScratchTests.run(spec, %{test_path => suite.source}, [test_path],
         timeout_ms: min(spec.timeout_ms, remaining),
-        extra: EdgeTests.run_arguments(),
+        extra: EdgeTests.run_arguments(stack),
         name: "edge-probe"
       )
       |> test_result(suite.names)

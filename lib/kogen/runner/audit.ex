@@ -9,6 +9,7 @@ defmodule Kogen.Runner.Audit do
   alias Kogen.Build.Recipe
   alias Kogen.Contracts.ProviderError
   alias Kogen.Contracts.RolePrompt
+  alias Kogen.Contracts.Stack
   alias Kogen.Engine.Build.CandidateSnapshot
   alias Kogen.Engine.Build.CheckStage
   alias Kogen.Engine.Build.GateSupport
@@ -104,9 +105,8 @@ defmodule Kogen.Runner.Audit do
     %{
       failing: ids,
       request: session.intent.request || session.intent_text,
-      test_path: "test/acceptance/#{slug}_test.exs",
-      test_source:
-        Map.get(session.approval.acceptance_files, ".kogen/acceptance/#{slug}_test.exs"),
+      test_path: Stack.acceptance_test(session.project.root, slug),
+      test_source: session.approval.acceptance_files |> Map.values() |> hd(),
       failure: session.failure_text || "",
       diff_summary: diff
     }

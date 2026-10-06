@@ -8,6 +8,7 @@ defmodule Kogen.Kernel.ApprovalChecks do
   alias Kogen.Contracts.Failure
   alias Kogen.Contracts.ProcResult
   alias Kogen.Contracts.Project, as: ProjectData
+  alias Kogen.Contracts.Stack
   alias Kogen.Engine.Build.Setup
   alias Kogen.Engine.Runtime
   alias Kogen.Kernel.Approval.Request
@@ -58,8 +59,8 @@ defmodule Kogen.Kernel.ApprovalChecks do
        ), do: :ok
 
   defp acceptance_checks(request, project, files, env, sandbox, run_dir) do
-    relative = "test/acceptance/#{request.slug}_test.exs"
-    bytes = Map.fetch!(files, ".kogen/acceptance/#{request.slug}_test.exs")
+    relative = Stack.acceptance_test(project.root, request.slug)
+    bytes = Map.fetch!(files, Stack.acceptance_source(project.root, request.slug))
     path = Path.join(request.project_root, relative)
 
     with {:ok, created?} <- stage_candidate(path, relative, bytes) do

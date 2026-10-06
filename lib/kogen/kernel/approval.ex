@@ -23,6 +23,7 @@ defmodule Kogen.Kernel.Approval do
   alias Kogen.Contracts.Intent, as: IntentData
   alias Kogen.Contracts.ShapeWarning
   alias Kogen.Contracts.ShapeWarningCodec
+  alias Kogen.Contracts.Stack
   alias Kogen.Engine.Runtime
   alias Kogen.Intent
   alias Kogen.Kernel.Approval.Request
@@ -174,7 +175,7 @@ defmodule Kogen.Kernel.Approval do
   end
 
   defp acceptance_files(project_root, slug) do
-    relative = acceptance_source_path(slug)
+    relative = Stack.acceptance_source(project_root, slug)
 
     case File.read(Path.join(project_root, relative)) do
       {:ok, bytes} -> {:ok, %{relative => bytes}}
@@ -197,5 +198,4 @@ defmodule Kogen.Kernel.Approval do
     do: is_binary(path) and Path.type(path) == :absolute and File.dir?(path)
 
   defp intent_path(slug), do: ".kogen/intents/#{slug}/intent.md"
-  defp acceptance_source_path(slug), do: ".kogen/acceptance/#{slug}_test.exs"
 end

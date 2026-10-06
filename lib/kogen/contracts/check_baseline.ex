@@ -104,7 +104,7 @@ defmodule Kogen.Contracts.CheckBaseline do
 
   defp compact_finding(finding) do
     {kind, id} =
-      if finding.tool == "exunit",
+      if finding.tool in ["exunit", "minitest"],
         do: {:test, finding.symbol || finding.rule},
         else: {:rule, finding.rule || Map.get(finding, :id) || finding.message}
 
@@ -123,8 +123,10 @@ defmodule Kogen.Contracts.CheckBaseline do
   defp identity(%{path: path, kind: :rule, id: id, tool: tool})
        when is_binary(path) and is_binary(id), do: {tool, path, :rule, id}
 
-  defp identity(%{path: path, tool: "exunit", symbol: symbol})
-       when is_binary(path) and is_binary(symbol), do: {"exunit", path, :test, symbol}
+  defp identity(%{path: path, tool: tool, symbol: symbol})
+       when tool in ["exunit", "minitest"] and is_binary(path) and is_binary(symbol),
+       do: {tool, path, :test, symbol}
+
 
   defp identity(%{path: path, rule: rule, tool: tool}) when is_binary(path) and is_binary(rule),
     do: {tool, path, :rule, rule}

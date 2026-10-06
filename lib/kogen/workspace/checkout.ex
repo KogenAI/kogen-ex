@@ -257,7 +257,7 @@ defmodule Kogen.Workspace.Checkout do
     target_parent = Path.join(destination, Path.dirname(directory))
     File.mkdir_p!(target_parent)
 
-    if File.dir?(source) and not File.exists?(Path.join(destination, directory)) do
+    if File.dir?(source) do
       case copy_with_clonefile(source, target_parent, git_env) do
         :ok -> :ok
         {:error, _reason} -> copy_plain(source, target_parent, Path.basename(directory), git_env)

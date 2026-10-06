@@ -4,6 +4,7 @@ defmodule Kogen.Engine.Build.GateSupport do
   alias Kogen.Build.Recipe
   alias Kogen.Contracts.Failure
   alias Kogen.Contracts.ProcResult
+  alias Kogen.Contracts.Stack
   alias Kogen.Engine.Build.Guard
   alias Kogen.Engine.Build.Session
   alias Kogen.Harness.Opts
@@ -92,16 +93,22 @@ defmodule Kogen.Engine.Build.GateSupport do
   @spec builder_text(Session.t()) :: String.t()
   def builder_text(%Session{rung: %{input: :raw_request} = rung} = session) do
     slug = session.approval.slug
-    source = Map.get(session.approval.acceptance_files, ".kogen/acceptance/#{slug}_test.exs", "")
+
+    source =
+      Map.get(
+        session.approval.acceptance_files,
+        Stack.acceptance_source(session.project.root, slug),
+        ""
+      )
 
     String.trim("""
     ## Request
     #{session.intent.request || session.intent_text}
     #{acceptance_items(rung, session.intent.acceptance)}
     ## Acceptance tests
-    These read-only tests are installed at test/acceptance/#{slug}_test.exs and must pass.
+    These read-only tests are installed at #{Stack.acceptance_test(session.project.root, slug)} and must pass.
 
-    ```elixir
+    ```#{if Stack.detect(session.project.root) == :rails, do: "ruby", else: "elixir"}
     #{String.trim_trailing(source)}
     ```
     """)
@@ -338,7 +345,11 @@ defmodule Kogen.Engine.Build.GateSupport do
       argv
       |> Kogen.Proc.run(
         cd: path,
-        env: session.process_env,
+        env:
+          Kogen.Engine.RailsEnvironment.apply(session.process_env, path, %{
+            session.project
+            | root: path
+          }),
         timeout_ms: timeout_ms,
         log_path: log_path,
         sandbox: sandbox

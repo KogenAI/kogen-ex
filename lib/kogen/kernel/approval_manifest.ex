@@ -2,6 +2,7 @@ defmodule Kogen.Kernel.ApprovalManifest do
   @moduledoc false
 
   alias Kogen.Contracts.Project, as: ProjectData
+  alias Kogen.Contracts.Stack
   alias Kogen.Kernel.Approval.Request
   alias Kogen.Project
   alias Kogen.Workspace
@@ -31,7 +32,7 @@ defmodule Kogen.Kernel.ApprovalManifest do
     }
 
     own = own_files(request.slug, intent.bytes, files)
-    acceptance_source = ".kogen/acceptance/#{request.slug}_test.exs"
+    acceptance_source = Stack.acceptance_source(project.root, request.slug)
 
     with {:ok, base_paths} <- Workspace.tree_paths(request.origin, base_sha, git_env),
          patterns = Project.protected_patterns(project, intent.changes_gate, base_paths),
@@ -50,11 +51,9 @@ defmodule Kogen.Kernel.ApprovalManifest do
   end
 
   defp own_files(slug, intent_bytes, acceptance_files) do
-    %{
-      ".kogen/intents/#{slug}/intent.md" => intent_bytes,
-      "test/acceptance/#{slug}_test.exs" =>
-        Map.fetch!(acceptance_files, ".kogen/acceptance/#{slug}_test.exs")
-    }
+    acceptance_files
+    |> Stack.installed_files()
+    |> Map.put(".kogen/intents/#{slug}/intent.md", intent_bytes)
   end
 
   defp candidate_paths(source, patterns, tree_matches, own_paths) do

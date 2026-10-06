@@ -1,6 +1,8 @@
 defmodule Kogen.Checks.Ledger do
   @moduledoc false
 
+  alias Kogen.Checks.Ledger.ElixirRunner
+  alias Kogen.Checks.Ledger.Rails
   alias Kogen.Checks.Ledger.Report
   alias Kogen.Checks.Ledger.Validation
   alias Kogen.Checks.LedgerRow
@@ -10,13 +12,10 @@ defmodule Kogen.Checks.Ledger do
   alias Kogen.Contracts.Intent
   alias Kogen.Contracts.MiseEnvironment
   alias Kogen.Contracts.ProcResult
+  alias Kogen.Contracts.Stack
   alias Kogen.Proc
   alias Kogen.Proc.Sandbox
   alias Kogen.Workspace
-
-  @formatter_source Path.expand("../../../priv/ledger/kogen_ledger_formatter.ex", __DIR__)
-  @external_resource @formatter_source
-  @formatter File.read!(@formatter_source)
 
   @spec acceptance(Path.t(), Intent.t(), Path.t()) ::
           {:ok, Kogen.Checks.acceptance_result()}
@@ -164,11 +163,18 @@ defmodule Kogen.Checks.Ledger do
   end
 
   defp report(workdir, %Intent{} = intent, run_dir, env, sandbox) do
-    test_path = Path.join([workdir, "test", "acceptance", "#{intent.slug}_test.exs"])
+    test_path = Path.join(workdir, Stack.acceptance_test(workdir, intent.slug))
 
     with :ok <- prepared_test(test_path),
          :ok <- prepare_run_files(run_dir),
-         {:ok, exit_status} <- run_tests(workdir, test_path, run_dir, env, sandbox) do
+         {:ok, exit_status} <-
+           run_tests(
+             workdir,
+             test_path,
+             run_dir,
+             runner_environment(workdir, env, run_dir, intent.slug),
+             sandbox
+           ) do
       if CommandExit.tool_missing?(exit_status) do
         tool_missing_failure(run_dir, exit_status)
       else
@@ -271,7 +277,8 @@ defmodule Kogen.Checks.Ledger do
   defp prepare_run_files(run_dir) do
     if Path.type(run_dir) == :absolute do
       with :ok <- File.mkdir_p(Path.join(run_dir, "logs")),
-           :ok <- File.write(Path.join(run_dir, "ledger_formatter.ex"), @formatter),
+           :ok <- ElixirRunner.prepare(run_dir),
+           :ok <- Rails.prepare(run_dir),
            :ok <- File.write(Path.join(run_dir, "ledger.jsonl"), "") do
         :ok
       else
@@ -300,25 +307,16 @@ defmodule Kogen.Checks.Ledger do
     |> process_result()
   end
 
+  defp runner_environment(workdir, env, run_dir, slug) do
+    if Stack.detect(workdir) == :rails, do: Rails.environment(env, run_dir, slug), else: env
+  end
+
   defp test_argv(workdir, test_path, run_dir, env) do
-    formatter_path = Path.join(run_dir, "ledger_formatter.ex")
-
-    preload =
-      "Code.require_file(#{inspect(formatter_path)}); Code.ensure_loaded!(KogenLedgerFormatter)"
-
-    argv = [
-      "elixir",
-      "-e",
-      preload,
-      "-S",
-      "mix",
-      "test",
-      "--formatter",
-      "KogenLedgerFormatter",
-      "--formatter",
-      "ExUnit.CLIFormatter",
-      Path.relative_to(test_path, workdir)
-    ]
+    argv =
+      case Stack.detect(workdir) do
+        :rails -> ["bundle", "exec", "rails", "test", Path.relative_to(test_path, workdir)]
+        :elixir -> ElixirRunner.argv(workdir, test_path, run_dir)
+      end
 
     if MiseEnvironment.configured?(env), do: ["mise", "exec", "--" | argv], else: argv
   end
@@ -337,7 +335,7 @@ defmodule Kogen.Checks.Ledger do
          failure(:environment, :missing_exit_status, "acceptance runner returned no exit status")}
 
       {:error, :enoent} ->
-        {:error, failure(:environment, :tool_missing, "Elixir test runner is not available")}
+        {:error, failure(:environment, :tool_missing, "Acceptance test runner is not available")}
 
       {:error, reason} ->
         {:error, failure(:environment, :process_failed, inspect(reason))}

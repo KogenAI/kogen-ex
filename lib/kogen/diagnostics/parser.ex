@@ -29,6 +29,9 @@ defmodule Kogen.Diagnostics.Parser do
       Compile.findings(output, workdir)
   end
 
+  def findings(output, tool, workdir) when tool in ["minitest", "rubocop", "standard"],
+    do: Kogen.Diagnostics.Ruby.findings(output, tool, workdir)
+
   def findings(output, "credo", workdir), do: parse_credo(output, workdir)
   def findings(output, "dialyzer", workdir), do: Dialyzer.findings(output, workdir)
   def findings(output, "format", workdir), do: parse_format(output, workdir)

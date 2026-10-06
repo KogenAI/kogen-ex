@@ -31,7 +31,7 @@ defmodule Kogen.Runner.Auditor do
     #{input.request}
 
     Acceptance test source (#{input.test_path}):
-    ```elixir
+    ```#{if Path.extname(input.test_path) == ".rb", do: "ruby", else: "elixir"}
     #{input.test_source}
     ```
 

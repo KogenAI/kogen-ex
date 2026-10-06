@@ -2,6 +2,7 @@ defmodule Kogen.Engine.Build.CandidateSnapshot do
   @moduledoc false
 
   alias Kogen.Build.GateSummary
+  alias Kogen.Contracts.Stack
   alias Kogen.Engine.Build.Session
   alias Kogen.Harness.Result, as: HarnessResult
   alias Kogen.State
@@ -141,14 +142,17 @@ defmodule Kogen.Engine.Build.CandidateSnapshot do
   defp excluded_paths(%Session{approval: approval}) do
     intent_files = [
       ".kogen/intents/#{approval.slug}/intent.md",
-      ".kogen/acceptance/#{approval.slug}_test.exs",
-      "test/acceptance/#{approval.slug}_test.exs"
+      Map.keys(approval.acceptance_files),
+      Map.keys(Stack.installed_files(approval.acceptance_files))
     ]
 
-    (Map.keys(approval.protected_manifest) ++ intent_files) |> Enum.uniq() |> Enum.sort()
+    (Map.keys(approval.protected_manifest) ++ List.flatten(intent_files))
+    |> Enum.uniq()
+    |> Enum.sort()
   end
 
-  defp acceptance_path(session), do: "test/acceptance/#{session.approval.slug}_test.exs"
+  defp acceptance_path(session),
+    do: session.approval.acceptance_files |> Stack.installed_files() |> Map.keys() |> hd()
 
   defp persist(%Session{} = session, reason) do
     case persist(session, reason, fn _diff -> %{} end) do

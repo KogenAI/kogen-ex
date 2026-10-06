@@ -6,6 +6,7 @@ defmodule Kogen.Checks.ShapeFormatter do
   alias Kogen.Contracts.Failure
   alias Kogen.Contracts.ProcResult
   alias Kogen.Contracts.Project
+  alias Kogen.Contracts.Stack
   alias Kogen.Proc
 
   @format_timeout_ms 120_000
@@ -13,18 +14,24 @@ defmodule Kogen.Checks.ShapeFormatter do
   @spec format_files(ShapeFormatRequest.t()) ::
           :ok | {:warning, Failure.t()} | {:error, Failure.t()}
   def format_files(%ShapeFormatRequest{} = request) do
-    expected_paths = [intent_path(request.slug), acceptance_path(request.slug)]
+    expected_paths = [
+      intent_path(request.slug),
+      Stack.acceptance_source(request.workdir, request.slug)
+    ]
 
     files =
       request.written_paths
       |> Enum.filter(&(&1 in expected_paths and source_file?(&1)))
       |> Enum.filter(&File.regular?(Path.join(request.workdir, &1)))
 
-    case files do
-      [] ->
+    case {files, formatter_argv(request.project)} do
+      {[], _formatter} ->
         :ok
 
-      _files ->
+      {_files, []} ->
+        :ok
+
+      {_files, _formatter} ->
         run_formatter(request, files)
     end
   end
@@ -64,12 +71,12 @@ defmodule Kogen.Checks.ShapeFormatter do
 
   defp formatter_argv(%Project{format: format}) when is_list(format), do: format
 
-  defp formatter_argv(%Project{checks: checks}) do
+  defp formatter_argv(%Project{root: root, checks: checks}) do
     case Enum.find(checks, fn check ->
            "format" in check.argv and "--check-formatted" in check.argv
          end) do
       %{argv: argv} -> Enum.reject(argv, &(&1 == "--check-formatted"))
-      nil -> ["mix", "format"]
+      nil -> if Stack.detect(root) == :rails, do: [], else: ["mix", "format"]
     end
   end
 
@@ -126,10 +133,9 @@ defmodule Kogen.Checks.ShapeFormatter do
     end
   end
 
-  defp source_file?(path), do: Path.extname(path) in [".ex", ".exs"]
+  defp source_file?(path), do: Path.extname(path) in [".ex", ".exs", ".rb"]
 
   defp intent_path(slug), do: ".kogen/intents/#{slug}/intent.md"
-  defp acceptance_path(slug), do: ".kogen/acceptance/#{slug}_test.exs"
 
   defp failure(class, reason, detail), do: %Failure{class: class, reason: reason, detail: detail}
 end

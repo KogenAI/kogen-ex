@@ -23,6 +23,7 @@ defmodule Kogen.Checks.Shaping do
   alias Kogen.Contracts.Failure
   alias Kogen.Contracts.MiseEnvironment
   alias Kogen.Contracts.ProcResult
+  alias Kogen.Contracts.Stack
   alias Kogen.Proc
   alias Kogen.Project.GatePaths
   alias Kogen.Workspace
@@ -103,7 +104,7 @@ defmodule Kogen.Checks.Shaping do
   end
 
   defp run_spec(spec, request, env, index) do
-    relative = "test/acceptance/#{request.intent.slug}_test.exs"
+    relative = Stack.acceptance_test(request.workdir, request.intent.slug)
     argv = Enum.map(spec.argv, &String.replace(&1, "{path}", relative))
 
     log_path =
@@ -167,7 +168,7 @@ defmodule Kogen.Checks.Shaping do
   end
 
   defp stage_test(workdir, slug, contents) do
-    path = Path.join([workdir, "test", "acceptance", "#{slug}_test.exs"])
+    path = Path.join(workdir, Stack.acceptance_test(workdir, slug))
 
     with :ok <- valid_stage_target(workdir, slug),
          {:ok, created_dirs} <- ensure_directories(workdir) do

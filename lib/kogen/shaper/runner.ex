@@ -8,6 +8,7 @@ defmodule Kogen.Shaper.Runner do
   alias Kogen.Contracts.Failure
   alias Kogen.Contracts.Project
   alias Kogen.Contracts.ShapeWarning
+  alias Kogen.Contracts.Stack
   alias Kogen.Harness
   alias Kogen.Harness.Opts
   alias Kogen.Harness.ShapePass
@@ -218,7 +219,7 @@ defmodule Kogen.Shaper.Runner do
 
   defp validate_files(request, project, opts, attempt_number) do
     intent_path = intent_path(request.slug)
-    acceptance_path = acceptance_path(request.slug)
+    acceptance_path = Stack.acceptance_source(request.workdir, request.slug)
 
     intent_result =
       with {:ok, intent_bytes} <- read_generated(request.workdir, intent_path),
@@ -363,7 +364,8 @@ defmodule Kogen.Shaper.Runner do
     %Result{
       slug: request.slug,
       intent_path: Path.join(request.workdir, intent_path(request.slug)),
-      acceptance_path: Path.join(request.workdir, acceptance_path(request.slug)),
+      acceptance_path:
+        Path.join(request.workdir, Stack.acceptance_source(request.workdir, request.slug)),
       calls: calls,
       rounds: rounds,
       transcript_path: Path.join(opts.run_dir, "transcript.jsonl"),
@@ -389,6 +391,5 @@ defmodule Kogen.Shaper.Runner do
     do: "#{failure.class}/#{failure.reason}: #{failure.detail}"
 
   defp intent_path(slug), do: ".kogen/intents/#{slug}/intent.md"
-  defp acceptance_path(slug), do: ".kogen/acceptance/#{slug}_test.exs"
   defp failure(class, reason, detail), do: %Failure{class: class, reason: reason, detail: detail}
 end

@@ -3,6 +3,7 @@ defmodule Kogen.Shaper.Setup do
 
   alias Kogen.Contracts.Failure
   alias Kogen.Contracts.Project
+  alias Kogen.Contracts.Stack
   alias Kogen.Proc
   alias Kogen.Project, as: ProjectDomain
   alias Kogen.Shaper.Request
@@ -52,7 +53,8 @@ defmodule Kogen.Shaper.Setup do
            cd: request.workdir,
            env: env,
            timeout_ms: spec.timeout_ms,
-           log_path: log_path
+           log_path: log_path,
+           sandbox: if(Stack.detect(request.workdir) == :rails, do: request.sandbox)
          ) do
       {:ok, %{exit_status: 0, timed_out: false}} ->
         {:cont, :ok}

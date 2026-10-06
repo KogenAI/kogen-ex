@@ -1,6 +1,7 @@
 defmodule Kogen.Workspace.ApprovalManifest do
   @moduledoc false
 
+  alias Kogen.Contracts.Stack
   alias Kogen.Workspace
 
   @spec unchanged_between(Path.t(), String.t(), String.t(), map(), map()) ::
@@ -36,7 +37,8 @@ defmodule Kogen.Workspace.ApprovalManifest do
           {:ok, map(), [String.t()]} | {:error, term()}
   def refresh(origin, current, approval, git_env) do
     acceptance =
-      Map.keys(approval.acceptance_files) ++ ["test/acceptance/#{approval.slug}_test.exs"]
+      Map.keys(approval.acceptance_files) ++
+        Map.keys(Stack.installed_files(approval.acceptance_files))
 
     with :ok <-
            unchanged_between(
