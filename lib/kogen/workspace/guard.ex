@@ -52,7 +52,14 @@ defmodule Kogen.Workspace.Guard do
   @spec scope_warnings(Path.t(), String.t(), Intent.t(), Project.t(), map()) ::
           {:ok, [map()]} | {:error, Failure.t()}
   def scope_warnings(workdir, base_sha, intent, project, git_env) do
-    case scope_violations(workdir, base_sha, intent, project, allowed_extra(intent, project.root), git_env) do
+    case scope_violations(
+           workdir,
+           base_sha,
+           intent,
+           project,
+           allowed_extra(intent, project.root),
+           git_env
+         ) do
       {:ok, paths} ->
         domains = Enum.sort(intent.domains)
 

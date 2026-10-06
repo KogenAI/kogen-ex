@@ -90,4 +90,25 @@ defmodule Kogen.Workspace.CandidateGuardTest do
 
     assert scope =~ "Cannot inspect scope paths:"
   end
+
+  test "Rails installed acceptance paths are allowed by the relocated guard", data do
+    paths = [
+      "Gemfile",
+      "config/application.rb",
+      ".kogen/acceptance/guard_test.rb",
+      "test/acceptance/guard_test.rb",
+      "test/acceptance/other_test.rb"
+    ]
+
+    for path <- paths do
+      full_path = Path.join(data.repo, path)
+      File.mkdir_p!(Path.dirname(full_path))
+      File.write!(full_path, "changed\n")
+    end
+
+    project = %{data.project | domains: %{"engine" => ["Gemfile", "config"]}}
+
+    assert {:ok, [%{path: "test/acceptance/other_test.rb"}]} =
+             Workspace.scope_warnings(data.repo, data.base, data.intent, project, Git.env())
+  end
 end
