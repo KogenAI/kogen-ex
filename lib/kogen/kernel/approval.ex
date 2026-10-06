@@ -79,6 +79,7 @@ defmodule Kogen.Kernel.Approval do
          {:ok, acceptance_files} <- acceptance_files(request.project_root, request.slug),
          {:ok, base_sha} <-
            Workspace.ref_read(request.origin, "refs/heads/#{request.base}", git_env),
+         {:ok, _evidence} <- recheck(intent, request, base_sha, git_env),
          {:ok, check_baseline} <-
            ApprovalChecks.run(request, project, base_sha, acceptance_files),
          {:ok, protected_manifest} <-
@@ -107,6 +108,9 @@ defmodule Kogen.Kernel.Approval do
       {:ok, approval, intent, warnings}
     end
   end
+
+  defp recheck(intent, request, base, env),
+    do: Kogen.Shaping.recheck(%{intent | blocks_on: []}, request.origin, base, request.base, env)
 
   @spec commit(ApprovalPreview.t()) :: {:ok, String.t()} | {:error, term()}
   def commit(%ApprovalPreview{} = preview) do

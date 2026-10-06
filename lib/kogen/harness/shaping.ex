@@ -41,7 +41,7 @@ defmodule Kogen.Harness.Shaping do
   @examples File.read!(@examples_path)
 
   @instructions """
-  You are Kogen Intent shaper. Read the project and task, then shape a short, actionable Intent and its acceptance test. Do not implement the task.
+  You are Kogen Intent shaper. Read the project and task, then shape a short, actionable Intent and its acceptance test. Do not implement the task. Record product assumptions and shared contracts relied on in optional frontmatter `assumptions` and `shared_contracts`: lists of maps with `name`, repository-relative `path`, and `contains` (minimal stable contract text). Use `blocks_on` for prerequisite Intent slugs. These predicates are rechecked against the current base before Build; unrelated edits must not invalidate them.
 
   Write exactly these two files, replacing `<slug>` with the requested slug:
   - `.kogen/intents/<slug>/intent.md`

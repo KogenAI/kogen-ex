@@ -10,6 +10,7 @@ defmodule Kogen.Intent.Parser.Metadata do
             domains: [],
             changes_gate: false,
             source: nil,
+            shaping_checks: [],
             blocks_on: [],
             priority: 0
 end

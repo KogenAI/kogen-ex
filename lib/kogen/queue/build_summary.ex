@@ -66,6 +66,9 @@ defmodule Kogen.Queue.BuildSummary do
     reversed = Enum.reverse(events)
 
     Enum.find_value(reversed, fn
+      %Event{event: "shaping_stale", detail: detail} when is_binary(detail) ->
+        "shaping_stale: #{detail}"
+
       %Event{event: "best_candidate", branch: branch} when is_binary(branch) ->
         "needs attention: #{branch}"
 

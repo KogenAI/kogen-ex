@@ -49,7 +49,19 @@ defmodule Kogen.Engine.Build.Engine do
              prepared.approval,
              request.runtime.git_env
            ),
-         :ok <- RunEvents.base_drift(prepared.run, drift, base) do
+         :ok <- RunEvents.base_drift(prepared.run, drift, base),
+         :ok <-
+           Kogen.Shaping.record(
+             prepared.run,
+             Kogen.Shaping.recheck(
+               prepared.intent,
+               request.origin,
+               base,
+               request.base,
+               request.runtime.git_env
+             ),
+             base
+           ) do
       approval = %{prepared.approval | protected_manifest: manifest}
       begin_run(%{prepared | base_sha: base, approval: approval})
     else

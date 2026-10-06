@@ -6,6 +6,7 @@ defmodule Kogen.Kernel do
       Kogen.Proc,
       Kogen.Project,
       Kogen.Intent,
+      Kogen.Shaping,
       Kogen.Provider,
       Kogen.Engine,
       Kogen.Workspace,

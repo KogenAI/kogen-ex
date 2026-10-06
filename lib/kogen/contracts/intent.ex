@@ -9,7 +9,14 @@ defmodule Kogen.Contracts.Intent do
 
   @enforce_keys [:slug, :title, :size, :brief, :acceptance, :domains, :notes, :path, :sha256]
   defstruct @enforce_keys ++
-              [request: nil, changes_gate: false, source: nil, blocks_on: [], priority: 0]
+              [
+                request: nil,
+                changes_gate: false,
+                source: nil,
+                shaping_checks: [],
+                blocks_on: [],
+                priority: 0
+              ]
 
   @type size :: :small | :medium | :large
   @type t :: %__MODULE__{
@@ -22,6 +29,7 @@ defmodule Kogen.Contracts.Intent do
           domains: [String.t()],
           changes_gate: boolean(),
           source: :raw | nil,
+          shaping_checks: [map()],
           blocks_on: [String.t()],
           priority: integer(),
           notes: String.t() | nil,

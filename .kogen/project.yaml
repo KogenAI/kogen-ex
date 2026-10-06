@@ -49,4 +49,5 @@ domains:
   kernel: [lib/kogen/kernel.ex, lib/kogen/kernel, test/kernel]
   queue: [lib/kogen/queue.ex, lib/kogen/queue, test/queue]
   shaper: [lib/kogen/shaper.ex, lib/kogen/shaper, test/shaper]
+  shaping: [lib/kogen/shaping.ex, lib/kogen/shaping, test/shaping]
   docs: [docs, README.md]

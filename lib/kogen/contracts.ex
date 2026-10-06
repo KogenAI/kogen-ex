@@ -25,6 +25,7 @@ defmodule Kogen.Contracts do
       Receipt,
       Redact,
       RolePrompt,
+      ShapingCheck,
       ShapeWarning,
       ShapeWarningCodec,
       Stack,

@@ -7,8 +7,9 @@ defmodule Kogen.Intent.Parser do
   alias Kogen.Intent.Parser.Metadata
   alias Kogen.Intent.Parser.SectionLines
   alias Kogen.Intent.Parser.VerifyLine
+  alias Kogen.Intent.ShapingCodec
 
-  @frontmatter_keys ~w(title domains size limits blocks_on priority changes_gate source)
+  @frontmatter_keys ~w(title domains size limits blocks_on priority changes_gate source assumptions shared_contracts)
   @changes_gate {[{:absent, false}, {"true", true}, {"false", false}], "true or false"}
   @source {[{:absent, nil}, {"raw", :raw}], "raw"}
   @sizes [{"small", :small}, {"medium", :medium}, {"large", :large}]
@@ -52,7 +53,8 @@ defmodule Kogen.Intent.Parser do
          :ok <- optional_string_list(attrs, "blocks_on", frontmatter),
          {:ok, blocks_on, priority} <- scheduling(attrs, frontmatter),
          {:ok, gate} <- optional_choice(attrs, "changes_gate", frontmatter, @changes_gate),
-         {:ok, source} <- optional_choice(attrs, "source", frontmatter, @source) do
+         {:ok, source} <- optional_choice(attrs, "source", frontmatter, @source),
+         {:ok, checks, _dependencies} <- ShapingCodec.parse(attrs) do
       size = @sizes |> List.keyfind(size, 0, {size, nil}) |> elem(1)
       metadata = %Metadata{title: title, size: size, domains: domains}
 
@@ -61,6 +63,7 @@ defmodule Kogen.Intent.Parser do
          metadata
          | changes_gate: gate,
            source: source,
+           shaping_checks: checks,
            blocks_on: blocks_on,
            priority: priority
        }}
@@ -198,10 +201,7 @@ defmodule Kogen.Intent.Parser do
   defp section_heading("## " <> name), do: {:unknown, name}
   defp section_heading(_text), do: nil
 
-  defp section_name(:acceptance), do: "Acceptance"
-  defp section_name(:verify), do: "Verify"
-  defp section_name(:notes), do: "Notes"
-  defp section_name(:request), do: "Request"
+  defp section_name(section), do: section |> Atom.to_string() |> String.capitalize()
 
   defp append_line(%SectionLines{current: :brief} = sections, line),
     do: %{sections | brief: [line | sections.brief]}
@@ -348,6 +348,7 @@ defmodule Kogen.Intent.Parser do
       domains: metadata.domains,
       changes_gate: metadata.changes_gate,
       source: metadata.source,
+      shaping_checks: metadata.shaping_checks,
       blocks_on: metadata.blocks_on,
       priority: metadata.priority,
       notes: if(notes == "", do: nil, else: notes),
