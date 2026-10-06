@@ -13,7 +13,6 @@ defmodule Kogen.Kernel.CLITest do
 
   @topics [
     [],
-    ["help"],
     ["status"],
     ["intent"],
     ["intent", "shape"],
@@ -27,23 +26,42 @@ defmodule Kogen.Kernel.CLITest do
     ["provider", "login"],
     ["provider", "logout"],
     ["provider", "use"],
-    ["version"],
-    ["checks"],
-    ["checks", "sample"],
-    ["checks", "effect"]
+    ["version"]
   ]
 
-  test "every help page matches its golden file, by every route" do
+  test "usage errors show each command's documented help" do
     for topic <- @topics do
-      expected = golden(topic)
-      assert CLI.execute(["help" | topic]) == {0, expected}, "help #{inspect(topic)}"
-      assert CLI.execute(topic ++ ["--help"]) == {0, expected}, "#{inspect(topic)} --help"
+      assert {2, output} = CLI.execute(topic ++ ["--bogus"])
+      assert String.ends_with?(output, "\n\n" <> golden(topic)), inspect(topic)
     end
 
     assert CLI.execute([]) == {0, golden([])}
+    assert CLI.execute(["help"]) == {0, golden([])}
     assert CLI.execute(["intent"]) == {0, golden(["intent"])}
     assert CLI.execute(["queue"]) == {0, golden(["queue"])}
     assert CLI.execute(["provider"]) == {0, golden(["provider"])}
+  end
+
+  test "commands and flags outside the fixed CLI return usage errors" do
+    for argv <- [
+          ["checks"],
+          ["checks", "sample", "proposal.json", "sample.json"],
+          ["checks", "effect", "qualification.json", "before", "checked"],
+          ["help", "checks"],
+          ["help", "status"],
+          ["--help"],
+          ["status", "--help"],
+          ["intent", "shape", "greet", "-", "--json"],
+          ["provider", "login", "chatgpt", "--as", "work"],
+          ["provider", "logout", "chatgpt", "--as", "work"],
+          ["provider", "use", "chatgpt"],
+          ["provider", "use", "chatgpt", "--as", ""]
+        ] do
+      assert {2, _output} = CLI.execute(argv), inspect(argv)
+    end
+
+    {0, help} = CLI.execute(["help"])
+    refute help =~ "checks"
   end
 
   test "the top level lists commands first and nothing else" do
@@ -73,7 +91,7 @@ defmodule Kogen.Kernel.CLITest do
       {["intent", "approve", "greet", "XYZ"],
        "kogen intent approve: <hash> must be 6 to 64 lowercase hex characters",
        ["intent", "approve"]},
-      {["help", "nope"], "kogen help: no command 'nope'", []}
+      {["help", "nope"], "kogen help: unexpected argument 'nope'", []}
     ]
 
     for {argv, message, topic} <- cases do
@@ -128,8 +146,8 @@ defmodule Kogen.Kernel.CLITest do
     assert {approve.command, approve.positionals, approve.by} ==
              {:intent_approve, ["greet", "3fa2c1"], "agent for almir"}
 
-    assert {:ok, shape} = Arguments.parse(["intent", "shape", "greet", "-", "--json"])
-    assert {shape.positionals, shape.json} == {["greet", "-"], true}
+    assert {:ok, shape} = Arguments.parse(["intent", "shape", "greet", "-"])
+    assert shape.positionals == ["greet", "-"]
 
     assert {:ok, start} = Arguments.parse(["queue", "start", "--detach", "--origin", "/o"])
     assert {start.command, start.detach, start.origin} == {:queue_start, true, "/o"}

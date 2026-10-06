@@ -1,6 +1,3 @@
-Usage: kogen provider logout chatgpt [options]
+Usage: kogen provider logout chatgpt
 
-Signs out the account <label>.
-
-Options:
-  --as <label>          Account label (default: default)
+Signs out the default account.

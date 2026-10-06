@@ -1,11 +1,14 @@
 defmodule Kogen.Kernel.CheckProposalTest do
   use Kogen.Testkit.Case, async: true
 
+  import ExUnit.CaptureIO
+
   alias Kogen.Contracts.Failure
-  alias Kogen.Kernel.CLI
   alias Kogen.State
   alias Kogen.State.Approval
   alias Kogen.Testkit.Git
+  alias Mix.Tasks.Kogen.Checks.Effect
+  alias Mix.Tasks.Kogen.Checks.Sample
 
   test "recurring failures retain examples, cost and separate package destinations", %{
     tmp_dir: root
@@ -52,14 +55,15 @@ defmodule Kogen.Kernel.CheckProposalTest do
     assert File.read!(Path.join(run.dir, "events.jsonl")) =~ "check_proposal_drafted"
   end
 
-  test "the CLI records real precision before drafting a separately approved adoption Intent", %{
-    tmp_dir: root
-  } do
+  test "developer tooling records real precision before drafting a separately approved adoption Intent",
+       %{
+         tmp_dir: root
+       } do
     {_run, context, proposal} = recurring!(root)
     spec = spec!(root, context.workdir, false)
 
     assert {0, output} =
-             CLI.execute(["checks", "sample", proposal, spec, "--project", context.workdir])
+             task_output(Sample, [proposal, spec, "--project", context.workdir])
 
     assert output =~ "Caller must shape and approve this individual protected rule"
     [report] = Path.wildcard(Path.join(Path.dirname(proposal), "sample-*/qualification.json"))
@@ -85,7 +89,7 @@ defmodule Kogen.Kernel.CheckProposalTest do
     spec = spec!(root, context.workdir, true)
 
     assert {0, output} =
-             CLI.execute(["checks", "sample", proposal, spec, "--project", context.workdir])
+             task_output(Sample, [proposal, spec, "--project", context.workdir])
 
     assert output =~ "need more work before proposing adoption"
     [report] = Path.wildcard(Path.join(Path.dirname(proposal), "sample-*/qualification.json"))
@@ -107,7 +111,7 @@ defmodule Kogen.Kernel.CheckProposalTest do
     )
 
     assert {1, output} =
-             CLI.execute(["checks", "sample", proposal, path, "--project", context.workdir])
+             task_output(Sample, [proposal, path, "--project", context.workdir])
 
     assert output =~ "invalid_precision_spec"
     assert Path.wildcard(Path.join(Path.dirname(proposal), "sample-*/adoption-intent.md")) == []
@@ -120,7 +124,7 @@ defmodule Kogen.Kernel.CheckProposalTest do
     File.write!(path, JSON.encode!(Map.put(spec, "argv", ["sh", "-c", "exit 127", "{path}"])))
 
     assert {0, output} =
-             CLI.execute(["checks", "sample", proposal, path, "--project", context.workdir])
+             task_output(Sample, [proposal, path, "--project", context.workdir])
 
     assert output =~ "need more work"
     [report] = Path.wildcard(Path.join(Path.dirname(proposal), "sample-*/qualification.json"))
@@ -135,7 +139,7 @@ defmodule Kogen.Kernel.CheckProposalTest do
     spec = spec!(root, context.workdir, false)
 
     assert {0, _output} =
-             CLI.execute(["checks", "sample", proposal, spec, "--project", context.workdir])
+             task_output(Sample, [proposal, spec, "--project", context.workdir])
 
     [report] = Path.wildcard(Path.join(Path.dirname(proposal), "sample-*/qualification.json"))
 
@@ -160,15 +164,7 @@ defmodule Kogen.Kernel.CheckProposalTest do
     assert :ok = State.record(next, %{event: :finished, status: :failed})
 
     assert {0, output} =
-             CLI.execute([
-               "checks",
-               "effect",
-               report,
-               before.dir,
-               next.dir,
-               "--project",
-               context.workdir
-             ])
+             task_output(Effect, [report, before.dir, next.dir])
 
     assert output =~ "Measured Build comparison:"
     [effect] = Path.wildcard(Path.join(Path.dirname(report), "build-effect-*.json"))
@@ -177,6 +173,32 @@ defmodule Kogen.Kernel.CheckProposalTest do
     assert data["repair_delta"] == -1
     assert data["qualification_sha256"] == hash(File.read!(report))
     assert data["interpretation"] =~ "not a causal benefit claim"
+  end
+
+  test "developer tools reject incomplete arguments" do
+    assert {1, output} = task_output(Sample, ["proposal.json", "--bogus"])
+    assert output =~ "Usage: mix kogen.checks.sample"
+    assert {1, output} = task_output(Effect, ["qualification.json"])
+    assert output =~ "Usage: mix kogen.checks.effect"
+  end
+
+  defp task_output(task, args) do
+    caller = self()
+
+    output =
+      capture_io(fn ->
+        try do
+          task.run(args)
+          send(caller, {:task_status, 0})
+        rescue
+          error in Mix.Error ->
+            IO.puts(Exception.message(error))
+            send(caller, {:task_status, 1})
+        end
+      end)
+
+    assert_receive {:task_status, status}
+    {status, output}
   end
 
   defp fixture!(root) do

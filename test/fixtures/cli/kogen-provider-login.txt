@@ -1,6 +1,3 @@
-Usage: kogen provider login chatgpt [options]
+Usage: kogen provider login chatgpt
 
-Signs in with ChatGPT in the browser and saves the account <label>.
-
-Options:
-  --as <label>          Account label (default: default)
+Signs in with ChatGPT in the browser and saves the default account.

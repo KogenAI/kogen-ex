@@ -1,5 +1,0 @@
-Usage: kogen checks <command>
-
-Commands:
-  sample <proposal.json> <sample.json>   Measure precision and draft adoption
-  effect <qualification.json> <before-run> <checked-run>   Retain measured Build comparisons

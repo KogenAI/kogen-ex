@@ -9,10 +9,9 @@ defmodule Kogen.Cli.Help do
     status     Show the queue, Builds and Intents
     intent     Shape, approve or remove an Intent
     queue      Build approved Intents one at a time
-    checks     Qualify candidate checks from recurring Build failures
     provider   Manage Kogen's provider logins
     version    Show the Kogen version
-    help       Show help for a command
+    help       List commands
 
   Intent shaping defaults to gpt-6.1-sol at high effort; an explicit build.roles.shaper
   in project or machine config overrides this default.
@@ -28,27 +27,6 @@ defmodule Kogen.Cli.Help do
 
   @spec render([String.t()]) :: String.t()
   def render([]), do: @top_level
-
-  def render(["help"]),
-    do: "Usage: kogen help [<command> [<subcommand>]]\n\nShows help for a command.\n"
-
-  def render(["checks"]),
-    do:
-      "Usage: kogen checks <command>\n\nCommands:\n  sample <proposal.json> <sample.json>   Measure precision and draft adoption\n  effect <qualification.json> <before-run> <checked-run>   Retain measured Build comparisons\n"
-
-  def render(["checks", "effect"]),
-    do:
-      "Usage: kogen checks effect <qualification.json> <before-run> <checked-run>\nRecords measured model time, repairs, outcome and base/model identities for the same approved Intent.\n"
-
-  def render(["checks", "sample"]) do
-    """
-    Usage: kogen checks sample <proposal.json> <sample.json> [--project <checkout>]
-
-    Runs a candidate checker over planted, contrasting and labeled real-code examples.
-    Records precision and cost. Passing samples produce a draft adoption Intent for
-    caller approval in kogen_credo (quality) or optimum_credo (style). Enables no gate.
-    """
-  end
 
   def render(["status"]) do
     """
@@ -71,9 +49,7 @@ defmodule Kogen.Cli.Help do
     Commands:
       shape <slug> <file|->     Shape an Intent from a request file (- reads stdin)
       approve <slug> [<hash>]   Show the review card, or approve and queue the Intent
-      remove <slug>             Remove an Intent and its approval in one commit
-
-    Run kogen intent <command> --help for its options.
+      remove <slug>            Remove an Intent and its approval in one commit
     """
   end
 
@@ -87,7 +63,6 @@ defmodule Kogen.Cli.Help do
     project or machine config overrides this default.
 
     Options:
-      --json                Print the shape result and model usage as JSON
     #{@project_options}\
     """
   end
@@ -126,8 +101,6 @@ defmodule Kogen.Cli.Help do
     Commands:
       start     Build approved Intents one at a time, oldest approval first
       stop      Stop the running queue after its current Build
-
-    Run kogen queue <command> --help for its options.
     """
   end
 
@@ -180,7 +153,7 @@ defmodule Kogen.Cli.Help do
     Choices live in ~/.kogen/accounts.yaml on this machine, never in a repo.
 
     Options:
-      --as <label>          Account label (default: default)
+      --as <label>          Account label (required)
       --project <checkout>  The project that uses this account
     """
   end
@@ -195,12 +168,9 @@ defmodule Kogen.Cli.Help do
       if verb == "login", do: "Signs in with ChatGPT in the browser and saves", else: "Signs out"
 
     """
-    Usage: kogen provider #{verb} chatgpt [options]
+    Usage: kogen provider #{verb} chatgpt
 
-    #{action} the account <label>.
-
-    Options:
-      --as <label>          Account label (default: default)
+    #{action} the default account.
     """
   end
 

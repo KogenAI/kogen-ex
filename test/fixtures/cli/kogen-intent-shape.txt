@@ -6,7 +6,6 @@ Shaping defaults to gpt-6.1-sol at high effort. An explicit build.roles.shaper i
 project or machine config overrides this default.
 
 Options:
-  --json                Print the shape result and model usage as JSON
   --project <checkout>  Project checkout (default: current directory)
   --origin <repo>       Git repository holding Intent state and the target branch
   --base <branch>       Target branch (project setting, origin HEAD, then current branch)

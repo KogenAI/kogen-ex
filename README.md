@@ -15,7 +15,7 @@ This repository is the single Mix application that forms Kogen's core. Kogen own
 
 ## CLI
 
-Commands are noun-first. `kogen` lists the commands, `kogen <command>` lists its subcommands, and `--help` works everywhere. Approved Intents build through the queue, one at a time; crashed Builds are recovered automatically by `status` and `queue start`.
+Commands are noun-first. `kogen` and `kogen help` list the commands; `kogen <group>` lists its subcommands. Approved Intents build through the queue, one at a time; crashed Builds are recovered automatically by `status` and `queue start`.
 
 ```sh
 kogen intent shape greet request.md   # or - to read the request from stdin

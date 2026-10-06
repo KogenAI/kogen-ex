@@ -4,21 +4,15 @@ defmodule Kogen.Kernel.CLI.Runner do
   alias Kogen.Cli.Args
   alias Kogen.Cli.Version
   alias Kogen.Kernel.Approval
-  alias Kogen.Kernel.CLI.CheckProposals
   alias Kogen.Kernel.CLI.ErrorOutput
   alias Kogen.Kernel.CLI.IntentRemoval
   alias Kogen.Kernel.CLI.QueueCommand
-  alias Kogen.Kernel.CLI.ShapeJson
   alias Kogen.Kernel.CLI.StatusCommand
   alias Kogen.Kernel.CLI.TaskInput
   alias Kogen.Kernel.Types.ApprovalPreview
 
   @spec run(Args.t()) :: {non_neg_integer(), String.t()}
   def run(%Args{command: :version}), do: {0, "kogen #{Version.display(Kogen.Kernel.version())}\n"}
-
-  def run(%Args{command: :checks_effect} = args), do: CheckProposals.run(args)
-
-  def run(%Args{command: :checks_sample} = args), do: CheckProposals.run(args)
 
   def run(%Args{command: :status} = args), do: StatusCommand.run(args)
   def run(%Args{command: :intent_shape} = args), do: intent_shape(args)
@@ -35,15 +29,13 @@ defmodule Kogen.Kernel.CLI.Runner do
     with :ok <- project_directory(args),
          {:ok, task} <- TaskInput.read(file),
          {:ok, result} <- Kogen.Kernel.shape(slug, args.project, task) do
-      render_shape(result, args.json)
+      render_shape(result)
     else
       {:error, reason} -> ErrorOutput.format_shape(reason)
     end
   end
 
-  defp render_shape(result, true), do: {0, ShapeJson.encode(result) <> "\n"}
-
-  defp render_shape(result, false) do
+  defp render_shape(result) do
     calls = Enum.map_join(result.calls, "", &shape_call_text/1)
     warnings = Approval.warnings_text(result.warnings)
 
@@ -112,8 +104,8 @@ defmodule Kogen.Kernel.CLI.Runner do
     end
   end
 
-  defp provider_login(args) do
-    label = args.account_label || "default"
+  defp provider_login(_args) do
+    label = "default"
 
     case Kogen.Kernel.provider_login(label) do
       {:ok, result} ->
@@ -126,8 +118,8 @@ defmodule Kogen.Kernel.CLI.Runner do
     end
   end
 
-  defp provider_logout(args) do
-    label = args.account_label || "default"
+  defp provider_logout(_args) do
+    label = "default"
 
     case Kogen.Kernel.provider_logout(label) do
       {:ok, %{remote_revoked?: true}} ->
@@ -144,7 +136,7 @@ defmodule Kogen.Kernel.CLI.Runner do
   end
 
   defp provider_use(args) do
-    label = args.account_label || "default"
+    label = args.account_label
 
     case Kogen.Kernel.provider_use(label, args.project) do
       :ok when is_nil(args.project) -> {0, "chatgpt:#{label} is the default account\n"}

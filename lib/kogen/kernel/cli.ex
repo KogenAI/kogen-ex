@@ -6,8 +6,7 @@ defmodule Kogen.Kernel.CLI do
       Kogen.Contracts,
       Kogen.Engine,
       Kogen.Kernel,
-      Kogen.Queue,
-      Kogen.CheckLearning
+      Kogen.Queue
     ],
     exports: []
 

@@ -31,6 +31,9 @@ defmodule Kogen.Acceptance.BenchProvidedIntentTest do
 
     usage = out_dir |> Path.join("usage.json") |> File.read!() |> :json.decode()
     assert usage["intent_source"] == "shaped"
+
+    assert [%{"model" => "fixture-shaper", "tokens" => %{"input" => 12}}] =
+             Enum.find(usage["stages"], &(&1["stage"] == "shape"))["calls"]
   end
 
   defp run_benchmark(tmp_dir, intent_dir) do
@@ -148,7 +151,12 @@ defmodule Kogen.Acceptance.BenchProvidedIntentTest do
         action=$1
         printf '%s\\n' "$action" >> "$KOGEN_BENCH_CALLS"
         [ "$action" = shape ] || exit 90
-        printf '%s\\n' '{"slug":"bench-provided-intent","usage":[]}'
+        for argument in "$@"; do
+          [ "$argument" != --json ] || exit 2
+        done
+        transcript="$(dirname "$KOGEN_BENCH_CALLS")/shape-transcript.jsonl"
+        printf '%s\\n' '{"event":"model_usage","stage":"shape","payload":{"model":"fixture-shaper","effort":"high","tokens":{"input":12},"wall_ms":7}}' > "$transcript"
+        printf 'Intent: shaped\\nTranscript: %s\\n' "$transcript"
         ;;
     """
   end

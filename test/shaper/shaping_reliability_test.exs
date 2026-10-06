@@ -6,7 +6,6 @@ defmodule Kogen.Shaper.ShapingReliabilityTests do
   alias Kogen.E2e.ScriptedProvider
   alias Kogen.E2e.ScriptedProvider.Config
   alias Kogen.Kernel.CLI
-  alias Kogen.Kernel.CLI.ShapeJson
   alias Kogen.Proc.Sandbox
   alias Kogen.Resilience.Policy
   alias Kogen.Shaper
@@ -44,9 +43,6 @@ defmodule Kogen.Shaper.ShapingReliabilityTests do
       assert [warning] = result.warnings
       assert warning.code == :shape_reclassified
       assert warning.item_ids == ["A1"]
-
-      assert %{"warnings" => [%{"code" => "shape_reclassified", "item_ids" => ["A1"]}]} =
-               result |> ShapeJson.encode() |> :json.decode()
 
       assert File.read!(result.intent_path) =~ "- A1: test domain=app"
       assert File.read!(result.intent_path) =~ "Tiny.value/0 keeps returning :new"

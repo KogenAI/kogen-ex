@@ -13,12 +13,11 @@ defmodule Kogen.Kernel.ShapeArgumentsTest do
                "new-feature",
                "/tmp/task.md",
                "--project",
-               "/tmp/project",
-               "--json"
+               "/tmp/project"
              ])
 
-    assert {args.command, args.positionals, args.json} ==
-             {:intent_shape, ["new-feature", "/tmp/task.md"], true}
+    assert {args.command, args.positionals, args.project} ==
+             {:intent_shape, ["new-feature", "/tmp/task.md"], "/tmp/project"}
 
     assert {:ok, %Args{positionals: ["new-feature", "-"]}} =
              Arguments.parse(["intent", "shape", "new-feature", "-"])

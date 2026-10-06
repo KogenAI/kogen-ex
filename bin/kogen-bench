@@ -951,8 +951,28 @@ elif [ "$intent_source" = raw ]; then
   write_raw_intent
 else
   if run_capture shape "$out_dir/shape.json" "$KOGEN_BIN" intent shape "$slug" "$prompt_file" \
-    --project "$project_dir" --origin "$origin" --base main --json; then
+    --project "$project_dir" --origin "$origin" --base main; then
     shape_wall_ms=$CAPTURE_WALL_MS
+    python3 - "$out_dir/shape.json" "$slug" <<'PYSHAPE'
+import json
+import sys
+from pathlib import Path
+
+path, slug = sys.argv[1:]
+text = Path(path).read_text(encoding="utf-8")
+try:
+    json.loads(text)
+except json.JSONDecodeError:
+    calls = []
+    for line in text.splitlines():
+        if line.startswith("Transcript: "):
+            transcript = Path(line.removeprefix("Transcript: "))
+            for row in transcript.read_text(encoding="utf-8").splitlines():
+                event = json.loads(row)
+                if event.get("event") == "model_usage" and event.get("stage") == "shape":
+                    calls.append(event["payload"])
+    Path(path).write_text(json.dumps({"slug": slug, "usage": calls}), encoding="utf-8")
+PYSHAPE
   else
     stage_status=$?
     shape_wall_ms=$CAPTURE_WALL_MS

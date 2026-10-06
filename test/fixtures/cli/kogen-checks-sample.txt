@@ -1,5 +1,0 @@
-Usage: kogen checks sample <proposal.json> <sample.json> [--project <checkout>]
-
-Runs a candidate checker over planted, contrasting and labeled real-code examples.
-Records precision and cost. Passing samples produce a draft adoption Intent for
-caller approval in kogen_credo (quality) or optimum_credo (style). Enables no gate.

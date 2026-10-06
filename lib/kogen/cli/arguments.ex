@@ -11,22 +11,19 @@ defmodule Kogen.Cli.Arguments do
 
   @project_flags [project: :string, origin: :string, base: :string]
 
-  @groups ~w(intent queue provider checks)
+  @groups ~w(intent queue provider)
 
   # path => {command, required positionals, optional positionals, command flags, project?}
   @commands %{
-    ["checks", "effect"] =>
-      {:checks_effect, ["<qualification.json>", "<before-run>", "<checked-run>"], [], [], true},
-    ["checks", "sample"] => {:checks_sample, ["<proposal.json>", "<sample.json>"], [], [], true},
     ["status"] => {:status, [], ["<slug>"], [json: :boolean, watch: :boolean], true},
-    ["intent", "shape"] => {:intent_shape, ["<slug>", "<file|->"], [], [json: :boolean], true},
+    ["intent", "shape"] => {:intent_shape, ["<slug>", "<file|->"], [], [], true},
     ["intent", "approve"] => {:intent_approve, ["<slug>"], ["<hash>"], [by: :string], true},
     ["intent", "remove"] => {:intent_remove, ["<slug>"], [], [force: :boolean], true},
     ["queue", "start"] => {:queue_start, [], [], [detach: :boolean], true},
     ["queue", "stop"] => {:queue_stop, [], [], [], true},
     ["provider", "list"] => {:provider_list, [], [], [], false},
-    ["provider", "login"] => {:provider_login, ["<provider>"], [], [as: :string], false},
-    ["provider", "logout"] => {:provider_logout, ["<provider>"], [], [as: :string], false},
+    ["provider", "login"] => {:provider_login, ["<provider>"], [], [], false},
+    ["provider", "logout"] => {:provider_logout, ["<provider>"], [], [], false},
     ["provider", "use"] =>
       {:provider_use, ["<provider>"], [], [as: :string, project: :string], false},
     ["version"] => {:version, [], [], [], false}
@@ -40,21 +37,15 @@ defmodule Kogen.Cli.Arguments do
     end
   end
 
-  @spec topic?([String.t()]) :: boolean()
-  def topic?([]), do: true
-  def topic?(["help"]), do: true
-  def topic?([group]) when group in @groups, do: true
-  def topic?(path), do: is_map_key(@commands, path)
-
   defp parse_tree([]), do: help([])
-  defp parse_tree(["--help" | _rest]), do: help([])
-  defp parse_tree(["help", "--help" | _rest]), do: help(["help"])
-  defp parse_tree(["help" | topic]), do: help_topic(topic)
+  defp parse_tree(["help"]), do: help([])
+
+  defp parse_tree(["help", extra | _rest]),
+    do: usage([], "kogen help: unexpected argument '#{extra}'")
 
   defp parse_tree([group | rest]) when group in @groups do
     case rest do
       [] -> help([group])
-      ["--help" | _rest] -> help([group])
       [sub | rest] -> parse_subcommand(group, sub, rest)
     end
   end
@@ -69,26 +60,16 @@ defmodule Kogen.Cli.Arguments do
       else: usage([group], "kogen #{group}: unknown command '#{sub}'")
   end
 
-  defp help_topic(topic) do
-    if topic?(topic),
-      do: help(topic),
-      else: usage([], "kogen help: no command '#{Enum.join(topic, " ")}'")
-  end
-
   defp command(path, argv) do
     {name, required, optional, flags, project?} = Map.fetch!(@commands, path)
     switches = if project?, do: flags ++ @project_flags, else: flags
 
-    if "--help" in argv do
-      help(path)
-    else
-      {options, positionals, invalid} = OptionParser.parse(argv, strict: switches)
+    {options, positionals, invalid} = OptionParser.parse(argv, strict: switches)
 
-      with :ok <- no_invalid_options(path, invalid, switches),
-           :ok <- positional_count(path, positionals, required, optional),
-           :ok <- valid_values(path, name, positionals, options) do
-        {:ok, args(name, positionals, options)}
-      end
+    with :ok <- no_invalid_options(path, invalid, switches),
+         :ok <- positional_count(path, positionals, required, optional),
+         :ok <- valid_values(path, name, positionals, options) do
+      {:ok, args(name, positionals, options)}
     end
   end
 
@@ -147,6 +128,12 @@ defmodule Kogen.Cli.Arguments do
   defp valid_values(path, :status, _positionals, options) do
     if Keyword.get(options, :watch, false) and Keyword.get(options, :json, false),
       do: usage(path, "#{prefix(path)}: --watch and --json can't be combined"),
+      else: :ok
+  end
+
+  defp valid_values(path, :provider_use, _positionals, options) do
+    if Keyword.get(options, :as) in [nil, ""],
+      do: usage(path, "#{prefix(path)}: missing --as <label>"),
       else: :ok
   end
 

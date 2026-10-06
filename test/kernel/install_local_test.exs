@@ -88,7 +88,7 @@ defmodule Kogen.Kernel.InstallLocalTest do
              run(["sh", "-c", "command -v escript"], project, test_env)
 
     assert String.trim(resolved) == stub
-    run([launcher, "--help"], project, test_env)
+    run([launcher, "help"], project, test_env)
   end
 
   defp run_with_mise_toolchain!(project, launcher, version, runtime) do
@@ -102,7 +102,7 @@ defmodule Kogen.Kernel.InstallLocalTest do
              )
 
     assert resolved =~ "/erlang/#{version}/bin/escript"
-    run([mise, "exec", "--", launcher, "--help"], project, runtime.base_env)
+    run([mise, "exec", "--", launcher, "help"], project, runtime.base_env)
   end
 
   defp run(argv, cd, env) do

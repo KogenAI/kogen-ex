@@ -60,7 +60,7 @@ defmodule Kogen.Kernel.Accounts do
          %ProviderError{
            class: :login,
            message:
-             "chatgpt:#{label} has no saved login; run kogen provider login chatgpt --as #{label}"
+             "chatgpt:#{label} has no saved login; run kogen provider login chatgpt to sign in to the default account"
          }}
   end
 

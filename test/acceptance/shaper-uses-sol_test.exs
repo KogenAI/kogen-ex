@@ -93,7 +93,7 @@ defmodule Kogen.Acceptance.ShaperUsesSolTest do
 
   @tag intent: "shaper-uses-sol/A4"
   test "intent shape help documents the default", %{tmp_dir: tmp_dir} do
-    help = cli(["intent", "shape", "--help"], tmp_dir)
+    help = cli(["help"], tmp_dir)
 
     assert help =~ "gpt-6.1-sol"
     assert help =~ "high effort"

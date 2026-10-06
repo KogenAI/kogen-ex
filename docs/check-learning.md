@@ -1,3 +1,5 @@
+Qualification commands are internal repository Mix tasks, outside the product CLI.
+
 Build review revisions and red repair gates retain advisory check proposals in
 `<project-state>/check-proposals/check-<fingerprint>/proposal.json`. A repeated
 failure at different repair attempts or Builds moves the proposal from watching
@@ -40,7 +42,7 @@ are errors. It must be standalone and read-only; `{path}` is a sample file, not
 a live Candidate. Inputs must be regular files inside the checkout; symlinks
 and traversal paths are rejected. Each command has a 30-second bound.
 
-Run `kogen checks sample <proposal.json> <sample.json> --project <package-checkout>`.
+From Kogen’s own repository, run `mise exec -- mix kogen.checks.sample <proposal.json> <sample.json> --project <package-checkout>`.
 It retains every case's source hash, label, verdict, output, command and elapsed
 time. `qualification.json` reports real-code TP, FP, FN, errors and precision
 separately from planted controls. A draft `adoption-intent.md` is generated only
@@ -60,7 +62,7 @@ event, while the original review or repair ruling remains in force.
 After measuring Builds with a proposed check, run:
 
 ```text
-kogen checks effect <qualification.json> <before-run-dir> <checked-run-dir>
+mise exec -- mix kogen.checks.effect <qualification.json> <before-run-dir> <checked-run-dir>
 ```
 
 Both Builds must be finished and use the same Intent hash. The comparison is
