@@ -28,6 +28,24 @@ defmodule Kogen.Harness.ContinuationTest do
               nil
             )
 
+          if limit do
+            rows =
+              opts.run_dir
+              |> Path.join("requests.jsonl")
+              |> File.read!()
+              |> String.split("\n", trim: true)
+              |> Enum.map(&Jason.decode!/1)
+
+            keys =
+              rows
+              |> Enum.filter(&(&1["record_kind"] == "model_request"))
+              |> Enum.map(& &1["conversation_id"])
+
+            # Original conversation, checkpoint request, and compacted continuation.
+            assert length(Enum.uniq(keys)) >= 3
+            assert hd(keys) == Enum.at(keys, 1)
+          end
+
           stats = Agent.get(opts.provider_config, & &1)
           success = File.exists?(Path.join(opts.workdir, "result.txt"))
 

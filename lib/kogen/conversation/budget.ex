@@ -16,8 +16,4 @@ defmodule Kogen.Conversation.Budget do
   end
 
   def note(%{} = state, _max_turns), do: {state, nil}
-
-  @spec instructions(String.t(), String.t() | nil) :: String.t()
-  def instructions(prompt, nil), do: prompt
-  def instructions(prompt, note), do: prompt <> "\n\n" <> note
 end

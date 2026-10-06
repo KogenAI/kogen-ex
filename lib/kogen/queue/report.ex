@@ -93,6 +93,7 @@ defmodule Kogen.Queue.Report do
       {"red_checks", latest_candidate_value(events, :red_checks, [])},
       {"acceptance_items", latest_candidate_value(events, :acceptance_items, [])},
       {"model_stages", model_stages(events)},
+      {"cache_hit_rate", nullable(State.cache_hit_rate(events))},
       {"gate_timing", gate_timing(events)},
       {"gate_timings",
        Enum.flat_map(events, fn event ->

@@ -115,6 +115,7 @@ defmodule Kogen.Harness.MutationQualificationTest do
     assert result.gate.status == :pass
     [build, advice] = HarnessScriptedProvider.requests(provider)
     assert advice.model == build.model
+    refute advice.prompt_cache_key == build.prompt_cache_key
     assert advice.tools == []
     assert File.read!(result.transcript_path) =~ "Advisory mutation qualification"
     assert File.read!(result.transcript_path) =~ "Add a zero boundary assertion"

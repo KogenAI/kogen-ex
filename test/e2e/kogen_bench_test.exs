@@ -19,6 +19,7 @@ defmodule Kogen.E2e.KogenBenchTest do
     assert File.read!(Path.join(out_dir, "final.diff")) == ""
 
     usage = out_dir |> Path.join("usage.json") |> File.read!() |> :json.decode()
+    assert usage["cache_hit_rate"] == 0.0
     assert {usage["landed"], usage["best_candidate"]} == {false, false}
 
     assert [

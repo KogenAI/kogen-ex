@@ -37,11 +37,19 @@ defmodule Kogen.Harness.Continuation do
       remaining_ms: remaining_ms
     }
 
-    with {:ok, response} <- Exchange.respond(opts, request),
+    tags = Map.put(opts.request_tags, :cache_epoch, "checkpoint-#{state.turns}")
+
+    with {:ok, response} <- Exchange.respond(%{opts | request_tags: tags}, request),
          {:ok, items, metrics} <-
            Conversation.checkpoint(response, state.authority, state.items, limit, path),
          :ok <- record(opts, state, path, metrics) do
-      {:ok, %{state | items: items, usage: Codec.usage(state.usage, response.usage)}}
+      {:ok,
+       %{
+         state
+         | items: items,
+           cache_epoch: Conversation.cache_epoch(items),
+           usage: Codec.usage(state.usage, response.usage)
+       }}
     else
       {:error, reason} -> {:error, %Error{reason: :continuation_failed, detail: inspect(reason)}}
     end

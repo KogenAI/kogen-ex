@@ -27,6 +27,15 @@ defmodule Kogen.State.Usage do
     end
   end
 
+  @doc "Token-weighted cache hit rate; Kogen input counts exclude cached tokens."
+  @spec cache_hit_rate([Event.t()]) :: float() | nil
+  def cache_hit_rate(events) do
+    rows = Enum.filter(events, &(&1.event == "model_stage"))
+    input = Enum.reduce(rows, 0, &(token_count(&1.tokens, "input") + &2))
+    cached = Enum.reduce(rows, 0, &(token_count(&1.tokens, "cached_input") + &2))
+    if input + cached > 0, do: cached / (input + cached)
+  end
+
   defp totals(rows) do
     tokens =
       Map.new(@token_names, fn token ->

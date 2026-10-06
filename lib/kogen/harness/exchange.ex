@@ -32,12 +32,11 @@ defmodule Kogen.Harness.Exchange do
   alias Kogen.Contracts.ModelRequest
   alias Kogen.Contracts.ModelResponse
   alias Kogen.Contracts.ProviderError
-  alias Kogen.Conversation.BuilderPolicy
-  alias Kogen.Conversation.PlanPolicy
+  alias Kogen.Conversation
+  alias Kogen.Conversation.PromptCacheKey
   alias Kogen.Harness.Codec
   alias Kogen.Harness.Exchange.Request
   alias Kogen.Harness.Opts
-  alias Kogen.Harness.PromptCacheKey
   alias Kogen.Harness.Recording
   alias Kogen.Resilience.Policy
   alias Kogen.Resilience.ProviderCall
@@ -100,10 +99,11 @@ defmodule Kogen.Harness.Exchange do
       |> Map.merge(%{
         retries: retry.attempt - 1,
         history: Codec.history_size(exchange_request.items),
-        tags: opts.request_tags,
+        tags:
+          Map.put(opts.request_tags, :conversation_id, conversation_key(opts, exchange_request)),
         settings: request_settings(opts, request)
       })
-      |> Map.put(:request_shape, request_measurements(exchange_request, result))
+      |> Map.put(:request_shape, Conversation.request_metrics(exchange_request, result))
 
     with {:ok, transcript_path} <- Recording.path(opts) do
       case RequestLog.append(
@@ -114,12 +114,6 @@ defmodule Kogen.Harness.Exchange do
         {:error, reason} -> {:error, request_log_error(reason)}
       end
     end
-  end
-
-  defp request_measurements(request, result) do
-    request.measurements
-    |> Map.merge(BuilderPolicy.request_metrics(request.tool_names, result))
-    |> Map.merge(PlanPolicy.response_metrics(request.stage, request.measurements, result))
   end
 
   defp request_log_error(reason),
@@ -261,7 +255,7 @@ defmodule Kogen.Harness.Exchange do
         request.items,
         request.tool_names
       )
-      | prompt_cache_key: PromptCacheKey.for_run_stage(opts.run_dir, request.stage),
+      | prompt_cache_key: conversation_key(opts, request),
         session_id: PromptCacheKey.for_run_stage(opts.run_dir, :session),
         model_generation_tokens:
           if(request.stage == :develop,
@@ -273,6 +267,9 @@ defmodule Kogen.Harness.Exchange do
         reasoning_context: if(luna_mode(opts, request.model) == :lite, do: :all_turns)
     }
   end
+
+  defp conversation_key(opts, request),
+    do: PromptCacheKey.for_run_stage(opts.run_dir, request.stage, opts.request_tags)
 
   defp luna_mode(opts, "gpt-6-luna"),
     do: Map.get(opts.project.build || %{}, :luna_provider_mode, :responses) || :responses

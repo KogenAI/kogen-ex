@@ -41,10 +41,13 @@ defmodule Kogen.Harness.Developer do
   defp initialize(opts, intent_text, plan, resume, transcript_path, prompt) do
     started_at = System.monotonic_time(:millisecond)
 
+    items = Conversation.initial_items(intent_text, plan, resume, opts.repairs_left)
+
     state = %DeveloperState{
       authority: Conversation.authority(intent_text, plan, opts.repairs_left),
       measurements: Conversation.authority_metrics(intent_text, plan),
-      items: Conversation.initial_items(intent_text, plan, resume, opts.repairs_left),
+      items: items,
+      cache_epoch: Conversation.cache_epoch(items),
       usage: Usage.zero(),
       turns: 0,
       empty_refusals: 0,
@@ -70,20 +73,25 @@ defmodule Kogen.Harness.Developer do
 
       true ->
         {state, system_note} = Budget.note(state, opts.limits.max_turns)
+        state = append_budget_note(state, system_note)
 
         with {:ok, state} <- Continuation.prepare(opts, state, remaining_ms) do
           developer_turn(
             opts,
             prompt,
             state,
-            max(state.deadline - System.monotonic_time(:millisecond), 0),
-            system_note
+            max(state.deadline - System.monotonic_time(:millisecond), 0)
           )
         end
     end
   end
 
-  defp developer_turn(opts, prompt, state, remaining_ms, system_note) do
+  defp append_budget_note(state, nil), do: state
+
+  defp append_budget_note(state, note),
+    do: %{state | items: state.items ++ [Codec.user_item(note)]}
+
+  defp developer_turn(opts, prompt, state, remaining_ms) do
     {model, effort} = opts.models.builder
     turn = state.turns + 1
 
@@ -92,14 +100,16 @@ defmodule Kogen.Harness.Developer do
       turn: turn,
       model: model,
       effort: effort,
-      instructions: Budget.instructions(prompt, system_note),
+      instructions: prompt,
       measurements: state.measurements,
       items: state.items,
       tool_names: Codec.tool_names(:developer, opts.builder_tools),
       remaining_ms: remaining_ms
     }
 
-    case Exchange.respond(opts, exchange_request) do
+    tags = Map.put(opts.request_tags, :cache_epoch, state.cache_epoch)
+
+    case Exchange.respond(%{opts | request_tags: tags}, exchange_request) do
       {:ok, %ModelResponse{} = response} ->
         state = accept_response(state, response)
 

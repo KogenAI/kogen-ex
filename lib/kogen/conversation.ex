@@ -2,11 +2,20 @@ defmodule Kogen.Conversation do
   @moduledoc "Approved conversation authority and opt-in continuation checkpoints."
   use Boundary,
     deps: [Kogen.Contracts],
-    exports: [Budget, BuilderPolicy, PlanPolicy, PlanShellPrompts, PlannerPrompts]
+    exports: [
+      Budget,
+      BuilderPolicy,
+      PlanPolicy,
+      PlanShellPrompts,
+      PlannerPrompts,
+      PromptCacheKey
+    ]
 
   alias Kogen.Contracts.JSON
   alias Kogen.Contracts.ModelResponse
   alias Kogen.Contracts.Redact
+  alias Kogen.Conversation.BuilderPolicy
+  alias Kogen.Conversation.PlanPolicy
 
   @sections ~w(obligations findings investigation ruled_out next_steps)
   @instructions """
@@ -16,6 +25,16 @@ defmodule Kogen.Conversation do
   useful investigation, disproven approaches and why they failed, and remaining work.
   Do not claim done, use tools, or change scope. Mark uncertainty honestly. Keep it concise.
   """
+
+  @doc "Stable identity of a compacted conversation, also retained by same-session repairs."
+  def cache_epoch([_authority, %{"content" => [%{"text" => text}]} = checkpoint | _rest])
+      when is_binary(text) do
+    if String.starts_with?(text, "Continuation of the same approved Build.\n\n") do
+      :sha256 |> :crypto.hash(:json.encode(checkpoint)) |> Base.encode16(case: :lower)
+    end
+  end
+
+  def cache_epoch(_items), do: nil
 
   def instructions, do: @instructions
 
@@ -93,7 +112,13 @@ defmodule Kogen.Conversation do
 
   def authority_metrics(intent_text, plan) do
     injection = if is_nil(plan), do: "", else: plan_content(plan)
-    Kogen.Conversation.PlanPolicy.authority_metrics(intent_text, plan, injection)
+    PlanPolicy.authority_metrics(intent_text, plan, injection)
+  end
+
+  def request_metrics(%{stage: stage, measurements: measurements, tool_names: tool_names}, result) do
+    measurements
+    |> Map.merge(BuilderPolicy.request_metrics(tool_names, result))
+    |> Map.merge(PlanPolicy.response_metrics(stage, measurements, result))
   end
 
   def authority(intent_text, plan, repairs_left) do

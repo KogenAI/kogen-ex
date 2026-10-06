@@ -66,17 +66,14 @@ defmodule Kogen.Harness.DeveloperToolSetTest do
     requests = ScriptedProvider.requests(provider)
     assert length(requests) == 10
 
-    noted_requests =
-      requests
-      |> Enum.with_index(1)
-      |> Enum.filter(fn {request, _turn} ->
-        String.contains?(request.instructions, "System note:")
-      end)
+    assert Enum.all?(requests, &(&1.instructions == hd(requests).instructions))
+    refute hd(requests).instructions =~ "System note:"
+    [before_note, note_request, after_note] = Enum.drop(requests, 7)
+    refute inspect(before_note.input) =~ "System note:"
+    assert inspect(note_request.input) =~ "System note: 2 turns remain."
+    assert Enum.take(after_note.input, length(note_request.input)) == note_request.input
 
-    assert [{note_request, 9}] = noted_requests
-    assert note_request.instructions =~ "System note: 2 turns remain."
-
-    assert note_request.instructions =~
+    assert inspect(after_note.input) =~
              "Run the targeted tests now and finish the smallest complete change."
   end
 

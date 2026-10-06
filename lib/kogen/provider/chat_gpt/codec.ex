@@ -8,6 +8,7 @@ defmodule Kogen.Provider.ChatGPT.Codec do
   alias Kogen.Provider.ChatGPT.Codec.Errors
   alias Kogen.Provider.ChatGPT.Codec.Recording
   alias Kogen.Provider.ChatGPT.Codec.Stream
+  alias Kogen.Provider.ChatGPT.RequestBody
   alias Kogen.Provider.ChatGPT.SSE
   alias Kogen.ResponseProtocol.Codec, as: RequestCodec
 
@@ -19,7 +20,7 @@ defmodule Kogen.Provider.ChatGPT.Codec do
     if valid_request?(request) do
       case {mode, request.adapter} do
         {:codex, :responses} ->
-          request |> request_body() |> encode_json()
+          request |> request_body() |> RequestBody.encode()
 
         {:codex, :lite} when is_nil(request.model_generation_tokens) ->
           RequestCodec.encode_lite(request)
@@ -147,12 +148,6 @@ defmodule Kogen.Provider.ChatGPT.Codec do
     do: Map.put(body, "prompt_cache_key", cache_key)
 
   defp maybe_put_prompt_cache_key(body, _cache_key), do: body
-
-  defp encode_json(value) do
-    {:ok, value |> :json.encode() |> IO.iodata_to_binary()}
-  rescue
-    ErlangError -> Errors.malformed()
-  end
 
   defp decode_event(data, stream) do
     case decode_json(data) do

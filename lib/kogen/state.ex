@@ -71,6 +71,9 @@ defmodule Kogen.State do
   @spec decode_event(binary()) :: {:ok, Event.t()} | {:error, :invalid_event}
   defdelegate decode_event(binary), to: Json
 
+  @spec cache_hit_rate([Event.t()]) :: float() | nil
+  defdelegate cache_hit_rate(events), to: Usage
+
   @spec attempt_usage(Run.t(), term()) ::
           {:ok, %{tokens: map(), model_wall_ms: non_neg_integer()}} | {:error, term()}
   defdelegate attempt_usage(run, attempt), to: Usage, as: :attempt

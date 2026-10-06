@@ -12,7 +12,7 @@ defmodule Kogen.Harness.DeveloperState do
     :deadline,
     :transcript_path
   ]
-  defstruct @enforce_keys ++ [budget_note_sent?: false, measurements: %{}]
+  defstruct @enforce_keys ++ [budget_note_sent?: false, measurements: %{}, cache_epoch: nil]
 
   @type t :: %__MODULE__{
           items: [map()],
@@ -23,6 +23,7 @@ defmodule Kogen.Harness.DeveloperState do
           protected_restores: non_neg_integer(),
           budget_note_sent?: boolean(),
           measurements: map(),
+          cache_epoch: String.t() | nil,
           started_at: integer(),
           deadline: integer(),
           transcript_path: Path.t()

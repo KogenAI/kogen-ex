@@ -87,6 +87,7 @@ defmodule Kogen.Resilience.RequestLog do
       %{
         record_kind: :model_request,
         stage: meta.stage,
+        conversation_id: nullable(Map.get(meta.tags, :conversation_id)),
         turn: meta.turn,
         attempt: nullable(Map.get(meta.tags, :attempt)),
         rung: nullable(Map.get(meta.tags, :rung)),

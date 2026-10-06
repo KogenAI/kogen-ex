@@ -59,6 +59,7 @@ defmodule Kogen.Kernel.GateTimingOutputTest do
              State.record(run, %{
                event: :model_stage,
                stage: "audit",
+               tokens: %{input: 100, cached_input: 900, output: 20, reasoning: 5},
                wall_ms: 2_000,
                gate_summary: %{timing: GateTiming.summarize([], 2_000)}
              })
@@ -81,6 +82,7 @@ defmodule Kogen.Kernel.GateTimingOutputTest do
     assert {:ok, bytes} = Report.read("timing-probe", state_root, repo, "main", Git.env())
     report = :json.decode(bytes)
     assert report["status"] == "landed"
+    assert report["cache_hit_rate"] == 0.9
     assert report["gate_timing"]["duration_ms"] == summary.gate_timing.duration_ms
     assert report["gate_timing"]["warnings"] == summary.gate_timing.warnings
 

@@ -41,7 +41,9 @@ defmodule Kogen.Harness.MutationAdvice do
       remaining_ms: min(max(state.deadline - System.monotonic_time(:millisecond), 0), 5_000)
     }
 
-    case Exchange.respond(opts, request) do
+    tags = Map.put(opts.request_tags, :cache_epoch, "mutation-advice")
+
+    case Exchange.respond(%{opts | request_tags: tags}, request) do
       {:ok, response} ->
         %{
           state

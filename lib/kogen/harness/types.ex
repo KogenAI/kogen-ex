@@ -75,7 +75,11 @@ defmodule Kogen.Harness.Opts do
           },
           limits: %{max_turns: pos_integer(), wall_ms: pos_integer() | :infinity},
           resilience: Policy.t(),
-          request_tags: %{optional(:attempt) => term(), optional(:rung) => String.t() | nil},
+          request_tags: %{
+            optional(:attempt) => term(),
+            optional(:rung) => String.t() | nil,
+            optional(:cache_epoch) => term()
+          },
           repairs_left: non_neg_integer(),
           protected: [String.t()]
         }

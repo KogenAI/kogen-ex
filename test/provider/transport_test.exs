@@ -21,7 +21,9 @@ defmodule Kogen.Provider.ChatGPT.TransportTest do
     {url, server} = start_server(200, body, :chunked)
     config = config(url)
 
-    assert {:ok, response} = ChatGPT.respond(config, request())
+    assert {:ok, response} =
+             ChatGPT.respond(config, %{request() | prompt_cache_key: "build-conversation"})
+
     assert response.text == "ok"
     assert_receive {:captured_request, request_bytes}, @receive_ms
     request_text = IO.iodata_to_binary(request_bytes)
@@ -29,6 +31,9 @@ defmodule Kogen.Provider.ChatGPT.TransportTest do
     encoded = :json.decode(request_body)
 
     assert String.downcase(headers) =~ "authorization: bearer test-token"
+    assert String.downcase(headers) =~ "session-id: build-conversation"
+    assert String.downcase(headers) =~ "thread-id: build-conversation"
+    assert encoded["prompt_cache_key"] == "build-conversation"
     assert encoded["model"] == "gpt-6-luna"
     assert encoded["store"] == false
     assert encoded["stream"] == true

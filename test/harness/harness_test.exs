@@ -6,10 +6,10 @@ defmodule Kogen.Harness.Tests do
   alias Kogen.Contracts.ModelResponse
   alias Kogen.Contracts.Project
   alias Kogen.Contracts.ToolCall
+  alias Kogen.Conversation.PromptCacheKey
   alias Kogen.Harness
   alias Kogen.Harness.Opts
   alias Kogen.Harness.Plan
-  alias Kogen.Harness.PromptCacheKey
   alias Kogen.Harness.Review
   alias Kogen.Provider.ChatGPT.Codec, as: ChatGPTCodec
   alias Kogen.Testkit.HarnessScriptedProvider, as: ScriptedProvider

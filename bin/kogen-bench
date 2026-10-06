@@ -204,6 +204,11 @@ with open(os.path.join(out_dir, "requests.jsonl"), encoding="utf-8") as source:
             if settings not in used:
                 used.append(settings)
 if usage:
+    build_tokens = [stage.get("tokens") or {} for stage in usage.get("stages", [])
+                    if stage.get("stage") != "shape"]
+    uncached = sum(int(tokens.get("input", 0) or 0) for tokens in build_tokens)
+    cached = sum(int(tokens.get("cached_input", 0) or 0) for tokens in build_tokens)
+    usage["cache_hit_rate"] = cached / (uncached + cached) if uncached + cached else None
     usage["roles"] = roles
     usage["builder_models"] = sorted({settings["model"] for settings in roles.get("builder", [])})
     with open(usage_path, "w", encoding="utf-8") as output:

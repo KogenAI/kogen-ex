@@ -28,7 +28,7 @@ defmodule Kogen.ResponseProtocol.Codec do
         do: Map.put(body, "prompt_cache_key", request.prompt_cache_key),
         else: body
 
-    {:ok, body |> controls(request) |> :json.encode() |> IO.iodata_to_binary()}
+    encode_body(controls(body, request))
   rescue
     ErlangError ->
       {:error, %ProviderError{class: :malformed, message: "Invalid model request controls."}}
@@ -134,10 +134,19 @@ defmodule Kogen.ResponseProtocol.Codec do
         do: body,
         else: Map.put(body, "prompt_cache_key", request.prompt_cache_key)
 
-    {:ok, body |> controls(request) |> :json.encode() |> IO.iodata_to_binary()}
+    encode_body(controls(body, request))
   rescue
     ErlangError ->
       {:error, %ProviderError{class: :malformed, message: "Invalid model request controls."}}
+  end
+
+  # Growing history is last, after every stable control. Only the closing JSON
+  # delimiters separate a previous prompt prefix from appended input items.
+  defp encode_body(body) do
+    history = body |> Map.fetch!("input") |> :json.encode() |> IO.iodata_to_binary()
+    static = body |> Map.delete("input") |> :json.encode() |> IO.iodata_to_binary()
+    prefix = binary_part(static, 0, byte_size(static) - 1)
+    {:ok, prefix <> ~s(,"input":) <> history <> "}"}
   end
 
   @spec incomplete_error(term()) :: ProviderError.t()

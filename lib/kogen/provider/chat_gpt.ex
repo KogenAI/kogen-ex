@@ -232,7 +232,7 @@ defmodule Kogen.Provider.ChatGPT do
   defp encoding_mode(_config), do: :codex
 
   defp request_headers(config, request, token, account_id) do
-    base = headers(config, token, account_id)
+    base = headers(config, token, account_id) ++ conversation_headers(request)
 
     if request.adapter == :lite do
       base ++
@@ -262,6 +262,11 @@ defmodule Kogen.Provider.ChatGPT do
 
   defp handle_response(%Transport.Response{status: status, body: body}),
     do: response_error(status, body)
+
+  defp conversation_headers(%ModelRequest{prompt_cache_key: key}) when is_binary(key),
+    do: [{"session-id", key}, {"thread-id", key}]
+
+  defp conversation_headers(_request), do: []
 
   defp headers(%Config{source: :kogen_owned}, token, _account_id) do
     [
