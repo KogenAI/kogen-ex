@@ -26,6 +26,7 @@ defmodule Kogen.Project.ProjectTest do
         argv: [npm, ci]
         timeout_ms: 120000
     setup_outputs: [deps, _build]
+    setup_inputs: [mix.lock, mise.toml]
     diagnose:
       - glob: "lib/**/*.ex"
         argv: [mix, compile]
@@ -54,6 +55,7 @@ defmodule Kogen.Project.ProjectTest do
            ]
 
     assert project.setup_outputs == ["deps", "_build"]
+    assert project.setup_inputs == ["mix.lock", "mise.toml"]
 
     assert project.fix == [
              %CheckSpec{name: "format", argv: ["mix", "format", "--force"], timeout_ms: 12_000}

@@ -2,14 +2,20 @@ defmodule Kogen.Project.SetupReuse do
   @moduledoc false
 
   alias Kogen.Contracts.Project
+  alias Kogen.Project.SetupKey
+  alias Kogen.Project.SetupLinks
   alias Kogen.Workspace
 
-  @cache_version 1
+  @cache_version 2
   @max_entries 3
-  @volatile_toolchain_env ~w(MISE_STATE_DIR MISE_CACHE_DIR MISE_TRUSTED_CONFIG_PATHS)
   @complete_file "complete"
 
-  @type result :: %{key: String.t() | nil, reused?: boolean(), saved_wall_ms: non_neg_integer()}
+  @type result :: %{
+          key: String.t() | nil,
+          reused?: boolean(),
+          saved_wall_ms: non_neg_integer(),
+          wall_ms: non_neg_integer()
+        }
 
   @spec run(
           Project.t(),
@@ -21,16 +27,24 @@ defmodule Kogen.Project.SetupReuse do
         ) :: {:ok, result()} | {:error, term()}
   def run(%Project{} = project, workdir, cache_root, base_tree_sha, toolchain_env, runner)
       when is_function(runner, 0) do
-    if cacheable?(project, workdir, cache_root, base_tree_sha, toolchain_env) do
-      key = cache_key(project, base_tree_sha, toolchain_env)
-      run_cached(project, workdir, cache_root, key, runner)
+    key_check = fn -> SetupKey.build(project, workdir, base_tree_sha, toolchain_env) end
+
+    with true <- cacheable?(project, workdir, cache_root),
+         {:ok, key} <- key_check.() do
+      run_cached(project, workdir, cache_root, key, runner, key_check)
     else
-      run_uncached(runner)
+      false -> run_uncached(runner)
+      :miss -> run_uncached(runner)
     end
   end
 
   @spec record_reuse(Path.t(), result()) :: :ok | {:error, term()}
-  def record_reuse(_run_dir, %{reused?: false}), do: :ok
+  def record_reuse(run_dir, %{reused?: false, wall_ms: wall_ms}) do
+    line = JSON.encode!(%{event: :setup_prepared, wall_ms: wall_ms}) <> "\n"
+
+    with :ok <- File.mkdir_p(run_dir),
+         do: File.write(Path.join(run_dir, "events.jsonl"), line, [:append, :binary])
+  end
 
   def record_reuse(run_dir, %{reused?: true, key: key, saved_wall_ms: wall_ms}) do
     line = ~s({"event":"setup_reused","setup_key":"#{key}","saved_wall_ms":#{wall_ms}}\n)
@@ -41,23 +55,22 @@ defmodule Kogen.Project.SetupReuse do
     end
   end
 
-  defp cacheable?(project, workdir, cache_root, base_tree_sha, toolchain_env) do
+  defp cacheable?(project, workdir, cache_root) do
     project.setup != [] and project.setup_outputs != [] and safe_outputs?(project.setup_outputs) and
-      absolute_directory?(workdir) and absolute_path?(cache_root) and valid_sha?(base_tree_sha) and
-      is_map(toolchain_env)
+      absolute_directory?(workdir) and absolute_path?(cache_root)
   end
 
-  defp run_cached(project, workdir, cache_root, key, runner) do
+  defp run_cached(project, workdir, cache_root, key, runner, key_check) do
     entry = Path.join(cache_root, key)
 
     case restore(entry, key, project.setup_outputs, workdir) do
       {:hit, wall_ms} ->
         touch_entry(entry)
         trim(cache_root)
-        {:ok, %{key: key, reused?: true, saved_wall_ms: wall_ms}}
+        {:ok, %{key: key, reused?: true, saved_wall_ms: wall_ms, wall_ms: 0}}
 
       :miss ->
-        run_and_publish(project.setup_outputs, workdir, cache_root, entry, key, runner)
+        run_and_publish(project, workdir, entry, key, runner, key_check)
 
       {:error, reason} ->
         {:error, reason}
@@ -65,20 +78,27 @@ defmodule Kogen.Project.SetupReuse do
   end
 
   defp run_uncached(runner) do
+    started_at = System.monotonic_time(:millisecond)
+
     case runner.() do
-      :ok -> {:ok, %{key: nil, reused?: false, saved_wall_ms: 0}}
+      :ok -> {:ok, %{key: nil, reused?: false, saved_wall_ms: 0, wall_ms: elapsed(started_at)}}
       {:error, _reason} = error -> error
     end
   end
 
-  defp run_and_publish(outputs, workdir, cache_root, entry, key, runner) do
+  defp run_and_publish(project, workdir, entry, key, runner, key_check) do
     started_at = System.monotonic_time(:millisecond)
 
     case runner.() do
       :ok ->
-        wall_ms = max(System.monotonic_time(:millisecond) - started_at, 0)
-        _publish = publish(cache_root, entry, key, outputs, workdir, wall_ms)
-        {:ok, %{key: key, reused?: false, saved_wall_ms: 0}}
+        wall_ms = elapsed(started_at)
+
+        if key_check.() == {:ok, key} do
+          _publish =
+            publish(Path.dirname(entry), entry, key, project.setup_outputs, workdir, wall_ms)
+        end
+
+        {:ok, %{key: key, reused?: false, saved_wall_ms: 0, wall_ms: wall_ms}}
 
       {:error, _reason} = error ->
         error
@@ -120,13 +140,23 @@ defmodule Kogen.Project.SetupReuse do
   defp publish_temporary(temporary, entry, key, outputs, workdir, wall_ms) do
     result =
       with {:ok, present} <- copy_present_outputs(workdir, temporary, outputs),
-           :ok <- write_complete(temporary, key, wall_ms, present) do
+           :ok <- write_complete(temporary, key, wall_ms, present),
+           :ok <- rebase_entry(temporary, entry, present) do
         install_entry(temporary, entry, key, outputs)
       end
 
     _cleanup = File.rm_rf(temporary)
     if result == :ok, do: trim(Path.dirname(entry))
     result
+  end
+
+  defp rebase_entry(temporary, entry, outputs) do
+    Enum.reduce_while(outputs, :ok, fn relative, :ok ->
+      case SetupLinks.rebase(temporary, temporary, relative, entry) do
+        :ok -> {:cont, :ok}
+        error -> {:halt, error}
+      end
+    end)
   end
 
   defp copy_present_outputs(source_root, target_root, outputs) do
@@ -144,12 +174,17 @@ defmodule Kogen.Project.SetupReuse do
         source = Path.join(source_root, relative)
         destination = Path.join(target_root, relative)
 
-        case Workspace.copy_on_write(source, destination) do
+        case copy_output(source_root, target_root, relative, source, destination) do
           :ok -> {:cont, :ok}
           {:error, reason} -> {:halt, {:error, {:setup_cache_copy_failed, relative, reason}}}
         end
       end)
     end
+  end
+
+  defp copy_output(source_root, target_root, relative, source, destination) do
+    with :ok <- Workspace.copy_on_write(source, destination),
+         do: SetupLinks.rebase(source_root, target_root, relative, target_root)
   end
 
   defp remove_outputs(root, outputs) do
@@ -302,30 +337,7 @@ defmodule Kogen.Project.SetupReuse do
     |> Enum.each(&File.rm_rf(Path.join(cache_root, &1)))
   end
 
-  defp cache_key(project, base_tree_sha, toolchain_env) do
-    spec_hash = digest({project.setup, project.setup_outputs, project.env})
-    toolchain_hash = toolchain_hash(toolchain_env)
-    digest({@cache_version, base_tree_sha, spec_hash, toolchain_hash})
-  end
-
-  defp toolchain_hash(environment) do
-    stable_environment = Map.drop(environment, @volatile_toolchain_env)
-
-    digest({
-      :os.type(),
-      :erlang.system_info(:system_architecture),
-      System.version(),
-      System.otp_release(),
-      stable_environment
-    })
-  end
-
-  defp digest(term) do
-    term
-    |> :erlang.term_to_binary([:deterministic])
-    |> then(&:crypto.hash(:sha256, &1))
-    |> Base.encode16(case: :lower)
-  end
+  defp elapsed(started_at), do: max(System.monotonic_time(:millisecond) - started_at, 0)
 
   defp safe_outputs?(outputs) when is_list(outputs) do
     Enum.all?(outputs, &safe_output?/1) and not overlapping_outputs?(outputs)
@@ -349,11 +361,6 @@ defmodule Kogen.Project.SetupReuse do
       end)
     end)
   end
-
-  defp valid_sha?(sha) when is_binary(sha),
-    do: Regex.match?(~r/\A(?:[0-9a-f]{40}|[0-9a-f]{64})\z/, sha)
-
-  defp valid_sha?(_sha), do: false
 
   defp path_exists?(path), do: match?({:ok, _stat}, File.lstat(path))
 

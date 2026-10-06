@@ -17,7 +17,8 @@ defmodule Kogen.Queue.BuildSummary do
                 candidate_diff: nil,
                 continuations: 0,
                 progress: nil,
-                gate_timing: nil
+                gate_timing: nil,
+                setup: nil
               ]
 
   @type t :: %__MODULE__{
@@ -29,7 +30,8 @@ defmodule Kogen.Queue.BuildSummary do
           gate_timing: Kogen.Contracts.GateTiming.t() | nil,
           progress: map() | nil,
           candidate_diff: Path.t() | nil,
-          continuations: non_neg_integer()
+          continuations: non_neg_integer(),
+          setup: map() | nil
         }
 
   @spec latest(Path.t(), String.t()) :: {:ok, t() | nil} | {:error, term()}
@@ -52,6 +54,7 @@ defmodule Kogen.Queue.BuildSummary do
          journal: run.dir,
          reason: reason(events),
          stages: stages(events),
+         setup: setup(events),
          continuations: Enum.count(events, &(&1.event == "context_continued")),
          gate_timing: Codec.latest(events),
          progress: Kogen.Queue.Progress.from_events(events),
@@ -87,6 +90,16 @@ defmodule Kogen.Queue.BuildSummary do
         _event ->
           nil
       end)
+  end
+
+  defp setup(events) do
+    events
+    |> Enum.reverse()
+    |> Enum.find_value(fn
+      %Event{event: "setup_reused", saved_wall_ms: ms} -> %{reused?: true, wall_ms: ms}
+      %Event{event: "setup_prepared", wall_ms: ms} -> %{reused?: false, wall_ms: ms}
+      _event -> nil
+    end)
   end
 
   defp stages(events) do

@@ -57,6 +57,7 @@ defmodule Kogen.Kernel.CLI.StatusOutput do
 
     "Build #{short(build.build_id)}: #{outcome}\n" <>
       stages <>
+      setup(build.setup) <>
       continuations(build.continuations) <>
       timing_text(build.gate_timing) <>
       progress_text(build.progress) <> diff <> "  journal: #{build.journal}\n"
@@ -75,6 +76,10 @@ defmodule Kogen.Kernel.CLI.StatusOutput do
     "  acceptance verified: #{Enum.join(verified, ", ")}\n" <>
       "  acceptance remaining: #{Enum.join(remaining, ", ")}\n"
   end
+
+  defp setup(nil), do: ""
+  defp setup(%{reused?: true, wall_ms: ms}), do: "  setup: reused (saved preparation #{ms} ms)\n"
+  defp setup(%{reused?: false, wall_ms: ms}), do: "  setup: prepared in #{ms} ms\n"
 
   defp continuations(0), do: ""
 

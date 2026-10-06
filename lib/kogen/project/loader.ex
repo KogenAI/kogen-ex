@@ -6,7 +6,7 @@ defmodule Kogen.Project.Loader do
   alias Kogen.Contracts.Yaml
   alias Kogen.Project.BuildSettings
 
-  @project_keys ~w(name checks format acceptance_checks setup setup_outputs fix diagnose protected_paths gate_paths domains env sandbox base account build)
+  @project_keys ~w(name checks format acceptance_checks setup setup_outputs setup_inputs fix diagnose protected_paths gate_paths domains env sandbox base account build)
   @env_name ~r/\A[A-Za-z_][A-Za-z0-9_]*\z/
 
   @type error :: %{line: pos_integer() | nil, message: String.t()}
@@ -143,7 +143,10 @@ defmodule Kogen.Project.Loader do
   defp project_settings(document) do
     {env, env_errors} = env(document)
     {sandbox, sandbox_errors} = sandbox(document)
-    {[env: env, sandbox: sandbox], env_errors ++ sandbox_errors}
+    {inputs, input_errors} = Kogen.Project.SetupInputs.validate(Map.get(document, "setup_inputs"))
+
+    {[env: env, sandbox: sandbox, setup_inputs: inputs],
+     env_errors ++ sandbox_errors ++ input_errors}
   end
 
   defp setup_outputs(document) do

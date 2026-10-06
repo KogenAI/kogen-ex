@@ -39,6 +39,8 @@ defmodule Kogen.Engine.Build.Setup do
   end
 
   @spec run_cached(Session.t()) :: :ok | {:error, term()}
+  def run_cached(%Session{project: %{setup: []}}), do: :ok
+
   def run_cached(%Session{} = session) do
     cache_root = Path.join(session.request.workspace_root, "setup-cache")
 
