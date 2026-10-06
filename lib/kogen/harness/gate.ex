@@ -17,7 +17,7 @@ defmodule Kogen.Harness.Gate do
   def run(%Opts{} = opts, deadline) do
     with :ok <- before_gate(opts.before_gate),
          {:ok, _transcript_path} <- Recording.path(opts),
-         {:ok, fixes, _fix_flakes} <- run_specs(opts, opts.project.fix, deadline, :fix),
+         {:ok, fixes} <- final_pass(opts, deadline),
          {:ok, checks, flake_excused} <- run_specs(opts, opts.project.checks, deadline, :check) do
       checks = checks ++ quality_commands(opts, deadline)
       commands = Enum.reject(fixes ++ checks, & &1.base_red?)
@@ -56,6 +56,21 @@ defmodule Kogen.Harness.Gate do
         changed_ranges: ranges
       )
     ]
+  defp final_pass(opts, deadline) do
+    Kogen.Checks.once_final_pass(
+      opts.workdir,
+      opts.run_dir,
+      opts.env,
+      opts.project.fix,
+      opts.check_baseline,
+      fn directory ->
+        case run_specs(%{opts | run_dir: directory}, opts.project.fix, deadline, :fix) do
+          {:ok, fixes, _flakes} -> {:ok, fixes}
+          error -> error
+        end
+      end
+    )
+  end
 
   defp quality_commands(opts, deadline) do
     opts.workdir

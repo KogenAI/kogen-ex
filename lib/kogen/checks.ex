@@ -46,6 +46,7 @@ defmodule Kogen.Checks do
     ],
     exports: [Feedback, LedgerRow, ShapeValidation, ShapeFormatRequest]
 
+  alias Kogen.Checks.FinalPass
   alias Kogen.Checks.Fixer
   alias Kogen.Checks.Ledger
   alias Kogen.Checks.LedgerRow
@@ -93,6 +94,18 @@ defmodule Kogen.Checks do
 
   def fix(workdir, project, run_dir, env, sandbox, baseline),
     do: Fixer.run(workdir, project, run_dir, env, sandbox, baseline)
+
+  defdelegate once_final_pass(workdir, run_dir, env, specs, baseline, run),
+    to: Kogen.Checks.FinalPass.Cache,
+    as: :once
+
+  defdelegate final_pass(workdir, project, run_dir, env, sandbox, baseline),
+    to: FinalPass,
+    as: :run
+
+  defdelegate final_pass_receipts(tree, project, results), to: FinalPass, as: :receipts
+
+  defdelegate final_pass_passed(results), to: FinalPass, as: :passed
 
   defdelegate verify_command(workdir, env, spec, baseline, run), to: Kogen.Checks.Verification
 

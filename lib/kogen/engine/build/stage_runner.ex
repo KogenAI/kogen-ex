@@ -230,16 +230,7 @@ defmodule Kogen.Engine.Build.StageRunner do
              manifest(session),
              session.git_env
            ),
-         {:ok, _results} <-
-           Kogen.Checks.fix(
-             session.workdir,
-             session.project,
-             session.run_dir,
-             session.process_env,
-             session.sandbox,
-             session.approval.check_baseline
-           ),
-         :ok <- record(session, %{event: :fix_result, result: :pass}) do
+         {:ok, _receipts} <- CheckStage.final_pass(session) do
       {:ok, %{session | failure: nil, failure_text: nil}, [{:stage_ok, :fix, %{}}]}
     else
       {:error, %Failure{} = failure} -> fail(session, :fix, failure)
@@ -258,6 +249,7 @@ defmodule Kogen.Engine.Build.StageRunner do
          session
          | acceptance: acceptance.ledger,
            receipts: check_result.receipts,
+           verified_tree: check_result.tree,
            scope_warnings: scope_warnings,
            failure: nil,
            failure_text: nil

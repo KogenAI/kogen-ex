@@ -63,6 +63,7 @@ defmodule Kogen.Engine.Build.Commit do
              :candidate_tree,
              Workspace.rev_parse(session.workdir, "#{commit}^{tree}", session.git_env)
            ),
+         :ok <- tag(:verified_tree, verified(session, tree)),
          :ok <- tag(:tree_match, same_tree(tree, committed_tree)),
          :ok <- tag(:commit_receipt, record_commit(session, commit, tree)) do
       {:ok, %{session | failure: nil, failure_text: nil},
@@ -151,32 +152,56 @@ defmodule Kogen.Engine.Build.Commit do
   end
 
   defp verify_rebased(session) do
-    with {:ok, project} <- Kogen.Project.load(session.workdir),
-         updated = %{session | project: project},
-         {:ok, tree} <- Guard.tree_hash(updated.workdir, updated.git_env) do
-      case recheck(updated, tree) do
-        {:ok, receipts, ledger} ->
-          {:ok, %{updated | receipts: receipts, acceptance: ledger}}
+    case Kogen.Project.load(session.workdir) do
+      {:ok, project} ->
+        updated = %{session | project: project}
 
-        {:error, %Failure{} = failure} ->
-          {:error, updated, failure}
+        case recheck(updated) do
+          {:ok, checks, ledger} ->
+            commit_verified(updated, checks, ledger)
 
-        {:error, reason} ->
-          {:error, updated, candidate_failure(:verification_failed, inspect(reason))}
-      end
-    else
+          {:error, %Failure{} = failure} ->
+            {:error, updated, failure}
+
+          {:error, reason} ->
+            {:error, updated, candidate_failure(:verification_failed, inspect(reason))}
+        end
+
       {:error, reason} ->
         {:error, session, candidate_failure(:verification_failed, inspect(reason))}
     end
   end
 
-  defp recheck(session, expected_tree) do
+  defp commit_verified(session, checks, ledger) do
+    case commit_fixed_tree(session, checks.tree) do
+      :ok ->
+        {:ok,
+         %{session | receipts: checks.receipts, acceptance: ledger, verified_tree: checks.tree}}
+
+      {:error, reason} ->
+        {:error, session, candidate_failure(:verification_failed, inspect(reason))}
+    end
+  end
+
+  defp commit_fixed_tree(session, tree) do
+    with {:ok, head_tree} <- Workspace.rev_parse(session.workdir, "HEAD^{tree}", session.git_env) do
+      if head_tree == tree do
+        :ok
+      else
+        with :ok <- Workspace.reset_soft(session.workdir, session.base_sha, session.git_env),
+             {:ok, _commit} <- commit_tree(session, nil),
+             do: :ok
+      end
+    end
+  end
+
+  defp recheck(session) do
     with :ok <- guard(session),
          {:ok, checks, acceptance} <- CheckStage.verify(session),
          :ok <- CheckStage.passed(session, checks, acceptance),
          {:ok, tree} <- Guard.tree_hash(session.workdir, session.git_env),
-         :ok <- same_tree(expected_tree, tree) do
-      {:ok, checks.receipts, acceptance.ledger}
+         :ok <- same_tree(checks.tree, tree) do
+      {:ok, checks, acceptance.ledger}
     end
   end
 
@@ -190,6 +215,9 @@ defmodule Kogen.Engine.Build.Commit do
       session.git_env
     )
   end
+
+  defp verified(%Session{verified_tree: tree}, tree) when is_binary(tree), do: :ok
+  defp verified(_session, _tree), do: {:error, :unverified_tree}
 
   defp same_tree(tree, tree), do: :ok
   defp same_tree(_expected, _actual), do: {:error, :tree_mutated}
