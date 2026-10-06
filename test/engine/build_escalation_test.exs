@@ -36,8 +36,14 @@ defmodule Kogen.Engine.BuildEscalationTest do
     assert GateSupport.harness_options(escalated).limits == %{max_turns: 60, wall_ms: 1_800_000}
     assert {:ok, base_sha} = Workspace.rev_parse(escalated.workdir, "HEAD", escalated.git_env)
     assert base_sha == fixture.base_sha
-    assert File.read!(Path.join(escalated.workdir, "lib/tiny_app.ex")) =~ "# revision: base"
-    refute File.read!(Path.join(escalated.workdir, "lib/tiny_app.ex")) =~ ":wrong"
+
+    assert ":base\n" ==
+             Kogen.Testkit.Proc.cmd!(
+               "elixir",
+               ["-r", "lib/tiny_app.ex", "-e", "IO.inspect(TinyApp.value())"],
+               cd: escalated.workdir
+             )
+
     refute File.exists?(luna_path)
   end
 

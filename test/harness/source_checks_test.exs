@@ -103,6 +103,30 @@ defmodule Kogen.Harness.SourceChecksTest do
     assert final.feedback =~ "RepeatedMapShape"
   end
 
+  test "implementation assertions are inventoried as advice without blocking a refactor", %{
+    tmp_dir: tmp
+  } do
+    repo = fixture(tmp)
+    File.mkdir_p!(Path.join(repo, "test"))
+    File.write!(Path.join(repo, "test/pinned_test.exs"), ~s{defmodule PinnedTest do
+use ExUnit.Case
+test "spelling", do: assert(File.read!("lib/app.ex") =~ "def value")
+end
+})
+    opts = options(repo, tmp)
+    assert {:ok, gate} = Gate.run(opts, deadline())
+    assert gate.status == :pass
+    assert Enum.join(gate.warnings) =~ "test/pinned_test.exs:3"
+    assert Enum.join(gate.warnings) =~ "Execute the interface"
+    File.write!(Path.join(repo, "test/pinned_test.exs"), ~s{defmodule PinnedTest do
+use ExUnit.Case
+test "value", do: assert(App.value() == :ready)
+end
+})
+    assert {:ok, gate} = Gate.run(opts, deadline())
+    refute Enum.join(gate.warnings) =~ "implementation_text"
+  end
+
   defp fixture(tmp) do
     repo = Git.create!(tmp)
     File.mkdir_p!(Path.join(repo, "lib"))

@@ -27,7 +27,7 @@ defmodule Kogen.E2e.LandingTest do
 
     assert origin |> Git.git!(["rev-parse", "refs/heads/main"]) |> String.trim() == sha
     assert origin |> Git.git!(["rev-parse", "HEAD"]) |> String.trim() == sha
-    assert File.read!(Path.join(origin, "lib/tiny_app.ex")) =~ "def value, do: :ready"
+    assert_value(origin, ":ready")
     assert Git.git!(origin, ["status", "--porcelain"]) == ""
     refute Enum.any?(build.lines, &String.contains?(&1, "warning"))
     refute Enum.any?(result.events, &(&1.event == "landing_warning"))
@@ -52,7 +52,7 @@ defmodule Kogen.E2e.LandingTest do
 
     assert origin |> Git.git!(["rev-parse", "refs/heads/main"]) |> String.trim() == sha
     assert local =~ "# local edit"
-    assert local =~ "def value, do: :base"
+    assert_value(origin, ":base")
 
     expected =
       "landed #{sha} on main; your checkout at #{canonical(origin)} has local changes and " <>
@@ -160,6 +160,17 @@ defmodule Kogen.E2e.LandingTest do
              "Advance during lock"
 
     assert result.claim_released
+  end
+
+  defp assert_value(repo, expected) do
+    output =
+      Kogen.Testkit.Proc.cmd!(
+        "elixir",
+        ["-r", "lib/tiny_app.ex", "-e", "IO.inspect(TinyApp.value())"],
+        cd: repo
+      )
+
+    assert String.trim(output) == expected
   end
 
   defp retry_delays(result),

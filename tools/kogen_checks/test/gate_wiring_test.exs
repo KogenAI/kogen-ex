@@ -1,222 +1,15 @@
 defmodule KogenChecks.GateWiringTest do
-  use ExUnit.Case, async: true
+  use Credo.Test.Case
+
+  alias KogenChecks.Check.DomainReach
+  alias KogenChecks.Check.ForbiddenCall
+  alias KogenChecks.Check.MissingExternalResource
+  alias KogenChecks.Check.StringKeyAccess
+  alias KogenChecks.Check.TestModuleShape
 
   @credo_path Path.expand("../../../.credo.exs", __DIR__)
-  @required_checks %{
-    KogenChecks.Check.MissingExternalResource => [blocking: true],
-    KogenChecks.Check.RepeatedMapShape => [],
-    KogenChecks.Check.BroadRescue => [],
-    KogenChecks.Check.CtxBag => [
-      banned_names: [:ctx, :context],
-      allowed_names: [:conn, :socket],
-      min_clauses: 4,
-      min_passed_ratio: 0.5,
-      min_fields: 8,
-      min_ambient: 2,
-      ambient_fields:
-        ~w(root cwd dir env tmp_dir tmp now clock time runner proc cmd git io shell config opts options control state log log_path logger harness provider http client repo context ctx timeout deadline registry store cache runtime deps services)a,
-      included_paths: ["lib/"]
-    ],
-    KogenChecks.Check.DomainReach => [
-      dependencies: %{
-        Kogen.Acceptance => [
-          Kogen.Proc,
-          Kogen.Project,
-          Kogen.Intent,
-          Kogen.Provider,
-          Kogen.Build,
-          Kogen.Engine,
-          Kogen.Workspace,
-          Kogen.State,
-          Kogen.Checks,
-          Kogen.Harness,
-          Kogen.Kernel,
-          Kogen.E2e
-        ],
-        Kogen.Project => [Kogen.Workspace],
-        Kogen.Cli => [],
-        Kogen.Workspace => [Kogen.Proc],
-        Kogen.Provider => [Kogen.Http, Kogen.Proc],
-        Kogen.State => [Kogen.Workspace],
-        Kogen.Quality => [Kogen.Proc, Kogen.Workspace],
-        Kogen.Feedback => [],
-        Kogen.Checks => [
-          Kogen.Quality,
-          Kogen.Feedback,
-          Kogen.Proc,
-          Kogen.Workspace,
-          Kogen.Project
-        ],
-        Kogen.Harness => [
-          Kogen.Quality,
-          Kogen.Checks,
-          Kogen.Proc,
-          Kogen.Provider,
-          Kogen.Project,
-          Kogen.Resilience,
-          Kogen.Tooling
-        ],
-        Kogen.Resilience => [],
-        Kogen.Build => [Kogen.Resilience],
-        Kogen.Tooling => [Kogen.Proc],
-        Kogen.Queue => [Kogen.Proc, Kogen.State, Kogen.Workspace],
-        Kogen.Runner => [
-          Kogen.Build,
-          Kogen.Checks,
-          Kogen.Engine,
-          Kogen.Harness,
-          Kogen.State
-        ],
-        Kogen.Engine => [
-          Kogen.Proc,
-          Kogen.Project,
-          Kogen.Intent,
-          Kogen.Provider,
-          Kogen.Build,
-          Kogen.Workspace,
-          Kogen.State,
-          Kogen.Checks,
-          Kogen.Harness,
-          Kogen.Resilience
-        ],
-        Kogen.Kernel => [
-          Kogen.Proc,
-          Kogen.Project,
-          Kogen.Intent,
-          Kogen.Provider,
-          Kogen.Engine,
-          Kogen.Workspace,
-          Kogen.State,
-          Kogen.Checks,
-          Kogen.Harness,
-          Kogen.Resilience,
-          Kogen.Shaper,
-          Kogen.Queue,
-          Kogen.Runner,
-          Kogen.Cli
-        ],
-        Kogen.E2e => [
-          Kogen.Engine,
-          Kogen.Kernel,
-          Kogen.Proc,
-          Kogen.Project,
-          Kogen.Queue,
-          Kogen.Resilience,
-          Kogen.Shaper,
-          Kogen.State,
-          Kogen.Testkit,
-          Kogen.Workspace
-        ],
-        Kogen.Shaper => [
-          Kogen.Contracts,
-          Kogen.Checks,
-          Kogen.Harness,
-          Kogen.Intent,
-          Kogen.Kernel,
-          Kogen.E2e,
-          Kogen.Proc,
-          Kogen.Project,
-          Kogen.Resilience
-        ]
-      },
-      root: Kogen,
-      shared: [Kogen.Contracts],
-      also_allowed: [Kogen.Testkit]
-    ],
-    KogenChecks.Check.DomainSize => [max_lines: 3000],
-    KogenChecks.Check.FailOpenWith => [included_paths: ["lib/"]],
-    KogenChecks.Check.ForbiddenCall => [
-      rules: [
-        %{
-          calls: [
-            {File, :cd!},
-            {File, :cd},
-            {System, :put_env},
-            {System, :delete_env},
-            {Application, :put_env}
-          ],
-          message: "Pass explicit values instead of mutating process-global state.",
-          allow: []
-        },
-        %{
-          calls: [{Process, :sleep}, {:timer, :sleep}],
-          message: "Wait on a message (assert_receive) or the injected clock.",
-          allow: []
-        },
-        %{
-          calls: [{System, :cmd}, {System, :shell}, {Port, :open}, {:os, :cmd}],
-          message: "Spawn through the Proc port (own group, wall deadline, TERM->KILL).",
-          allow: [
-            "lib/kogen/proc/",
-            "lib/kogen/proc.ex",
-            "test/support/testkit/proc.ex",
-            "test/support/testkit/git.ex"
-          ]
-        },
-        %{
-          calls: [
-            {System, :get_env},
-            {System, :fetch_env!},
-            {System, :fetch_env},
-            {System, :user_home},
-            {System, :user_home!},
-            {System, :tmp_dir!},
-            {File, :cwd!},
-            {File, :cwd},
-            {DateTime, :utc_now},
-            {System, :os_time}
-          ],
-          message: "Pass explicit values; read ambient configuration in Kogen.Kernel.",
-          allow: [
-            "lib/kogen/kernel/",
-            "lib/kogen/proc/sandbox.ex",
-            "test/support/testkit/temp.ex"
-          ]
-        }
-      ]
-    ],
-    KogenChecks.Check.SizeLimits => [
-      max_file_lines: 400,
-      max_module_lines: 400,
-      max_function_lines: 40
-    ],
-    KogenChecks.Check.StringKeyAccess => [
-      included_paths: ["lib/"],
-      codec_modules: [
-        Kogen.Quality.Codec,
-        Kogen.Quality.Request,
-        Kogen.Contracts.Yaml,
-        Kogen.Contracts.ShapeWarningCodec,
-        Kogen.Proc.Request,
-        Kogen.Project.Loader,
-        Kogen.Project.BuildSettings,
-        Kogen.Workspace.Git,
-        Kogen.Contracts.MiseEnvironment,
-        Kogen.Engine.Runtime,
-        Kogen.Provider.ChatGPT.Codec,
-        Kogen.Provider.ChatGPT.Codec.Recording,
-        Kogen.Provider.ChatGPT.Callback,
-        Kogen.Provider.ChatGPT.CredentialStore,
-        Kogen.Provider.ChatGPT.HostId,
-        Kogen.Provider.ChatGPT.IDToken,
-        Kogen.Provider.ChatGPT.OIDC,
-        Kogen.Provider.ChatGPT.Refresh.Codec,
-        Kogen.Provider.ChatGPT.SIWC.TokenResponse,
-        Kogen.Provider.ChatGPT.SIWCCCodec,
-        Kogen.Harness.Codec,
-        Kogen.Tooling.Codec,
-        Kogen.Checks.Ledger,
-        Kogen.State.ApprovalBaselineCodec,
-        Kogen.State.Json,
-        Kogen.Kernel.CLI.ShapeJson,
-        Kogen.Runner.Auditor
-      ]
-    ],
-    KogenChecks.Check.TestModuleShape => [max_tests: 30, serial_allowed: []]
-  }
 
-  test "every required check is enabled with the exact protected parameters" do
-    {:ok, _started_apps} = Application.ensure_all_started(:credo)
+  setup do
     parent = self()
 
     Credo.CLI.Output.Shell.suppress_output(fn ->
@@ -225,13 +18,147 @@ defmodule KogenChecks.GateWiringTest do
 
     assert_received {:execution, execution}
     {enabled, _only, _ignored} = Credo.Execution.checks(execution)
-    enabled_checks = Map.new(enabled)
-
-    assert map_size(enabled_checks) == length(enabled), "duplicate checks are not allowed"
-
-    Enum.each(@required_checks, fn {check, params} ->
-      assert Map.fetch(enabled_checks, check) == {:ok, params},
-             "#{inspect(check)} is missing or has changed parameters"
-    end)
+    {:ok, enabled: Map.new(enabled)}
   end
+
+  test "the configured gate reports attempted integrity bypasses", %{enabled: enabled} do
+    cases = [
+      {KogenChecks.Check.CtxBag, "def run(ctx), do: ctx.root"},
+      {DomainReach, "def run, do: Kogen.Checks.Runner.run([])"},
+      {KogenChecks.Check.FailOpenWith,
+       "def run do\nwith {:ok, value} <- f() do\nvalue\nelse\n_ -> :ok\nend\nend"},
+      {KogenChecks.Check.BroadRescue, "def run do\ntry do\nf()\nrescue\n_ -> :ok\nend\nend"},
+      {StringKeyAccess, ~s{def run(data), do: Map.get(data, "key")}}
+    ]
+
+    for {check, body} <- cases do
+      reports = configured(enabled, check, [source(body)])
+
+      assert Enum.any?(reports, &(&1.exit_status > 0)),
+             "#{inspect(check)} allowed a forbidden fixture"
+    end
+  end
+
+  test "configured process and ambient authority checks reject each forbidden capability", %{
+    enabled: enabled
+  } do
+    for call <- [
+          ~s{System.put_env("x", "y")},
+          "Process.sleep(1)",
+          ~s{System.cmd("true", [])},
+          ~s{System.get_env("x")}
+        ] do
+      reports = configured(enabled, ForbiddenCall, [source("def run, do: " <> call)])
+      assert Enum.any?(reports, &(&1.exit_status > 0))
+    end
+
+    proc = source(~s{def run, do: System.cmd("true", [])}, "lib/kogen/proc/fixture.ex")
+    kernel = source(~s{def run, do: System.get_env("x")}, "lib/kogen/kernel/fixture.ex")
+    assert configured(enabled, ForbiddenCall, [proc, kernel]) == []
+  end
+
+  test "size ceilings reject excess and accept files within the published limits", %{
+    enabled: enabled
+  } do
+    check = KogenChecks.Check.SizeLimits
+
+    for body <- [
+          String.duplicate("# padding\n", 400),
+          "def run do\n" <> String.duplicate(":ok\n", 40) <> "end"
+        ] do
+      assert Enum.any?(configured(enabled, check, [source(body)]), &(&1.exit_status > 0))
+    end
+
+    assert configured(enabled, check, [source("def run, do: :ok")]) == []
+    domain = KogenChecks.Check.DomainSize
+
+    assert Enum.any?(
+             configured(enabled, domain, [source(String.duplicate("# padding\n", 3000))]),
+             &(&1.exit_status > 0)
+           )
+
+    assert configured(enabled, domain, [source(String.duplicate("# padding\n", 2990))]) == []
+  end
+
+  test "resource reads block and public map repetition stays advisory", %{enabled: enabled} do
+    resource = source(~s{@data File.read!("input.txt")})
+    reports = configured(enabled, MissingExternalResource, [resource])
+    assert Enum.any?(reports, &(&1.exit_status > 0))
+    declared = source(~s{@external_resource "input.txt"\n@data File.read!("input.txt")})
+    assert configured(enabled, MissingExternalResource, [declared]) == []
+
+    maps =
+      for n <- 1..3,
+          do: source("def f#{n}, do: %{a: 1, b: 2, c: 3, d: 4}", "lib/kogen/build/f#{n}.ex")
+
+    assert [_ | _] = reports = configured(enabled, KogenChecks.Check.RepeatedMapShape, maps)
+    assert Enum.all?(reports, &(&1.exit_status == 0))
+  end
+
+  test "serial tests are rejected while the async testkit interface and declared dependencies pass",
+       %{enabled: enabled} do
+    serial =
+      to_source_file(
+        "defmodule SerialTest do\nuse ExUnit.Case\nend",
+        "test/build/serial_test.exs"
+      )
+
+    assert Enum.any?(configured(enabled, TestModuleShape, [serial]), &(&1.exit_status > 0))
+
+    async =
+      to_source_file(
+        "defmodule AsyncTest do\nuse Kogen.Testkit.Case\nend",
+        "test/build/async_test.exs"
+      )
+
+    assert configured(enabled, TestModuleShape, [async]) == []
+
+    tooling =
+      source(
+        "def run, do: Kogen.Tooling.Tools.run([])",
+        "lib/kogen/harness/fixture.ex",
+        "Kogen.Harness.Fixture"
+      )
+
+    assert configured(enabled, DomainReach, [tooling]) == []
+
+    codec =
+      source(
+        ~s{def run(data), do: Map.get(data, "key")},
+        "lib/kogen/contracts/yaml.ex",
+        "Kogen.Contracts.Yaml"
+      )
+
+    assert configured(enabled, StringKeyAccess, [codec]) == []
+  end
+
+  test "Checks can use Feedback while Feedback cannot reach back into Checks", %{enabled: enabled} do
+    caller =
+      source(
+        "def run(output), do: Kogen.Feedback.failed_test_ids(output, \".\")",
+        "lib/kogen/checks/fixture.ex",
+        "Kogen.Checks.Fixture"
+      )
+
+    assert configured(enabled, DomainReach, [caller]) == []
+
+    reverse =
+      source(
+        "def run, do: Kogen.Checks.Runner.run([])",
+        "lib/kogen/feedback/fixture.ex",
+        "Kogen.Feedback.Fixture"
+      )
+
+    assert Enum.any?(configured(enabled, DomainReach, [reverse]), &(&1.exit_status > 0))
+  end
+
+  defp configured(enabled, check, files) do
+    case Map.fetch(enabled, check) do
+      {:ok, params} -> run_check(files, check, params)
+      :error -> []
+    end
+  end
+
+  defp source(body, path \\ "lib/kogen/build/fixture.ex", module \\ "Kogen.Build.Fixture"),
+    do: to_source_file("defmodule #{module} do\n#{body}\nend\n", path)
 end

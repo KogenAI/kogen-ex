@@ -30,7 +30,7 @@ defmodule Kogen.Harness.LiveSmokeTest do
 
     case BenchmarkAuth.config() do
       {:ok, provider_config} ->
-        live_develop(tmp_dir, workdir, source_path, provider_config)
+        live_develop(tmp_dir, workdir, provider_config)
 
       {:error, :benchmark_auth_unavailable} ->
         IO.puts("Live Harness smoke skipped: set KOGEN_AUTH_PATH in the benchmark/CI job.")
@@ -42,25 +42,23 @@ defmodule Kogen.Harness.LiveSmokeTest do
     end
   end
 
-  defp live_develop(tmp_dir, workdir, source_path, provider_config) do
+  defp live_develop(tmp_dir, workdir, provider_config) do
     check = %CheckSpec{
       name: "greet-function",
-      argv: ["sh", "-c", "grep -q 'def greet' lib/mini.ex"],
+      argv: ["elixir", "-r", "lib/mini.ex", "-e", "true = Mini.greet() == :hello"],
       timeout_ms: 5_000
     }
 
     opts = live_options(tmp_dir, workdir, provider_config, check)
     intent = "Add a function named greet/0 to lib/mini.ex that returns :hello."
     assert {:ok, result} = Harness.develop(opts, intent, nil, nil)
-    source = File.read!(source_path)
 
     IO.puts(
-      "LIVE HARNESS OUTPUT: outcome=#{result.outcome} turns=#{result.turns} gate=#{inspect(result.gate.status)} source=#{inspect(source)}"
+      "LIVE HARNESS OUTPUT: outcome=#{result.outcome} turns=#{result.turns} gate=#{inspect(result.gate.status)}"
     )
 
     assert result.outcome == :done
-    assert source =~ "def greet"
-    assert source =~ ":hello"
+    assert result.gate.status == :pass
   end
 
   defp live_options(tmp_dir, workdir, provider_config, check) do

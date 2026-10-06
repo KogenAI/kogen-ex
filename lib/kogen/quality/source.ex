@@ -15,7 +15,12 @@ defmodule Kogen.Quality.Source do
         for {file, line, message} <- MapShapes.analyze(sources),
             do: Report.finding("kogen_checks", "RepeatedMapShape", file, line, message)
 
-      [Report.command("source_checks", resources ++ maps ++ notes)]
+      [
+        Report.command(
+          "source_checks",
+          resources ++ maps ++ Kogen.Quality.TestIntegrity.findings(sources) ++ notes
+        )
+      ]
     else
       []
     end
