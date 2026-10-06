@@ -35,7 +35,7 @@ defmodule Kogen.Contracts.Finding do
 
   defp identity(finding) do
     identity =
-      if finding.tool == "exunit" and is_binary(Map.get(finding, :symbol)),
+      if finding.tool in ["exunit", "minitest"] and is_binary(Map.get(finding, :symbol)),
         do: {finding.tool, Map.get(finding, :path), finding.symbol},
         else:
           {finding.tool, finding.rule, Map.get(finding, :path), Map.get(finding, :symbol),

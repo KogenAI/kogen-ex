@@ -15,6 +15,13 @@ defmodule Kogen.Proc do
   alias Kogen.Proc.Request
   alias Kogen.Proc.Runner
 
+  @spec toolchain_environment(Path.t(), Path.t(), map()) ::
+          {:ok, map()}
+          | {:error, :invalid_toolchain_environment | {:toolchain_failed, String.t()}}
+  defdelegate toolchain_environment(workdir, mise, env),
+    to: Kogen.Proc.Toolchain,
+    as: :environment
+
   @spec run([String.t()], keyword()) :: {:ok, ProcResult.t()} | {:error, term()}
   @impl Kogen.Contracts.ProcPort
   def run(argv, opts) do

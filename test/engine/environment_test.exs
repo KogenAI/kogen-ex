@@ -1,7 +1,7 @@
 defmodule Kogen.Engine.EnvironmentTest do
   use Kogen.Testkit.Case
 
-  alias Kogen.Engine.Environment
+  alias Kogen.Engine
   alias Kogen.Engine.Runtime
 
   test "runtime preserves the outer sandbox marker without exporting it to project commands" do
@@ -74,7 +74,7 @@ defmodule Kogen.Engine.EnvironmentTest do
 
     runtime = Runtime.new(%{"PATH" => "/usr/bin:/bin"}, mise, nil, "/runtime", "/runtime/bin")
 
-    assert {:error, {:toolchain_failed, detail}} = Environment.project(tmp_dir, runtime)
+    assert {:error, {:toolchain_failed, detail}} = Engine.project_environment(tmp_dir, runtime)
     assert detail =~ "mise env failed"
     assert detail =~ "mise diagnostic output"
   end

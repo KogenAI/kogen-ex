@@ -127,7 +127,6 @@ defmodule Kogen.Contracts.CheckBaseline do
        when tool in ["exunit", "minitest"] and is_binary(path) and is_binary(symbol),
        do: {tool, path, :test, symbol}
 
-
   defp identity(%{path: path, rule: rule, tool: tool}) when is_binary(path) and is_binary(rule),
     do: {tool, path, :rule, rule}
 

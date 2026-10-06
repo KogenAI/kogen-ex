@@ -34,7 +34,7 @@ defmodule Kogen.Diagnostics.Ruby do
             nil -> {nil, nil, nil}
           end
 
-        [Common.finding("minitest", "failure", location, name, Common.truncate(block))]
+        [%{Common.finding("minitest", "failure", location, name, block) | explanation: block}]
 
       nil ->
         []

@@ -33,7 +33,6 @@ defmodule Kogen.Engine do
   alias Kogen.Contracts.Project
   alias Kogen.Engine.Build.Request
   alias Kogen.Engine.Build.Result
-  alias Kogen.Engine.Environment
   alias Kogen.Engine.Runtime
 
   @spec build_recipe(String.t(), String.t(), String.t()) :: Recipe.t()
@@ -82,8 +81,11 @@ defmodule Kogen.Engine do
   @spec project_environment(Path.t(), Runtime.t()) ::
           {:ok, %{String.t() => String.t()}}
           | {:error, :invalid_toolchain_environment | {:toolchain_failed, String.t()}}
-  def project_environment(workdir, %Runtime{} = runtime),
-    do: Environment.project(workdir, runtime)
+  def project_environment(workdir, %Runtime{} = runtime) do
+    with {:ok, env} <- Kogen.Proc.toolchain_environment(workdir, runtime.mise, runtime.base_env) do
+      {:ok, Runtime.process_env(runtime, env)}
+    end
+  end
 
   @spec candidate_environment(Path.t(), Runtime.t(), Project.t()) ::
           {:ok, %{String.t() => String.t()}}
