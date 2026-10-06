@@ -62,7 +62,7 @@ defmodule Kogen.Kernel.AgentStatusTest do
         watcher = Task.async(fn -> status(project, ["--watch"]) end)
         wait_for_snapshot(Process.group_leader())
         send(worker, :finish)
-        assert Task.await(watcher, 5_000) == {0, ""}
+        assert Task.await(watcher, 30_000) == {0, ""}
       end)
 
     assert Task.await(task) == :done

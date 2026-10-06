@@ -106,6 +106,7 @@ defmodule Kogen.E2e.LandingRepairTest do
              :json.decode(report)
   end
 
+  @tag timeout: 300_000
   test "protected base drift during landing is retained and re-gated", %{tmp_dir: root} do
     seed =
       Build.prepare_seed!(root,

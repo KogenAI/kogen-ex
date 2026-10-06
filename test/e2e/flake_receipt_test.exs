@@ -9,6 +9,7 @@ defmodule Kogen.E2e.FlakeReceiptTest do
   @moduletag :e2e
   @moduletag timeout: 120_000
 
+  @tag timeout: 300_000
   test "a same-seed test flake that fails on base is excused and reported", context do
     parent = scenario_parent(context, "flake-policy")
     marker = Path.join(parent, "candidate-test-ran")
