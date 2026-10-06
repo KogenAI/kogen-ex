@@ -138,6 +138,12 @@
                Kogen.Provider.ChatGPT.OIDC,
                Kogen.Provider.ChatGPT.Refresh.Codec,
                Kogen.Provider.ChatGPT.SIWC.TokenResponse,
+               Kogen.Provider.ChatGPT.SIWCCCodec,
+               Kogen.Accounts.Store,
+               Kogen.Grok.Codec,
+               Kogen.Grok.CredentialStore,
+               Kogen.Grok.DeviceAuth.Codec,
+               Kogen.Grok.Refresh.Codec,
                Kogen.Agents.Codec,
                Kogen.ResponseProtocol.Codec,
                Kogen.Harness.Codec,
@@ -175,8 +181,10 @@
                Kogen.Project => [Kogen.Workspace],
                Kogen.Cli => [],
                Kogen.Workspace => [Kogen.Proc],
-               Kogen.Provider => [Kogen.Http, Kogen.Proc, Kogen.ResponseProtocol],
+               Kogen.Provider => [Kogen.Accounts, Kogen.Http, Kogen.Proc, Kogen.ResponseProtocol],
                Kogen.ResponseProtocol => [],
+               Kogen.Grok => [Kogen.Http, Kogen.Provider],
+               Kogen.ProviderControl => [Kogen.Accounts, Kogen.Grok, Kogen.Provider],
                Kogen.State => [Kogen.Workspace],
                Kogen.CheckLearning => [Kogen.Proc, Kogen.State, Kogen.Workspace],
                Kogen.Shaping => [Kogen.Workspace, Kogen.State],
@@ -201,7 +209,8 @@
                  Kogen.Provider,
                  Kogen.Project,
                  Kogen.Resilience,
-                 Kogen.Tooling
+                 Kogen.Tooling,
+                 Kogen.Grok
                ],
                Kogen.Conversation => [],
                Kogen.Resilience => [],
@@ -230,6 +239,7 @@
                  Kogen.Resilience
                ],
                Kogen.Kernel => [
+                 Kogen.Accounts,
                  Kogen.Agents,
                  Kogen.CheckLearning,
                  Kogen.Shaping,
@@ -246,7 +256,9 @@
                  Kogen.Shaper,
                  Kogen.Queue,
                  Kogen.Runner,
-                 Kogen.Cli
+                 Kogen.Cli,
+                 Kogen.Grok,
+                 Kogen.ProviderControl
                ],
                Kogen.E2e => [
                  Kogen.Engine,

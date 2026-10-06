@@ -3,7 +3,10 @@ Usage: kogen provider <command> [options]
 Commands:
   list               List saved accounts and the default
   login chatgpt      Sign in with a ChatGPT account
+  login grok         Sign in with a Grok subscription
   logout chatgpt     Sign out of a ChatGPT account
+  logout grok        Sign out of a Grok subscription
   use chatgpt        Choose the default account, or one project's account
+  use grok           Choose the default account, or one project's account
 
 Logins belong to this machine, never to a repo.

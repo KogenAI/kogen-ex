@@ -1,6 +1,6 @@
 defmodule Kogen.Workspace do
   @moduledoc "Creates isolated checkouts and performs safe Git ref operations."
-  use Boundary, deps: [Kogen.Contracts, Kogen.Proc], exports: []
+  use Boundary, deps: [Kogen.Contracts, Kogen.Proc], exports: [Workspaces]
 
   alias Kogen.Contracts.Failure
   alias Kogen.Contracts.Intent

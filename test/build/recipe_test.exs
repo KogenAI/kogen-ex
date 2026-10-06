@@ -67,4 +67,28 @@ defmodule Kogen.Build.RecipeTest do
              on: [:repair_cap, :unchanged, :gate_red, :turn_cap, :wall_cap]
            }
   end
+
+  test "Grok recipes keep all model roles and escalation on the selected provider" do
+    staged = Recipe.for_build("staged", "grok-4.7", "xhigh")
+
+    assert staged.roles == %{
+             context: {"grok-4.7", "xhigh"},
+             planner: {"grok-4.7", "xhigh"},
+             builder: {"grok-4.7", "xhigh"},
+             reviewer: {"grok-4.7", "xhigh"},
+             auditor: {"grok-4.7", "xhigh"}
+           }
+
+    escalated = Recipe.for_build("direct-escalate", "grok-4.6", "high")
+    assert escalated.escalation.model == "grok-4.6"
+    assert escalated.escalation.effort == "high"
+
+    ladder = Recipe.for_build("ladder", "grok-4.6", "high")
+    assert Recipe.auditor(ladder) == {"grok-4.6", "high"}
+
+    assert Enum.all?(Recipe.ladder(ladder).rungs, fn rung ->
+             {model, _effort} = Recipe.rung_builder(ladder, rung)
+             String.starts_with?(model, "grok-")
+           end)
+  end
 end

@@ -17,4 +17,20 @@ defmodule Kogen.Kernel.BuildConfigTest do
     assert {:ok, %{model_fallback: false}} = BuildConfig.load(root, nil, "0")
     assert {:ok, %{model_fallback: true}} = BuildConfig.load(root, %{model_fallback: true}, nil)
   end
+
+  test "Grok defaults use Grok models and configured Grok role names are accepted" do
+    assert BuildConfig.builder_settings(%{}, :grok) == {"grok-4.6", "high"}
+    assert BuildConfig.shape_settings(%{}, :grok) == {"grok-4.6", "high"}
+
+    assert {:ok, %{roles: roles}} =
+             Kogen.Project.BuildSettings.parse(%{
+               "roles" => %{
+                 "builder" => %{"model" => "grok-4.6", "effort" => "high"},
+                 "planner" => %{"model" => "grok-4.7", "effort" => "xhigh"}
+               }
+             })
+
+    assert roles.builder == %{model: "grok-4.6", effort: "high"}
+    assert roles.planner == %{model: "grok-4.7", effort: "xhigh"}
+  end
 end

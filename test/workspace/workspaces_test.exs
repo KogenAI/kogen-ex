@@ -1,7 +1,7 @@
-defmodule Kogen.Kernel.WorkspacesTest do
+defmodule Kogen.Workspace.WorkspacesTest do
   use Kogen.Testkit.Case
 
-  alias Kogen.Kernel.Workspaces
+  alias Kogen.Workspace.Workspaces
 
   test "workspace key is readable, stable, and distinguishes checkout paths", %{tmp_dir: tmp_dir} do
     project = Path.join(tmp_dir, "careful-rebuild")

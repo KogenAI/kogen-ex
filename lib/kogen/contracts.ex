@@ -15,6 +15,7 @@ defmodule Kogen.Contracts do
       GateTiming.Codec,
       Intent,
       JSON,
+      Lock,
       ModelRequest,
       ModelResponse,
       MiseEnvironment,

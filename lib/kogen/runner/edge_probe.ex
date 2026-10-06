@@ -73,8 +73,8 @@ defmodule Kogen.Runner.EdgeProbe do
 
   defp ask(session, request) do
     started = now()
-    {model, effort} = {"gpt-6.1-sol", "high"}
     opts = GateSupport.harness_options(session)
+    {model, effort} = opts.models.strong
     opts = %{opts | models: Map.put(opts.models, :edge_writer, {model, effort})}
 
     text = EdgeTests.input(request, EdgeTests.module_names(session.workdir))

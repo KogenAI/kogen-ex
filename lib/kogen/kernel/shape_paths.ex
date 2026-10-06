@@ -2,8 +2,8 @@ defmodule Kogen.Kernel.ShapePaths do
   @moduledoc false
 
   alias Kogen.Engine.Runtime
-  alias Kogen.Kernel.Workspaces
   alias Kogen.Workspace
+  alias Kogen.Workspace.Workspaces
 
   @spec run_dir(%{String.t() => String.t()}, String.t()) :: Path.t()
   def run_dir(process_env, slug) do

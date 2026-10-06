@@ -3,6 +3,7 @@ defmodule Kogen.Kernel.ShapeExecution do
 
   alias Kogen.Engine
   alias Kogen.Engine.Runtime
+  alias Kogen.Grok
   alias Kogen.Kernel.BuildConfig
   alias Kogen.Kernel.ShapePaths
   alias Kogen.Kernel.Types.ShapeInputs
@@ -19,12 +20,13 @@ defmodule Kogen.Kernel.ShapeExecution do
          {:ok, project} <- Kogen.Project.load(project_root),
          {:ok, home} <- runtime_home(runtime),
          {:ok, build_config} <- BuildConfig.load(home, project.build),
-         {default_model, default_effort} = BuildConfig.shape_settings(build_config.roles),
          {:ok, runtime, process_env, run_dir} <-
            shape_environment(slug, project_root, runtime, project),
-         {:ok, account} <- Kogen.Kernel.Accounts.label(project_root, project),
+         {:ok, {provider, account}} <- Kogen.Kernel.Accounts.selection(project_root, project),
+         {default_model, default_effort} =
+           BuildConfig.shape_settings(build_config.roles, provider),
          {:ok, provider_config, _source, _label} <-
-           Kogen.Kernel.provider_config(label: account),
+           Kogen.Kernel.provider_config(provider, label: account),
          {:ok, request} <-
            shape_request(%ShapeInputs{
              slug: slug,
@@ -34,7 +36,7 @@ defmodule Kogen.Kernel.ShapeExecution do
              effort: default_effort,
              project: project,
              provider_config: provider_config,
-             resilience: %Policy{model_fallback: build_config.model_fallback},
+             resilience: resilience(provider, build_config.model_fallback),
              runtime: runtime,
              process_env: process_env,
              run_dir: run_dir,
@@ -43,6 +45,11 @@ defmodule Kogen.Kernel.ShapeExecution do
       Shaper.shape(request)
     end
   end
+
+  defp resilience(:grok, model_fallback),
+    do: %Policy{model_fallback: model_fallback, fallbacks: %{}}
+
+  defp resilience(_provider, model_fallback), do: %Policy{model_fallback: model_fallback}
 
   defp runtime_home(%Runtime{} = runtime) do
     case Runtime.home(runtime) do
@@ -85,7 +92,7 @@ defmodule Kogen.Kernel.ShapeExecution do
       task: inputs.task,
       model: inputs.model,
       effort: inputs.effort,
-      provider_mod: ChatGPT,
+      provider_mod: provider_module(inputs.provider_config),
       provider_config: inputs.provider_config,
       resilience: inputs.resilience,
       env: inputs.process_env,
@@ -107,4 +114,7 @@ defmodule Kogen.Kernel.ShapeExecution do
       }
     }
   end
+
+  defp provider_module(%Grok.Config{}), do: Grok
+  defp provider_module(_config), do: ChatGPT
 end

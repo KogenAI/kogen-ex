@@ -4,20 +4,37 @@ defmodule Kogen.Provider.ChatGPT.FileStore do
   @spec path(Path.t(), String.t()) :: Path.t()
   def path(root, label), do: Path.join([root, "credentials", "chatgpt-#{label}.json"])
 
+  @spec path(Path.t(), String.t(), String.t()) :: Path.t()
+  def path(root, provider, label),
+    do: Path.join([root, "credentials", "#{provider}-#{label}.json"])
+
   @spec encrypted_path(Path.t(), String.t()) :: Path.t()
-  def encrypted_path(root, label), do: Path.join([root, "credentials", "chatgpt-#{label}.enc"])
+  def encrypted_path(root, label), do: encrypted_path(root, "chatgpt", label)
+
+  @spec encrypted_path(Path.t(), String.t(), String.t()) :: Path.t()
+  def encrypted_path(root, provider, label),
+    do: Path.join([root, "credentials", "#{provider}-#{label}.enc"])
 
   @spec read_encrypted(Path.t(), String.t()) :: {:ok, binary()} | {:error, term()}
-  def read_encrypted(root, label), do: File.read(encrypted_path(root, label))
+  def read_encrypted(root, label), do: read_encrypted(root, "chatgpt", label)
+
+  @spec read_encrypted(Path.t(), String.t(), String.t()) :: {:ok, binary()} | {:error, term()}
+  def read_encrypted(root, provider, label), do: File.read(encrypted_path(root, provider, label))
 
   @spec write_encrypted(Path.t(), String.t(), binary()) :: :ok | {:error, term()}
-  def write_encrypted(root, label, contents) when is_binary(contents) do
-    atomic_write(encrypted_path(root, label), contents)
-  end
+  def write_encrypted(root, label, contents),
+    do: write_encrypted(root, "chatgpt", label, contents)
+
+  @spec write_encrypted(Path.t(), String.t(), String.t(), binary()) :: :ok | {:error, term()}
+  def write_encrypted(root, provider, label, contents) when is_binary(contents),
+    do: atomic_write(encrypted_path(root, provider, label), contents)
 
   @spec delete_encrypted(Path.t(), String.t()) :: :ok | {:error, term()}
-  def delete_encrypted(root, label) do
-    case File.rm(encrypted_path(root, label)) do
+  def delete_encrypted(root, label), do: delete_encrypted(root, "chatgpt", label)
+
+  @spec delete_encrypted(Path.t(), String.t(), String.t()) :: :ok | {:error, term()}
+  def delete_encrypted(root, provider, label) do
+    case File.rm(encrypted_path(root, provider, label)) do
       :ok -> :ok
       {:error, :enoent} -> :ok
       {:error, reason} -> {:error, reason}

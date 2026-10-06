@@ -12,11 +12,11 @@ defmodule Kogen.Kernel.ApprovalChecks do
   alias Kogen.Engine.Build.Setup
   alias Kogen.Engine.Runtime
   alias Kogen.Kernel.Approval.Request
-  alias Kogen.Kernel.Workspaces
   alias Kogen.Proc
   alias Kogen.Proc.Sandbox
   alias Kogen.Project
   alias Kogen.Workspace
+  alias Kogen.Workspace.Workspaces
 
   @spec run(Request.t(), ProjectData.t(), String.t(), %{String.t() => binary()}) ::
           {:ok, [map()]} | {:error, term()}

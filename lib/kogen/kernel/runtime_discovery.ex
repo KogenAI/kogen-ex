@@ -4,6 +4,7 @@ defmodule Kogen.Kernel.RuntimeDiscovery do
   alias Kogen.Contracts.ProcResult
   alias Kogen.Contracts.ProviderError
   alias Kogen.Engine.Runtime
+  alias Kogen.Grok
   alias Kogen.Proc
   alias Kogen.Provider.ChatGPT
 
@@ -54,32 +55,63 @@ defmodule Kogen.Kernel.RuntimeDiscovery do
   end
 
   @spec provider_config(keyword()) ::
-          {:ok, ChatGPT.Config.t(), :kogen_owned | :custom, String.t()}
-          | {
-              :error,
-              ProviderError.t()
-            }
-  def provider_config(opts \\ []) do
+          {:ok, ChatGPT.Config.t() | Grok.Config.t(), :kogen_owned | :custom, String.t()}
+          | {:error, ProviderError.t()}
+  def provider_config(opts \\ []), do: provider_config("chatgpt", opts)
+
+  @spec provider_config(String.t() | atom(), keyword()) ::
+          {:ok, ChatGPT.Config.t() | Grok.Config.t(), :kogen_owned | :custom, String.t()}
+          | {:error, ProviderError.t()}
+  def provider_config(provider, opts) when provider in ["chatgpt", :chatgpt, "grok", :grok] do
     with {:ok, home} <- home() do
       label = Keyword.get(opts, :label, "default")
-      # Benchmark and CI runners may inject a temporary credential file. CLI users select
-      # Kogen-owned logins with the project account setting instead.
       explicit = System.get_env("KOGEN_AUTH_PATH")
 
-      if is_binary(explicit) and explicit != "" do
-        explicit |> Path.expand() |> ChatGPT.config() |> with_source(:custom, "custom")
-      else
-        home
-        |> Path.join(".kogen")
-        |> ChatGPT.owned_config(credential_backend(), label)
-        |> with_source(:kogen_owned, label)
+      case provider do
+        name when name in ["chatgpt", :chatgpt] ->
+          if is_binary(explicit) and explicit != "" do
+            explicit |> Path.expand() |> ChatGPT.config() |> with_source(:custom, "custom")
+          else
+            home
+            |> Path.join(".kogen")
+            |> ChatGPT.owned_config(credential_backend(), label)
+            |> with_source(:kogen_owned, label)
+          end
+
+        name when name in ["grok", :grok] ->
+          home
+          |> Path.join(".kogen")
+          |> Grok.owned_config(credential_backend(), label,
+            endpoint:
+              Keyword.get(opts, :endpoint) || "https://cli-chat-proxy.grok.com/v1/responses",
+            token_endpoint: Keyword.get(opts, :token_endpoint),
+            proxy_env: proxy_environment()
+          )
+          |> with_source(:kogen_owned, label)
       end
     end
   end
 
   @spec benchmark_provider_config() ::
-          {:ok, ChatGPT.Config.t()} | {:error, ProviderError.t() | :benchmark_auth_unavailable}
+          {:ok, ChatGPT.Config.t() | Grok.Config.t()}
+          | {:error, ProviderError.t() | :benchmark_auth_unavailable}
   def benchmark_provider_config do
+    provider = System.get_env("KOGEN_BENCH_PROVIDER") || "chatgpt"
+    label = System.get_env("KOGEN_BENCH_ACCOUNT") || "default"
+    benchmark_provider_config(provider, label)
+  end
+
+  @spec benchmark_provider_config(String.t(), String.t()) ::
+          {:ok, ChatGPT.Config.t() | Grok.Config.t()}
+          | {:error, ProviderError.t() | :benchmark_auth_unavailable}
+  def benchmark_provider_config("grok", label) do
+    case provider_config("grok", label: label) do
+      {:ok, config, :kogen_owned, _label} -> {:ok, config}
+      {:error, %ProviderError{} = error} -> {:error, error}
+    end
+  end
+
+  def benchmark_provider_config("chatgpt", _label) do
     case System.get_env("KOGEN_AUTH_PATH") do
       path when is_binary(path) and path != "" ->
         path |> Path.expand() |> ChatGPT.config() |> benchmark_config_with_proxy()
@@ -88,6 +120,8 @@ defmodule Kogen.Kernel.RuntimeDiscovery do
         {:error, :benchmark_auth_unavailable}
     end
   end
+
+  def benchmark_provider_config(_provider, _label), do: {:error, :benchmark_auth_unavailable}
 
   @spec provider_root() :: {:ok, Path.t()} | {:error, :home_unavailable}
   def provider_root do

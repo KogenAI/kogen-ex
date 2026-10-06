@@ -3,7 +3,9 @@ defmodule Kogen.Kernel do
   use Boundary,
     deps: [
       Kogen.Agents,
+      Kogen.Accounts,
       Kogen.Contracts,
+      Kogen.Grok,
       Kogen.Proc,
       Kogen.Project,
       Kogen.Intent,
@@ -19,7 +21,8 @@ defmodule Kogen.Kernel do
       Kogen.Shaper,
       Kogen.Queue,
       Kogen.Runner,
-      Kogen.Cli
+      Kogen.Cli,
+      Kogen.ProviderControl
     ],
     exports: [
       Approval,
@@ -34,6 +37,7 @@ defmodule Kogen.Kernel do
   alias Kogen.Engine.Build.Request
   alias Kogen.Engine.Build.Result
   alias Kogen.Engine.Runtime
+  alias Kogen.Grok
   alias Kogen.Kernel.Accounts
   alias Kogen.Kernel.Approval
   alias Kogen.Kernel.Approval.Request, as: ApprovalRequest
@@ -46,14 +50,13 @@ defmodule Kogen.Kernel do
   alias Kogen.Kernel.ShapeExecution
   alias Kogen.Kernel.Types.ApprovalPreview
   alias Kogen.Kernel.Types.BuildOptions
-  alias Kogen.Kernel.Workspaces
   alias Kogen.Provider.ChatGPT
-  alias Kogen.Provider.ChatGPT.CredentialStore
-  alias Kogen.Provider.ChatGPT.SIWC
+  alias Kogen.ProviderControl
   alias Kogen.Resilience.Policy
   alias Kogen.Runner
   alias Kogen.Shaper.Result, as: ShapeResult
   alias Kogen.Workspace
+  alias Kogen.Workspace.Workspaces
 
   @type toolchain_error ::
           :mise_missing
@@ -119,8 +122,8 @@ defmodule Kogen.Kernel do
          {:ok, project} <- Kogen.Project.load(options.project_root),
          {:ok, build_config} <- BuildConfig.load(home, project.build),
          {:ok, process_env} <- project_environment(options.project_root, runtime),
-         {:ok, account} <- Accounts.label(options.project_root, project),
-         {:ok, provider_config, source, label} <- provider_config(label: account),
+         {:ok, {provider, account}} <- Accounts.selection(options.project_root, project),
+         {:ok, provider_config, source, label} <- provider_config(provider, label: account),
          {:ok, origin, base} <-
            ProjectContext.resolve(
              options.project_root,
@@ -131,7 +134,7 @@ defmodule Kogen.Kernel do
            ) do
       runtime = Runtime.for_project(runtime, process_env)
       role_overrides = BuildConfig.role_overrides(build_config.roles)
-      {builder_model, builder_effort} = BuildConfig.builder_settings(build_config.roles)
+      {builder_model, builder_effort} = BuildConfig.builder_settings(build_config.roles, provider)
 
       request =
         build_request(%{
@@ -144,6 +147,7 @@ defmodule Kogen.Kernel do
           roles: role_overrides,
           build_config: build_config,
           runtime: runtime,
+          provider_mod: provider_module(provider),
           provider: {provider_config, source, label}
         })
 
@@ -226,20 +230,28 @@ defmodule Kogen.Kernel do
 
   @spec provider_list() :: {:ok, [String.t()]} | {:error, term()}
   def provider_list do
+    with {:ok, root} <- RuntimeDiscovery.provider_root(), do: ProviderControl.list(root)
+  end
+
+  @spec provider_use(String.t(), String.t(), Path.t() | nil) :: :ok | {:error, term()}
+  def provider_use(provider, label, project_root) do
+    target = if project_root, do: {:project, Workspaces.canonical(project_root)}, else: :default
+
     with {:ok, root} <- RuntimeDiscovery.provider_root(),
-         {:ok, profiles} <- CredentialStore.profiles(root),
-         {:ok, default} <- Accounts.default() do
-      {:ok, Enum.map(profiles, &provider_profile_line(&1, default))}
-    end
+         do: ProviderControl.use(root, provider, label, target)
   end
 
   @spec provider_use(String.t(), Path.t() | nil) :: :ok | {:error, term()}
-  defdelegate provider_use(label, project_root), to: Accounts, as: :use
+  def provider_use(label, project_root), do: provider_use("chatgpt", label, project_root)
 
-  @spec provider_login(String.t()) :: {:ok, map()} | {:error, ProviderError.t()}
-  def provider_login(label) when is_binary(label) do
+  @spec provider_login(String.t(), String.t()) :: {:ok, map()} | {:error, ProviderError.t()}
+  def provider_login(provider, label) when is_binary(provider) and is_binary(label) do
     with {:ok, root} <- RuntimeDiscovery.provider_root() do
-      SIWC.login(root, RuntimeDiscovery.credential_backend(), label,
+      ProviderControl.login(
+        provider,
+        root,
+        RuntimeDiscovery.credential_backend(),
+        label,
         proxy_env: RuntimeDiscovery.proxy_environment(),
         authorize: fn url ->
           IO.puts("Continue with ChatGPT")
@@ -251,40 +263,50 @@ defmodule Kogen.Kernel do
     end
   end
 
-  @spec provider_logout(String.t()) ::
+  @spec provider_login(String.t()) :: {:ok, map()} | {:error, ProviderError.t()}
+  def provider_login(label), do: provider_login("chatgpt", label)
+
+  @spec provider_logout(String.t(), String.t()) ::
           {:ok, %{label: String.t(), remote_revoked?: boolean()}} | {:error, ProviderError.t()}
-  def provider_logout(label) when is_binary(label) do
+  def provider_logout(provider, label) when is_binary(provider) and is_binary(label) do
     with {:ok, root} <- RuntimeDiscovery.provider_root() do
-      SIWC.logout(root, RuntimeDiscovery.credential_backend(), label,
+      ProviderControl.logout(provider, root, RuntimeDiscovery.credential_backend(), label,
         proxy_env: RuntimeDiscovery.proxy_environment()
       )
     end
   end
 
+  @spec provider_logout(String.t()) ::
+          {:ok, %{label: String.t(), remote_revoked?: boolean()}} | {:error, ProviderError.t()}
+  def provider_logout(label), do: provider_logout("chatgpt", label)
+
   @doc false
   @spec provider_config(keyword()) ::
-          {:ok, ChatGPT.Config.t(), :kogen_owned | :custom, String.t()}
-          | {
-              :error,
-              ProviderError.t()
-            }
-  def provider_config(opts \\ []) do
-    RuntimeDiscovery.provider_config(opts)
-  end
+          {:ok, ChatGPT.Config.t() | Grok.Config.t(), :kogen_owned | :custom, String.t()}
+          | {:error, ProviderError.t()}
+  def provider_config(opts \\ []), do: RuntimeDiscovery.provider_config(opts)
+
+  @doc false
+  @spec provider_config(String.t() | atom(), keyword()) ::
+          {:ok, ChatGPT.Config.t() | Grok.Config.t(), :kogen_owned | :custom, String.t()}
+          | {:error, ProviderError.t()}
+  def provider_config(provider, opts), do: RuntimeDiscovery.provider_config(provider, opts)
 
   @doc false
   @spec benchmark_provider_config() ::
-          {:ok, ChatGPT.Config.t()} | {:error, ProviderError.t() | :benchmark_auth_unavailable}
+          {:ok, ChatGPT.Config.t() | Grok.Config.t()}
+          | {:error, ProviderError.t() | :benchmark_auth_unavailable}
   def benchmark_provider_config, do: RuntimeDiscovery.benchmark_provider_config()
 
-  defp provider_profile_line(%CredentialStore.Profile{} = profile, default) do
-    state = if profile.signed_in, do: "signed in", else: "signed out"
-    plan = if profile.plan_usage, do: " Using ChatGPT plan", else: ""
-    email = if is_binary(profile.email), do: " #{profile.email}", else: ""
-    expiry = if is_integer(profile.expires_at), do: " expires=#{profile.expires_at}", else: ""
-    marker = if profile.label == default, do: " (default)", else: ""
-    "chatgpt:#{profile.label}#{marker} #{state}#{email}#{plan}#{expiry}\n"
-  end
+  @doc false
+  @spec benchmark_provider_config(String.t(), String.t()) ::
+          {:ok, ChatGPT.Config.t() | Grok.Config.t()}
+          | {:error, ProviderError.t() | :benchmark_auth_unavailable}
+  def benchmark_provider_config(provider, label),
+    do: RuntimeDiscovery.benchmark_provider_config(provider, label)
+
+  defp provider_module(:chatgpt), do: ChatGPT
+  defp provider_module(:grok), do: Grok
 
   defp runtime_home(%Runtime{} = runtime) do
     case Runtime.home(runtime) do
@@ -304,6 +326,7 @@ defmodule Kogen.Kernel do
       roles: roles,
       build_config: build_config,
       runtime: runtime,
+      provider_mod: provider_mod,
       provider: {provider_config, source, label}
     } = inputs
 
@@ -324,15 +347,20 @@ defmodule Kogen.Kernel do
           roles,
           wall_ms(build_config)
         ),
-      resilience: %Policy{model_fallback: build_config.model_fallback},
+      resilience: resilience(provider_mod, build_config.model_fallback),
       plan_max_words: build_config.plan_max_words,
       runtime: runtime,
-      provider_mod: ChatGPT,
+      provider_mod: provider_mod,
       provider_config: provider_config,
       credential_source: source,
       credential_label: label
     }
   end
+
+  defp resilience(Grok, model_fallback),
+    do: %Policy{model_fallback: model_fallback, fallbacks: %{}}
+
+  defp resilience(_provider, model_fallback), do: %Policy{model_fallback: model_fallback}
 
   defp wall_ms(%{wall_minutes: minutes}) when is_integer(minutes), do: minutes * 60_000
   defp wall_ms(_build_config), do: nil

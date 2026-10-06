@@ -1,7 +1,8 @@
-Usage: kogen provider use chatgpt --as <label> [--project <checkout>]
+Usage: kogen provider use <provider> --as <label> [--project <checkout>]
 
-Without --project: makes <label> the default account on this machine.
-With --project: that project uses <label>; other projects keep the default.
+Supported providers: chatgpt, grok.
+Without --project: makes <label> the provider and account default on this machine.
+With --project: that project uses this provider and account; other projects keep their choice.
 Choices live in ~/.kogen/accounts.yaml on this machine, never in a repo.
 
 Options:

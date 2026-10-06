@@ -3,7 +3,9 @@ defmodule Kogen.Testkit.FakeResponsesServer do
   A scripted loopback Responses endpoint. Each accepted connection consumes the next behaviour
   (the last one repeats) and the owner receives `{:fake_request, index, request_body, monotonic_ms}` with the decoded JSON body.
 
-  Behaviours: `{:ok, text}`, `{:status, code, body}`, `:hang` (no reply), `:close` (drop the
+  Behaviours: `{:ok, text}`, `{:items, items, usage}` (completed Responses events),
+  `{:cut, events, ending}` (partial stream then close, hang, or end), `{:status, code, body}`,
+  `:hang` (no reply), `:close` (drop the
   connection), `:trickle` (a 200 stream that emits a keepalive comment every 50 ms and never
   completes), `:stall` (a 200 stream that sends one event and then nothing),
   `{:events, text, chunks, ms}` (raw body chunks `ms` apart, then the completed response) and
@@ -14,6 +16,7 @@ defmodule Kogen.Testkit.FakeResponsesServer do
 
   @type behaviour ::
           {:ok, String.t()}
+          | {:items, [map()], map()}
           | {:status, pos_integer(), binary()}
           | {:cut, [map()], :close | :hang | :end}
           | :hang
@@ -54,8 +57,9 @@ defmodule Kogen.Testkit.FakeResponsesServer do
 
   defp serve(socket, owner, index, behaviour) do
     request = read_request(socket, <<>>)
-    [_headers, body] = :binary.split(request, "\r\n\r\n")
+    [headers, body] = :binary.split(request, "\r\n\r\n")
     send(owner, {:fake_request, index, :json.decode(body), System.monotonic_time(:millisecond)})
+    send(owner, {:fake_request_headers, index, header_map(headers)})
     respond(socket, behaviour)
     send(owner, {:fake_request_ended, index})
   end
@@ -76,6 +80,31 @@ defmodule Kogen.Testkit.FakeResponsesServer do
       :end -> :gen_tcp.send(socket, "0\r\n\r\n")
       other -> respond(socket, other)
     end
+  end
+
+  defp respond(socket, {:items, items, usage}) do
+    :ok = :gen_tcp.send(socket, stream_header())
+
+    events =
+      Enum.map(items, fn item ->
+        event("response.output_item.done", %{
+          "type" => "response.output_item.done",
+          "item" => item
+        })
+      end) ++
+        [
+          event("response.completed", %{
+            "type" => "response.completed",
+            "response" => %{
+              "id" => "resp_fake_#{System.unique_integer([:positive])}",
+              "status" => "completed",
+              "output" => [],
+              "usage" => usage
+            }
+          })
+        ]
+
+    send_chunked(socket, events)
   end
 
   defp respond(socket, :stall) do
@@ -174,6 +203,17 @@ defmodule Kogen.Testkit.FakeResponsesServer do
     :gen_tcp.close(socket)
   end
 
+  defp send_chunked(socket, events) do
+    frames = Enum.map(events, &chunk/1)
+    :ok = :gen_tcp.send(socket, [frames, "0\r\n\r\n"])
+    :gen_tcp.close(socket)
+  end
+
+  defp event(type, payload) do
+    "event: #{type}\r\ndata: " <>
+      (payload |> :json.encode() |> IO.iodata_to_binary()) <> "\r\n\r\n"
+  end
+
   # httpc holds body bytes that arrive in the header's packet until more data comes, so the
   # first event goes out on its own.
   defp started_stream(socket) do
@@ -224,6 +264,18 @@ defmodule Kogen.Testkit.FakeResponsesServer do
       case :binary.split(String.downcase(line), ":", [:global]) do
         ["content-length", value] -> String.to_integer(String.trim(value))
         _other -> nil
+      end
+    end)
+  end
+
+  defp header_map(headers) do
+    headers
+    |> :binary.split("\r\n", [:global])
+    |> Enum.drop(1)
+    |> Enum.reduce(%{}, fn line, values ->
+      case :binary.split(line, ":", [:global]) do
+        [key, value] -> Map.put(values, String.downcase(key), String.trim(value))
+        _other -> values
       end
     end)
   end

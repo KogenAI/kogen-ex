@@ -1,4 +1,4 @@
-defmodule Kogen.Kernel.Workspaces do
+defmodule Kogen.Workspace.Workspaces do
   @moduledoc false
 
   @spec root(Path.t(), Path.t()) :: Path.t()

@@ -17,18 +17,27 @@ defmodule Kogen.Kernel.BuildConfig do
     end
   end
 
-  @spec builder_settings(map()) :: {String.t(), String.t()}
-  def builder_settings(roles) do
+  @spec builder_settings(map(), atom()) :: {String.t(), String.t()}
+  def builder_settings(roles, provider \\ :chatgpt) do
     builder = Map.get(roles, :builder, %{})
-    {Map.get(builder, :model, "gpt-6-luna"), Map.get(builder, :effort, "max")}
+
+    {Map.get(builder, :model, default_builder(provider)),
+     Map.get(builder, :effort, default_effort(provider))}
   end
 
   @spec role_overrides(map()) :: map()
   def role_overrides(roles), do: Map.delete(roles, :shaper)
 
-  @spec shape_settings(map()) :: {String.t(), String.t()}
-  def shape_settings(roles) do
+  @spec shape_settings(map(), atom()) :: {String.t(), String.t()}
+  def shape_settings(roles, provider \\ :chatgpt) do
     settings = Map.get(roles, :shaper, %{})
-    {Map.get(settings, :model, "gpt-6.1-sol"), Map.get(settings, :effort, "high")}
+    {Map.get(settings, :model, default_shaper(provider)), Map.get(settings, :effort, "high")}
   end
+
+  defp default_builder(:grok), do: "grok-4.6"
+  defp default_builder(_provider), do: "gpt-6-luna"
+  defp default_effort(:grok), do: "high"
+  defp default_effort(_provider), do: "max"
+  defp default_shaper(:grok), do: "grok-4.6"
+  defp default_shaper(_provider), do: "gpt-6.1-sol"
 end

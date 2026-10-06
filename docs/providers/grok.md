@@ -25,6 +25,17 @@ On macOS, the tokens are stored AES-256-GCM encrypted in `~/.kogen/credentials/g
 with the key in the `kogen` Keychain service. Other platforms use a private Kogen credential
 file, matching the existing ChatGPT backend. No Grok CLI auth file is read or copied.
 
+Use the existing provider commands:
+
+```sh
+kogen provider login grok
+kogen provider use grok --as default
+kogen provider logout grok
+```
+
+`--project <checkout>` on `provider use` selects Grok for one project. Account choices stay in
+`~/.kogen/accounts.yaml`.
+
 ## Inference protocol
 
 Grok Build's enterprise documentation names `cli-chat-proxy.grok.com` as the inference proxy.
@@ -39,10 +50,16 @@ POST https://cli-chat-proxy.grok.com/v1/responses
 ```
 
 Requests stream SSE and carry `model`, `instructions`, `input`, top-level `tools`,
-`reasoning: {effort: ...}`, `store: false`, and `prompt_cache_key`. Kogen sends the required
-proxy auth/model-routing headers, a truthful Kogen user agent and client identifier, and
-`x-grok-conv-id` with the same stable cache key. Full conversation input is sent on each turn;
-Kogen does not depend on a stored `previous_response_id`.
+`reasoning: {effort: ...}`, `store: false`, and `prompt_cache_key`. Kogen sends the documented
+bearer, token-auth, and model-routing headers, plus the proxy's `x-authenticateresponse` marker,
+a truthful Kogen user agent/client identifier, and `x-grok-conv-id` and `x-grok-session-id` from
+the same stable cache key. `x-grok-req-id` is new for every HTTP attempt. Full conversation input
+is sent on each turn; Kogen does not depend on a stored `previous_response_id`.
+
+The public Grok Build shell README explicitly lists bearer auth, `X-XAI-Token-Auth`, and
+`x-grok-model-override`. The exact extra proxy headers and version gates aren't specified in the
+public API docs; Kogen uses its own version and identity values and has not tested against xAI's
+live proxy.
 
 Responses function calls use `function_call` output items and are parsed into Kogen's regular
 tool-call contract. Their results return as `function_call_output` input items. For streamed
@@ -76,6 +93,10 @@ For Grok login and inference, allow HTTPS to:
 - `accounts.x.ai`
 - `grok.com`
 - `cli-chat-proxy.grok.com`
+
+`kogen-bench` accepts `KOGEN_BENCH_PROVIDER=grok`, defaults its builder and shaper to `grok-4.6`
+at high effort, and records these hosts in `usage.json` as `egress_hosts` for the benchmark
+runner's network policy.
 
 The public enterprise guide says `api.x.ai` is for the direct API-key path. Kogen does not use
 it.

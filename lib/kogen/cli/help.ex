@@ -138,8 +138,11 @@ defmodule Kogen.Cli.Help do
     Commands:
       list               List saved accounts and the default
       login chatgpt      Sign in with a ChatGPT account
+      login grok         Sign in with a Grok subscription
       logout chatgpt     Sign out of a ChatGPT account
+      logout grok        Sign out of a Grok subscription
       use chatgpt        Choose the default account, or one project's account
+      use grok           Choose the default account, or one project's account
 
     Logins belong to this machine, never to a repo.
     """
@@ -147,10 +150,11 @@ defmodule Kogen.Cli.Help do
 
   def render(["provider", "use"]) do
     """
-    Usage: kogen provider use chatgpt --as <label> [--project <checkout>]
+    Usage: kogen provider use <provider> --as <label> [--project <checkout>]
 
-    Without --project: makes <label> the default account on this machine.
-    With --project: that project uses <label>; other projects keep the default.
+    Supported providers: chatgpt, grok.
+    Without --project: makes <label> the provider and account default on this machine.
+    With --project: that project uses this provider and account; other projects keep their choice.
     Choices live in ~/.kogen/accounts.yaml on this machine, never in a repo.
 
     Options:
@@ -165,13 +169,10 @@ defmodule Kogen.Cli.Help do
         "and the default.\n"
 
   def render(["provider", verb]) when verb in ["login", "logout"] do
-    action =
-      if verb == "login", do: "Signs in with ChatGPT in the browser and saves", else: "Signs out"
-
     """
-    Usage: kogen provider #{verb} chatgpt
+    Usage: kogen provider #{verb} <provider>
 
-    #{action} the default account.
+    Supported providers: chatgpt, grok.
     """
   end
 

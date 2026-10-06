@@ -3,6 +3,7 @@ defmodule Kogen.Kernel.CLITest do
 
   import ExUnit.CaptureIO
 
+  alias Kogen.Cli.Args
   alias Kogen.Cli.Arguments
   alias Kogen.Cli.Version
   alias Kogen.Kernel.CLI
@@ -85,8 +86,8 @@ defmodule Kogen.Kernel.CLITest do
       {["status", "--base"], "kogen status: --base needs a value", ["status"]},
       {["queue", "start", "now"], "kogen queue start: unexpected argument 'now'",
        ["queue", "start"]},
-      {["provider", "login", "grok"],
-       "kogen provider login: unknown provider 'grok' (supported: chatgpt)",
+      {["provider", "login", "codex"],
+       "kogen provider login: unknown provider 'codex' (supported: chatgpt, grok)",
        ["provider", "login"]},
       {["intent", "approve", "greet", "XYZ"],
        "kogen intent approve: <hash> must be 6 to 64 lowercase hex characters",
@@ -97,6 +98,31 @@ defmodule Kogen.Kernel.CLITest do
     for {argv, message, topic} <- cases do
       assert CLI.execute(argv) == {2, message <> "\n\n" <> golden(topic)}, inspect(argv)
     end
+  end
+
+  test "Grok uses the existing provider commands and flags" do
+    assert {:ok,
+            %Args{
+              command: :provider_use,
+              positionals: ["grok"],
+              account_label: "bench",
+              project: "/tmp/project"
+            }} =
+             Arguments.parse([
+               "provider",
+               "use",
+               "grok",
+               "--as",
+               "bench",
+               "--project",
+               "/tmp/project"
+             ])
+
+    assert {:ok, %Args{command: :provider_login, positionals: ["grok"]}} =
+             Arguments.parse(["provider", "login", "grok"])
+
+    assert {:ok, %Args{command: :provider_logout, positionals: ["grok"]}} =
+             Arguments.parse(["provider", "logout", "grok"])
   end
 
   test "old forms exit 2 with one moved line" do

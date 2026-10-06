@@ -98,16 +98,15 @@ defmodule Kogen.Kernel.CLI.Runner do
 
   defp provider_list do
     case Kogen.Kernel.provider_list() do
-      {:ok, []} -> {0, "chatgpt: not signed in\n"}
       {:ok, lines} -> {0, Enum.join(lines)}
       {:error, reason} -> ErrorOutput.format(reason)
     end
   end
 
-  defp provider_login(_args) do
+  defp provider_login(%Args{positionals: ["chatgpt"]}) do
     label = "default"
 
-    case Kogen.Kernel.provider_login(label) do
+    case Kogen.Kernel.provider_login("chatgpt", label) do
       {:ok, result} ->
         notice = if result.first_notice?, do: "You're using your ChatGPT plan\n", else: ""
         email = if is_binary(result.email), do: " (#{result.email})", else: ""
@@ -118,10 +117,23 @@ defmodule Kogen.Kernel.CLI.Runner do
     end
   end
 
-  defp provider_logout(_args) do
+  defp provider_login(%Args{positionals: ["grok"]}) do
     label = "default"
 
-    case Kogen.Kernel.provider_logout(label) do
+    case Kogen.Kernel.provider_login("grok", label) do
+      {:ok, result} ->
+        email = if is_binary(result.email), do: " (#{result.email})", else: ""
+        {0, "grok:#{result.label} signed in#{email}\n"}
+
+      {:error, reason} ->
+        ErrorOutput.format(reason)
+    end
+  end
+
+  defp provider_logout(%Args{positionals: ["chatgpt"]}) do
+    label = "default"
+
+    case Kogen.Kernel.provider_logout("chatgpt", label) do
       {:ok, %{remote_revoked?: true}} ->
         {0, "chatgpt:#{label} signed out\n"}
 
@@ -135,12 +147,27 @@ defmodule Kogen.Kernel.CLI.Runner do
     end
   end
 
-  defp provider_use(args) do
+  defp provider_logout(%Args{positionals: ["grok"]}) do
+    label = "default"
+
+    case Kogen.Kernel.provider_logout("grok", label) do
+      {:ok, %{remote_revoked?: false}} ->
+        {0, "grok:#{label} signed out locally\n"}
+
+      {:ok, %{remote_revoked?: true}} ->
+        {0, "grok:#{label} signed out\n"}
+
+      {:error, reason} ->
+        ErrorOutput.format(reason)
+    end
+  end
+
+  defp provider_use(%Args{positionals: [provider]} = args) do
     label = args.account_label
 
-    case Kogen.Kernel.provider_use(label, args.project) do
-      :ok when is_nil(args.project) -> {0, "chatgpt:#{label} is the default account\n"}
-      :ok -> {0, "chatgpt:#{label} is the account for #{args.project}\n"}
+    case Kogen.Kernel.provider_use(provider, label, args.project) do
+      :ok when is_nil(args.project) -> {0, "#{provider}:#{label} is the default account\n"}
+      :ok -> {0, "#{provider}:#{label} is the account for #{args.project}\n"}
       {:error, reason} -> ErrorOutput.format(reason)
     end
   end

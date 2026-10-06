@@ -124,28 +124,82 @@ defmodule Kogen.Build.Recipe do
   defp recipe(name, builder_model, builder_effort)
        when name in @names and is_binary(builder_model) and is_binary(builder_effort) do
     builder = {builder_model, builder_effort}
+    grok? = String.starts_with?(builder_model, "grok-")
+    roles = roles_for_builder(name, builder, grok?, builder_model, builder_effort)
 
     recipe = %{
       name: name,
       stages: stages_for(name),
-      roles: roles_for(name, builder),
+      roles: roles,
       builder_tools: builder_tools(name)
     }
 
+    specialize(recipe, name, grok?, builder, builder_model, builder_effort)
+  end
+
+  defp roles_for_builder(_name, _builder, true, model, effort) do
+    %{
+      context: {model, effort},
+      planner: {model, effort},
+      builder: {model, effort},
+      reviewer: {model, effort},
+      auditor: {model, effort}
+    }
+  end
+
+  defp roles_for_builder(name, builder, false, _model, _effort), do: roles_for(name, builder)
+
+  defp specialize(recipe, name, grok?, builder, model, effort) do
     cond do
       name in ["direct-escalate", "escalate-shell"] ->
-        Map.put(recipe, :escalation, %{
-          model: "gpt-6.1-sol",
-          effort: "high",
+        escalation = %{
+          model: if(grok?, do: model, else: "gpt-6.1-sol"),
+          effort: if(grok?, do: effort, else: "high"),
           on: [:repair_cap, :unchanged, :gate_red, :turn_cap, :wall_cap]
-        })
+        }
+
+        Map.put(recipe, :escalation, escalation)
 
       name in @ladder_names ->
-        Map.put(recipe, :ladder, Map.put(@ladder_policy, :rungs, ladder_rungs(name)))
+        rungs = if grok?, do: grok_ladder_rungs(name, builder), else: ladder_rungs(name)
+        Map.put(recipe, :ladder, Map.put(@ladder_policy, :rungs, rungs))
 
       true ->
         recipe
     end
+  end
+
+  defp grok_ladder_rungs(name, {model, _effort}) when name in ["ladder", "ladder-diverse"] do
+    medium = {model, "medium"}
+    high = {model, "high"}
+
+    rungs = [
+      %{name: "builder", builder: :builder, input: :plan},
+      %{name: "grok-medium", builder: medium, input: :plan},
+      %{name: "grok-high", builder: high, input: :plan},
+      %{name: "raw-request", builder: high, input: :raw_request, experimental: true}
+    ]
+
+    then(rungs, fn ladder ->
+      if name == "ladder-diverse",
+        do:
+          List.replace_at(ladder, 1, %{
+            name: "grok-medium-raw",
+            builder: medium,
+            input: :raw_request,
+            acceptance_items: true
+          }),
+        else: ladder
+    end)
+  end
+
+  defp grok_ladder_rungs(_name, {_model, _effort} = builder) do
+    [
+      %{name: "builder", builder: builder, input: :plan},
+      %{name: "fresh-2", builder: builder, input: :plan},
+      %{name: "fresh-3", builder: builder, input: :plan},
+      %{name: "raw-request", builder: builder, input: :raw_request, experimental: true}
+    ]
   end
 
   defp stages_for("staged"), do: @staged_stages

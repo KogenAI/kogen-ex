@@ -116,8 +116,10 @@ defmodule Kogen.Cli.Arguments do
   end
 
   defp valid_values(path, name, [provider | _rest], _options)
-       when name in [:provider_login, :provider_logout, :provider_use] and provider != "chatgpt",
-       do: usage(path, "#{prefix(path)}: unknown provider '#{provider}' (supported: chatgpt)")
+       when name in [:provider_login, :provider_logout, :provider_use] and
+              provider not in ["chatgpt", "grok"],
+       do:
+         usage(path, "#{prefix(path)}: unknown provider '#{provider}' (supported: chatgpt, grok)")
 
   defp valid_values(path, :intent_approve, [_slug, hash], _options) do
     if Regex.match?(~r/\A[0-9a-f]{6,64}\z/, hash),

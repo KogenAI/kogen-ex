@@ -10,7 +10,6 @@ defmodule Kogen.Kernel.Queueing do
   alias Kogen.Kernel.RuntimeDiscovery
   alias Kogen.Kernel.Types.BuildOptions
   alias Kogen.Kernel.Types.QueueTarget
-  alias Kogen.Kernel.Workspaces
   alias Kogen.Proc
   alias Kogen.Queue.BuildSummary
   alias Kogen.Queue.Drain
@@ -18,6 +17,7 @@ defmodule Kogen.Kernel.Queueing do
   alias Kogen.Queue.Recovery
   alias Kogen.Queue.StateView
   alias Kogen.Queue.Status
+  alias Kogen.Workspace.Workspaces
 
   # Forks, starts a new session so the caller's process-group cleanup can't reach the drain,
   # and reports the pid only once exec succeeded (the close-on-exec pipe then reads empty).

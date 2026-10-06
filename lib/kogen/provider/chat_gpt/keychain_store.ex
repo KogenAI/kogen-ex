@@ -18,14 +18,21 @@ defmodule Kogen.Provider.ChatGPT.KeychainStore do
 
   @spec read(Path.t(), String.t(), Path.t() | nil) :: {:ok, binary()} | {:error, term()}
   def read(root, label, keychain \\ nil) when is_binary(root) and is_binary(label) do
+    read_for_provider(root, "chatgpt", label, keychain)
+  end
+
+  @spec read_for_provider(Path.t(), String.t(), String.t(), Path.t() | nil) ::
+          {:ok, binary()} | {:error, term()}
+  def read_for_provider(root, provider, label, keychain \\ nil)
+      when is_binary(root) and is_binary(provider) and is_binary(label) do
     with :ok <- prepare_root(root) do
-      case FileStore.read_encrypted(root, label) do
+      case FileStore.read_encrypted(root, provider, label) do
         {:ok, encrypted} ->
-          with {:ok, key} <- read_key(root, label, keychain),
-               do: decrypt(encrypted, key, label)
+          with {:ok, key} <- read_key(root, provider, label, keychain),
+               do: decrypt(encrypted, key, provider, label)
 
         {:error, :enoent} ->
-          read_legacy(root, label, keychain)
+          read_legacy(root, provider, label, keychain)
 
         {:error, reason} ->
           {:error, reason}
@@ -36,26 +43,40 @@ defmodule Kogen.Provider.ChatGPT.KeychainStore do
   @spec write(Path.t(), String.t(), binary(), Path.t() | nil) :: :ok | {:error, term()}
   def write(root, label, contents, keychain \\ nil)
       when is_binary(root) and is_binary(label) and is_binary(contents) do
+    write_for_provider(root, "chatgpt", label, contents, keychain)
+  end
+
+  @spec write_for_provider(Path.t(), String.t(), String.t(), binary(), Path.t() | nil) ::
+          :ok | {:error, term()}
+  def write_for_provider(root, provider, label, contents, keychain \\ nil)
+      when is_binary(root) and is_binary(provider) and is_binary(label) and is_binary(contents) do
     with :ok <- prepare_root(root),
-         {:ok, key} <- key_for_write(root, label, keychain),
-         {:ok, encrypted} <- encrypt(contents, key, label),
-         :ok <- FileStore.write_encrypted(root, label, encrypted),
-         :ok <- verify_encrypted(root, label, contents, key, keychain) do
-      delete_item(root, legacy_account(label), keychain)
+         {:ok, key} <- key_for_write(root, provider, label, keychain),
+         {:ok, encrypted} <- encrypt(contents, key, provider, label),
+         :ok <- FileStore.write_encrypted(root, provider, label, encrypted),
+         :ok <- verify_encrypted(root, provider, label, contents, key, keychain) do
+      delete_item(root, legacy_account(provider, label), keychain)
     end
   end
 
   @spec delete(Path.t(), String.t(), Path.t() | nil) :: :ok | {:error, term()}
   def delete(root, label, keychain \\ nil) when is_binary(root) and is_binary(label) do
+    delete_for_provider(root, "chatgpt", label, keychain)
+  end
+
+  @spec delete_for_provider(Path.t(), String.t(), String.t(), Path.t() | nil) ::
+          :ok | {:error, term()}
+  def delete_for_provider(root, provider, label, keychain \\ nil)
+      when is_binary(root) and is_binary(provider) and is_binary(label) do
     with :ok <- prepare_root(root),
-         :ok <- FileStore.delete_encrypted(root, label),
-         :ok <- delete_item(root, key_account(label), keychain) do
-      delete_item(root, legacy_account(label), keychain)
+         :ok <- FileStore.delete_encrypted(root, provider, label),
+         :ok <- delete_item(root, key_account(provider, label), keychain) do
+      delete_item(root, legacy_account(provider, label), keychain)
     end
   end
 
-  defp key_for_write(root, label, keychain) do
-    case read_key(root, label, keychain) do
+  defp key_for_write(root, provider, label, keychain) do
+    case read_key(root, provider, label, keychain) do
       {:ok, key} ->
         {:ok, key}
 
@@ -68,20 +89,20 @@ defmodule Kogen.Provider.ChatGPT.KeychainStore do
       {:error, :not_found} ->
         key = :crypto.strong_rand_bytes(@key_bytes)
 
-        with :ok <- store_key(root, label, key), do: {:ok, key}
+        with :ok <- store_key(root, provider, label, key), do: {:ok, key}
 
       {:error, reason} ->
         {:error, reason}
     end
   end
 
-  defp store_key(root, label, key) do
+  defp store_key(root, provider, label, key) do
     encoded = Base.encode64(key)
     input = encoded <> "\n" <> encoded <> "\n"
 
     with {:ok, _output} <-
-           run_security(add_args(key_account(label)), input, root),
-         {:ok, ^encoded} <- read_key_encoded(root, label, nil) do
+           run_security(add_args(key_account(provider, label)), input, root),
+         {:ok, ^encoded} <- read_key_encoded(root, provider, label, nil) do
       :ok
     else
       {:ok, _different} -> {:error, :keychain_key_mismatch}
@@ -91,11 +112,11 @@ defmodule Kogen.Provider.ChatGPT.KeychainStore do
     end
   end
 
-  defp verify_encrypted(root, label, expected, key, keychain) do
-    with {:ok, actual_key} <- read_key(root, label, keychain),
+  defp verify_encrypted(root, provider, label, expected, key, keychain) do
+    with {:ok, actual_key} <- read_key(root, provider, label, keychain),
          true <- actual_key == key,
-         {:ok, encrypted} <- FileStore.read_encrypted(root, label),
-         {:ok, actual} <- decrypt(encrypted, actual_key, label),
+         {:ok, encrypted} <- FileStore.read_encrypted(root, provider, label),
+         {:ok, actual} <- decrypt(encrypted, actual_key, provider, label),
          true <- actual == expected do
       :ok
     else
@@ -104,8 +125,8 @@ defmodule Kogen.Provider.ChatGPT.KeychainStore do
     end
   end
 
-  defp read_key(root, label, keychain) do
-    with {:ok, encoded} <- read_key_encoded(root, label, keychain) do
+  defp read_key(root, provider, label, keychain) do
+    with {:ok, encoded} <- read_key_encoded(root, provider, label, keychain) do
       case Base.decode64(encoded) do
         {:ok, key} when byte_size(key) == @key_bytes -> {:ok, key}
         _invalid -> {:error, :keychain_key_invalid}
@@ -113,20 +134,20 @@ defmodule Kogen.Provider.ChatGPT.KeychainStore do
     end
   end
 
-  defp read_key_encoded(root, label, keychain) do
+  defp read_key_encoded(root, provider, label, keychain) do
     case command(
            root,
-           generic_args("find-generic-password", key_account(label), keychain, ["-w"])
+           generic_args("find-generic-password", key_account(provider, label), keychain, ["-w"])
          ) do
       {:ok, output} -> {:ok, String.trim(output)}
       error -> error
     end
   end
 
-  defp read_legacy(root, label, keychain) do
+  defp read_legacy(root, provider, label, keychain) do
     case command(
            root,
-           generic_args("find-generic-password", legacy_account(label), keychain, ["-w"])
+           generic_args("find-generic-password", legacy_account(provider, label), keychain, ["-w"])
          ) do
       {:ok, output} -> decode_legacy(output)
       error -> error
@@ -140,7 +161,7 @@ defmodule Kogen.Provider.ChatGPT.KeychainStore do
     end
   end
 
-  defp encrypt(contents, key, label) do
+  defp encrypt(contents, key, provider, label) do
     nonce = :crypto.strong_rand_bytes(@nonce_bytes)
 
     {ciphertext, tag} =
@@ -154,26 +175,28 @@ defmodule Kogen.Provider.ChatGPT.KeychainStore do
         true
       )
 
-    {:ok, @magic <> nonce <> tag <> ciphertext}
+    {:ok, magic(provider) <> nonce <> tag <> ciphertext}
   rescue
     ArgumentError -> {:error, :credential_encryption_failed}
   end
 
-  defp decrypt(
-         <<@magic::binary, nonce::binary-size(@nonce_bytes), tag::binary-size(@tag_bytes),
-           ciphertext::binary>>,
-         key,
-         label
-       ) do
-    case :crypto.crypto_one_time_aead(:aes_256_gcm, key, nonce, ciphertext, label, tag, false) do
-      plaintext when is_binary(plaintext) -> {:ok, plaintext}
-      :error -> {:error, :credential_decryption_failed}
+  defp decrypt(encrypted, key, provider, label) do
+    prefix = magic(provider)
+
+    case encrypted do
+      <<^prefix::binary, nonce::binary-size(@nonce_bytes), tag::binary-size(@tag_bytes),
+        ciphertext::binary>> ->
+        case :crypto.crypto_one_time_aead(:aes_256_gcm, key, nonce, ciphertext, label, tag, false) do
+          plaintext when is_binary(plaintext) -> {:ok, plaintext}
+          :error -> {:error, :credential_decryption_failed}
+        end
+
+      _invalid ->
+        {:error, :credential_file_invalid}
     end
   rescue
     ArgumentError -> {:error, :credential_decryption_failed}
   end
-
-  defp decrypt(_encrypted, _key, _label), do: {:error, :credential_file_invalid}
 
   defp delete_item(root, account, keychain) do
     case command(
@@ -242,6 +265,9 @@ defmodule Kogen.Provider.ChatGPT.KeychainStore do
 
   defp password_mismatch?(output), do: String.contains?(String.downcase(output), "don't match")
 
-  defp key_account(label), do: "chatgpt:" <> label <> ":key"
-  defp legacy_account(label), do: "chatgpt:" <> label
+  defp key_account(provider, label), do: provider <> ":" <> label <> ":key"
+  defp legacy_account(provider, label), do: provider <> ":" <> label
+
+  defp magic("chatgpt"), do: @magic
+  defp magic(provider), do: "KOGEN-" <> String.upcase(provider) <> "-1\n"
 end

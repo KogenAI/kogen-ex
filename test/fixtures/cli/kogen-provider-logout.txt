@@ -1,3 +1,3 @@
-Usage: kogen provider logout chatgpt
+Usage: kogen provider logout <provider>
 
-Signs out the default account.
+Supported providers: chatgpt, grok.
