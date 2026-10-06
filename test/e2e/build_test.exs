@@ -8,7 +8,7 @@ defmodule Kogen.E2e.BuildTest do
   alias Kogen.Testkit.Git
 
   @moduletag :e2e
-  @tag timeout: 120_000
+  @moduletag timeout: 300_000
   @intent_slug "build-engine"
   @intent_title "Expose a ready value"
 

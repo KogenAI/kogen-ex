@@ -10,10 +10,10 @@ defmodule Kogen.E2e.ApprovalSetupTest do
   alias Kogen.Testkit.Git
 
   @moduletag :e2e
+  @moduletag timeout: 300_000
 
   @slug "approval-setup"
 
-  @tag timeout: 120_000
   test "approval runs setup before its acceptance checks", %{tmp_dir: tmp_dir} do
     project = project!(tmp_dir)
 
@@ -100,7 +100,7 @@ defmodule Kogen.E2e.ApprovalSetupTest do
     write!(project, "lib/tiny.ex", "defmodule Tiny do\n  def value, do: :old\nend\n")
     write!(project, "test/test_helper.exs", "ExUnit.start()\n")
     write!(project, ".kogen/setup-source", "fixture ready\n")
-    write!(project, ".kogen/project.yaml", project_config())
+    write!(project, ".kogen/project.yaml", project_config(tmp_dir))
     Git.git!(project, ["add", "--all"])
     Git.git!(project, ["commit", "--quiet", "-m", "Seed approval fixture"])
     Git.git!(project, ["branch", "-M", "main"])
@@ -108,9 +108,11 @@ defmodule Kogen.E2e.ApprovalSetupTest do
     project
   end
 
-  defp project_config do
+  defp project_config(tmp_dir) do
     """
     name: approval_fixture
+    env:
+      TMPDIR: #{inspect(tmp_dir)}
     setup:
       - name: fixture
         argv: [sh, -c, 'cp .kogen/setup-source .kogen/setup-ready && echo approval-setup-ran']

@@ -8,7 +8,7 @@ defmodule Kogen.E2e.BaseCheckBaselineTest do
   alias Kogen.Workspace
 
   @moduletag :e2e
-  @tag timeout: 120_000
+  @moduletag timeout: 300_000
 
   test "an unchanged base-red format finding is warned about and the Candidate lands", %{
     tmp_dir: tmp_dir

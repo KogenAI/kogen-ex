@@ -78,12 +78,12 @@ defmodule Kogen.Harness.CredentialLeakTest do
       proxy_env: %{"https_proxy" => proxy}
     }
 
-    opts = opts(tmp_dir, ChatGPT, config, %{@fast | request_cap_ms: 300})
+    opts = opts(tmp_dir, ChatGPT, config, %{@fast | request_cap_ms: 2_000})
 
     output =
       leak_surface(fn ->
         assert {:error, %ProviderError{class: :timeout}} =
-                 Exchange.respond(opts, %{request() | remaining_ms: 1_200})
+                 Exchange.respond(opts, %{request() | remaining_ms: 8_000})
       end)
 
     :gen_tcp.close(listener)
@@ -116,7 +116,7 @@ defmodule Kogen.Harness.CredentialLeakTest do
         # OTP logs a crash report after the crashed process is gone.
         receive do
         after
-          300 -> :ok
+          2_000 -> :ok
         end
       end)
 

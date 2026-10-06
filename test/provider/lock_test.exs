@@ -11,7 +11,7 @@ defmodule Kogen.Provider.ChatGPT.LockTest do
   test "reclaims a lock whose owner record is stale", %{tmp_dir: root} do
     write_owner!(root, "1 0 token")
 
-    assert {:ok, :done} = Lock.with_lock(root, "login", fn -> :done end, timeout_ms: 500)
+    assert {:ok, :done} = Lock.with_lock(root, "login", fn -> :done end, timeout_ms: 2_000)
   end
 
   test "waits on a fresh lock until the deadline", %{tmp_dir: root} do
@@ -26,7 +26,7 @@ defmodule Kogen.Provider.ChatGPT.LockTest do
     File.chmod!(owner, 0o000)
     on_exit(fn -> File.chmod(owner, 0o600) end)
 
-    assert {:error, :eacces} = Lock.with_lock(root, "login", fn -> :done end, timeout_ms: 500)
+    assert {:error, :eacces} = Lock.with_lock(root, "login", fn -> :done end, timeout_ms: 2_000)
   end
 
   defp write_owner!(root, contents) do

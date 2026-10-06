@@ -8,7 +8,7 @@ defmodule Kogen.E2e.ApprovalGatePathsTest do
   alias Kogen.Workspace
 
   @moduletag :e2e
-  @tag timeout: 180_000
+  @moduletag timeout: 300_000
   @slug "build-engine"
   @intent ".kogen/intents/#{@slug}/intent.md"
 

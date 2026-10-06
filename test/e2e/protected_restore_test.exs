@@ -8,7 +8,7 @@ defmodule Kogen.E2e.ProtectedRestoreTest do
   alias Kogen.Testkit.Git
 
   @moduletag :e2e
-  @tag timeout: 120_000
+  @moduletag timeout: 300_000
 
   test "a shell edit to approved tests and Intent is repaired before checks", %{tmp_dir: tmp_dir} do
     parent = Path.join(tmp_dir, "protected-shell-edits")

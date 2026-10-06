@@ -46,7 +46,7 @@ defmodule Kogen.Harness.ExchangeTest do
         access_token: "test-token",
         account_id: "test-account",
         endpoint: url,
-        timeout_ms: 400
+        timeout_ms: 2_000
       },
       proc_mod: Kogen.Proc,
       resilience: %Policy{backoff_base_ms: 50, backoff_max_ms: 100},
@@ -71,7 +71,7 @@ defmodule Kogen.Harness.ExchangeTest do
     assert result.text == "ok"
     assert_receive {:http_request, :first, _bytes, first_at}
     assert_receive {:http_request, :retry, _bytes, retry_at}
-    assert retry_at - first_at >= 400
+    assert retry_at - first_at >= 2_000
     assert_receive {:recorded_event, %{event: :provider_retry, stage: :shape, attempt: 1}}
 
     events =

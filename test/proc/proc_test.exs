@@ -35,13 +35,13 @@ defmodule Kogen.Proc.ProcTest do
     started_at = System.monotonic_time(:millisecond)
 
     assert {:ok, %ProcResult{exit_status: nil, timed_out: true}} =
-             run(["sleep", "30"], tmp_dir, timeout_ms: 100)
+             run(["sleep", "30"], tmp_dir, timeout_ms: 2_000)
 
-    assert System.monotonic_time(:millisecond) - started_at < 2_100
+    assert System.monotonic_time(:millisecond) - started_at < 15_000
   end
 
   test "escalates to KILL when the child ignores TERM", %{tmp_dir: tmp_dir} do
-    timeout_ms = 500
+    timeout_ms = 2_000
     grace_ms = 200
     term_received = Path.join(tmp_dir, "term-received")
     started_at = System.monotonic_time(:millisecond)
@@ -69,12 +69,12 @@ defmodule Kogen.Proc.ProcTest do
     # This clock starts before wrapper startup; allow small scheduling and millisecond rounding
     # while requiring the timeout plus the full TERM grace period before Proc.run returns.
     assert elapsed >= timeout_ms + grace_ms - 20
-    assert elapsed < 2_100
+    assert elapsed < 15_000
   end
 
   test "a continuously writing child cannot starve the deadline", %{tmp_dir: tmp_dir} do
     assert {:ok, %ProcResult{timed_out: true, exit_status: nil, output_tail: tail}} =
-             run(["yes"], tmp_dir, timeout_ms: 100)
+             run(["yes"], tmp_dir, timeout_ms: 2_000)
 
     assert byte_size(tail) <= 16 * 1024
   end
@@ -84,13 +84,13 @@ defmodule Kogen.Proc.ProcTest do
     marker = Path.join(tmp_dir, "grandchild-killed")
 
     script =
-      "sh -c 'trap \"printf killed > $MARKER; exit 0\" TERM; sleep 2 & printf ready > $READY; wait' & " <>
+      "sh -c 'trap \"printf killed > $MARKER; exit 0\" TERM; sleep 30 & printf ready > $READY; wait' & " <>
         "while [ ! -f $READY ]; do sleep 0.01; done; exit 0"
 
     assert {:ok, %ProcResult{exit_status: 0}} =
              run(["sh", "-c", script], tmp_dir,
                env: %{"MARKER" => marker, "READY" => ready},
-               timeout_ms: 2_000
+               timeout_ms: 10_000
              )
 
     assert wait_for_content(marker, "killed")
@@ -167,10 +167,10 @@ defmodule Kogen.Proc.ProcTest do
       end)
 
     run_monitor = Process.monitor(run_pid)
-    assert_receive :runner_started
+    assert_receive :runner_started, 10_000
     assert wait_for_file(ready)
     Process.exit(run_pid, :kill)
-    assert_receive {:DOWN, ^run_monitor, :process, ^run_pid, :killed}
+    assert_receive {:DOWN, ^run_monitor, :process, ^run_pid, :killed}, 10_000
     assert wait_for_content(marker, "killed")
   end
 

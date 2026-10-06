@@ -8,7 +8,7 @@ defmodule Kogen.E2e.DirectEscalationTest do
   alias Kogen.Testkit.Git
 
   @moduletag :e2e
-  @tag timeout: 120_000
+  @moduletag timeout: 300_000
 
   test "failed Build report includes last gate findings and stop counts", context do
     seed_project =

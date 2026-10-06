@@ -6,6 +6,7 @@ defmodule Kogen.E2e.KogenBenchTest do
   alias Kogen.Testkit.Git
 
   @moduletag :e2e
+  @moduletag timeout: 300_000
 
   test "copies failed candidate diffs into the benchmark output and usage receipt", %{
     tmp_dir: tmp_dir

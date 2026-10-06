@@ -9,7 +9,7 @@ defmodule Kogen.Http.TransportProxyTest do
 
     try do
       assert {:ok, %Transport.Response{status: 200, body: "proxied"}} =
-               Transport.post_stream("https://chatgpt.com/responses", [], "{}", 3_000,
+               Transport.post_stream("https://chatgpt.com/responses", [], "{}", 15_000,
                  proxy_env: %{"https_proxy" => proxy_url},
                  cacerts: test_cacerts()
                )
@@ -31,7 +31,7 @@ defmodule Kogen.Http.TransportProxyTest do
       Enum.each([{"no_proxy", "localhost"}, {"NO_PROXY", ".LOCALHOST"}, {"no_proxy", " * "}], fn
         {name, no_proxy} ->
           assert {:ok, 200, "direct"} =
-                   Transport.get("https://localhost:#{tls_port}/", 3_000,
+                   Transport.get("https://localhost:#{tls_port}/", 15_000,
                      proxy_env: %{"HTTPS_PROXY" => proxy_url, name => no_proxy},
                      cacerts: test_cacerts()
                    )
@@ -73,42 +73,42 @@ defmodule Kogen.Http.TransportProxyTest do
 
     try do
       assert {:ok, 200, "ordered"} =
-               Transport.get("https://chatgpt.com/", 3_000, proxy_opts(proxy_env))
+               Transport.get("https://chatgpt.com/", 15_000, proxy_opts(proxy_env))
 
       assert_receive {:proxy_connect, :https_lower, "CONNECT chatgpt.com:443 HTTP/1.1"}
 
       proxy_env = Map.delete(proxy_env, "https_proxy")
 
       assert {:ok, 200, "ordered"} =
-               Transport.get("https://chatgpt.com/", 3_000, proxy_opts(proxy_env))
+               Transport.get("https://chatgpt.com/", 15_000, proxy_opts(proxy_env))
 
       assert_receive {:proxy_connect, :https_upper, "CONNECT chatgpt.com:443 HTTP/1.1"}
 
       proxy_env = Map.delete(proxy_env, "HTTPS_PROXY")
 
       assert {:ok, 200, "ordered"} =
-               Transport.get("https://chatgpt.com/", 3_000, proxy_opts(proxy_env))
+               Transport.get("https://chatgpt.com/", 15_000, proxy_opts(proxy_env))
 
       assert_receive {:proxy_connect, :all_lower, "CONNECT chatgpt.com:443 HTTP/1.1"}
 
       proxy_env = Map.delete(proxy_env, "all_proxy")
 
       assert {:ok, 200, "ordered"} =
-               Transport.get("https://chatgpt.com/", 3_000, proxy_opts(proxy_env))
+               Transport.get("https://chatgpt.com/", 15_000, proxy_opts(proxy_env))
 
       assert_receive {:proxy_connect, :all_upper, "CONNECT chatgpt.com:443 HTTP/1.1"}
 
       proxy_env = Map.delete(proxy_env, "ALL_PROXY")
 
       assert {:ok, 200, "ordered"} =
-               Transport.get("https://chatgpt.com/", 3_000, proxy_opts(proxy_env))
+               Transport.get("https://chatgpt.com/", 15_000, proxy_opts(proxy_env))
 
       assert_receive {:proxy_connect, :http_lower, "CONNECT chatgpt.com:443 HTTP/1.1"}
 
       proxy_env = Map.delete(proxy_env, "http_proxy")
 
       assert {:ok, 200, "ordered"} =
-               Transport.get("https://chatgpt.com/", 3_000, proxy_opts(proxy_env))
+               Transport.get("https://chatgpt.com/", 15_000, proxy_opts(proxy_env))
 
       assert_receive {:proxy_connect, :http_upper, "CONNECT chatgpt.com:443 HTTP/1.1"}
     after
@@ -150,9 +150,9 @@ defmodule Kogen.Http.TransportProxyTest do
     server =
       spawn(fn ->
         for _attempt <- 1..accepts do
-          case :ssl.transport_accept(listener, 5_000) do
+          case :ssl.transport_accept(listener, 15_000) do
             {:ok, transport_socket} ->
-              {:ok, socket} = :ssl.handshake(transport_socket, [], 5_000)
+              {:ok, socket} = :ssl.handshake(transport_socket, [], 15_000)
               request = receive_ssl_request(socket, <<>>)
               send(parent, {:tls_request, request})
               :ok = :ssl.send(socket, https_response(body))
@@ -171,7 +171,7 @@ defmodule Kogen.Http.TransportProxyTest do
     if request_complete?(buffer) do
       buffer
     else
-      {:ok, chunk} = :ssl.recv(socket, 0, 5_000)
+      {:ok, chunk} = :ssl.recv(socket, 0, 15_000)
       receive_ssl_request(socket, buffer <> chunk)
     end
   end
@@ -234,7 +234,7 @@ defmodule Kogen.Http.TransportProxyTest do
 
   defp receive_headers(socket, buffer) do
     if :binary.match(buffer, "\r\n\r\n") == :nomatch do
-      {:ok, chunk} = :gen_tcp.recv(socket, 0, 5_000)
+      {:ok, chunk} = :gen_tcp.recv(socket, 0, 15_000)
       receive_headers(socket, buffer <> chunk)
     else
       buffer

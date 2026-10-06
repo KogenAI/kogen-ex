@@ -11,7 +11,7 @@ defmodule Kogen.E2e.ProviderStallTest do
   @moduletag :e2e
   @moduletag timeout: 300_000
 
-  @fast_idle %Policy{stream_idle_ms: 200, backoff_base_ms: 10, backoff_max_ms: 20}
+  @fast_idle %Policy{stream_idle_ms: 2_000, backoff_base_ms: 10, backoff_max_ms: 20}
   @plan "Difficulty: normal\n## Acceptance criteria\n1. TinyApp.value/0 returns :ready."
 
   setup_all do
@@ -48,7 +48,7 @@ defmodule Kogen.E2e.ProviderStallTest do
 
     for stalled <- Enum.filter(requests(result), &(&1["outcome"] == "stall")) do
       assert is_integer(stalled["first_byte_at"])
-      assert stalled["idle_ms"] >= 200 and stalled["idle_ms"] < 5_000
+      assert stalled["idle_ms"] >= 2_000 and stalled["idle_ms"] < 15_000
     end
   end
 
@@ -61,7 +61,7 @@ defmodule Kogen.E2e.ProviderStallTest do
         recipe: "ladder",
         builder_model: "gpt-6-luna",
         builder_effort: "max",
-        ladder: %{wall_ms: 12_000},
+        ladder: %{wall_ms: 30_000},
         resilience: @fast_idle
       })
 

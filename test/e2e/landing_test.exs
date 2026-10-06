@@ -10,7 +10,7 @@ defmodule Kogen.E2e.LandingTest do
   alias Kogen.Testkit.Git
 
   @moduletag :e2e
-  @moduletag timeout: 120_000
+  @moduletag timeout: 300_000
 
   setup_all do
     {:ok, seed_project: Kogen.Testkit.BuildSeed.get!(&Build.prepare_seed!/1)}

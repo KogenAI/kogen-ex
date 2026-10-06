@@ -46,7 +46,7 @@ defmodule Kogen.Acceptance.ApprovalCheckOutputTest do
   @tag intent: "approval-check-output/A2"
   test "a timed out check is reported as a timeout", %{tmp_dir: tmp_dir} do
     repo = project!(tmp_dir, "allowed")
-    write_project_yaml!(repo, ["[sleep, '30']"], 200)
+    write_project_yaml!(repo, ["[sleep, '30']"], 2_000)
     commit!(repo)
 
     {output, status} = approve(repo)

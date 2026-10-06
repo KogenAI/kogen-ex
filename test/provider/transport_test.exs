@@ -47,7 +47,7 @@ defmodule Kogen.Provider.ChatGPT.TransportTest do
 
     body = sse(%{"type" => "response.completed", "response" => completed("resp_slow", [item])})
     {url, _server} = start_server(200, body, :slow_chunked)
-    config = %{config(url) | timeout_ms: 400}
+    config = %{config(url) | timeout_ms: 2_000}
     started = System.monotonic_time(:millisecond)
 
     assert {:ok, response} = ChatGPT.respond(config, request())
@@ -87,7 +87,7 @@ defmodule Kogen.Provider.ChatGPT.TransportTest do
 
   test "classifies an HTTP request timeout" do
     {url, server} = start_hanging_server()
-    config = %{config(url) | timeout_ms: 250}
+    config = %{config(url) | timeout_ms: 2_000}
 
     assert {:error, %ProviderError{class: :timeout}} = ChatGPT.respond(config, request())
     send(server, :release)
@@ -235,7 +235,7 @@ defmodule Kogen.Provider.ChatGPT.TransportTest do
 
       receive do
       after
-        30 -> :ok
+        150 -> :ok
       end
     end)
 

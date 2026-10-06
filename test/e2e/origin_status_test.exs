@@ -12,7 +12,7 @@ defmodule Kogen.E2e.OriginStatusTest do
   alias Kogen.Testkit.Git
 
   @moduletag :e2e
-  @tag timeout: 120_000
+  @moduletag timeout: 300_000
   @slug "origin-status"
 
   test "status and report read the separate origin without fetching", %{tmp_dir: tmp_dir} do

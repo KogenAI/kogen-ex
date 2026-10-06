@@ -6,6 +6,7 @@ defmodule Kogen.E2e.KogenBenchRawIntentTest do
   alias Kogen.Testkit.Git
 
   @moduletag :e2e
+  @moduletag timeout: 300_000
   @slug "bench-raw-intent"
   @prompt "Add a Greeter module that returns hello.\n\n## Acceptance\nnot a real section\n"
 

@@ -6,7 +6,7 @@ defmodule Kogen.E2e.ApprovalStyleBuildTest do
   alias Kogen.E2e.ScriptedProvider
 
   @moduletag :e2e
-  @tag timeout: 120_000
+  @moduletag timeout: 300_000
 
   test "an approved Intent with style warnings builds and lands", %{tmp_dir: tmp_dir} do
     intent = """

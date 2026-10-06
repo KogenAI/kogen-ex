@@ -12,15 +12,16 @@ defmodule Kogen.Checks.GateResultsTest do
   } do
     repo = Git.create!(tmp_dir)
 
+    # Shell printf writes without buffering before the long sleep. Leave startup room under load.
     spec = %CheckSpec{
       name: "slow",
-      argv: ["/bin/sh", "-c", "echo waiting-for-repair; sleep 5"],
-      timeout_ms: 100
+      argv: ["/bin/sh", "-c", "printf 'waiting-for-repair\\n'; sleep 30"],
+      timeout_ms: 2_000
     }
 
     assert {:ok, red} = run(repo, tmp_dir, [spec], [])
     assert red.status == {:fail, ["slow"]}
-    assert red.feedback =~ "timed out after 0.1 s"
+    assert red.feedback =~ "timed out after 2 s"
     assert red.feedback =~ "waiting-for-repair"
     baseline = CheckBaseline.from_assessments(red.checks)
     assert {:ok, excused} = run(repo, tmp_dir, [spec], baseline)

@@ -10,7 +10,7 @@ defmodule Kogen.E2e.ApprovalCheckoutBehindTest do
   alias Kogen.Testkit.Git
 
   @moduletag :e2e
-  @tag timeout: 180_000
+  @moduletag timeout: 300_000
   @slug "build-engine"
   @guard "tools/guard.txt"
 

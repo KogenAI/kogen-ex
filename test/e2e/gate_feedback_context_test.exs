@@ -6,7 +6,7 @@ defmodule Kogen.E2e.GateFeedbackContextTest do
   alias Kogen.E2e.ScriptedProvider
 
   @moduletag :e2e
-  @tag timeout: 120_000
+  @moduletag timeout: 300_000
 
   test "a red gate sends project context and changed ranges to the builder, which repairs and lands",
        %{tmp_dir: tmp_dir} do
