@@ -4,24 +4,28 @@ defmodule Kogen.Tooling.Codec do
   alias Kogen.Contracts.ToolCall
   alias Kogen.Tooling.ToolArgs
 
-  @tool_order [:read, :search, :edit, :write, :shell]
+  @tool_order [:read, :search, :edit, :write, :shell, :tool_output]
 
-  @type tool_name :: :read | :search | :edit | :write | :shell
+  @type tool_name :: :read | :search | :edit | :write | :shell | :tool_output
   @type builder_tool_set :: :full | :shell
 
   @spec tool_names(:developer | :context | :shaper) :: [tool_name()]
   def tool_names(:developer), do: tool_names(:developer, :full)
-  def tool_names(:context), do: [:read, :search]
-  def tool_names(:shaper), do: [:read, :search, :write]
+  def tool_names(:context), do: [:read, :search, :tool_output]
+  def tool_names(:shaper), do: [:read, :search, :write, :tool_output]
 
   @spec tool_names(:developer, builder_tool_set()) :: [tool_name()]
   def tool_names(:developer, :full), do: @tool_order
-  def tool_names(:developer, :shell), do: [:shell]
+  def tool_names(:developer, :shell), do: [:shell, :tool_output]
 
   @spec decode_tool_call(ToolCall.t()) :: {:ok, ToolArgs.t()} | {:error, :invalid_arguments}
   def decode_tool_call(%ToolCall{name: name, arguments: arguments}) when is_map(arguments) do
-    with {:ok, tool} <- tool_name(name) do
-      decode_arguments(tool, arguments)
+    with {:ok, tool} <- tool_name(name),
+         {:ok, decoded} <- decode_arguments(tool, arguments),
+         {:ok, tokens} <- optional_range(arguments, "tool_result_tokens", 128, 100_000),
+         {:ok, offset} <- optional_range(arguments, "output_offset", 0, 1_000_000_000),
+         {:ok, limit} <- optional_range(arguments, "output_limit", 1, 400_000) do
+      {:ok, %{decoded | tool_result_tokens: tokens, output_offset: offset, output_limit: limit}}
     end
   end
 
@@ -95,6 +99,15 @@ defmodule Kogen.Tooling.Codec do
     )
   end
 
+  defp tool_spec(:tool_output) do
+    function_tool(
+      "tool_output",
+      "Retrieve a retained tool result by handle without rerunning its command.",
+      %{"handle" => string_schema("Handle from a truncation notice or receipt.")},
+      ["handle"]
+    )
+  end
+
   defp function_tool(name, description, properties, required) do
     %{
       "type" => "function",
@@ -102,7 +115,21 @@ defmodule Kogen.Tooling.Codec do
       "description" => description,
       "parameters" => %{
         "type" => "object",
-        "properties" => properties,
+        "properties" =>
+          Map.merge(properties, %{
+            "tool_result_tokens" =>
+              integer_schema(
+                "Result budget, estimated at 4 UTF-8 bytes/token; 128..100000; defaults to build.tool_result_tokens (2000). This does not cap model generation."
+              ),
+            "output_offset" =>
+              integer_schema(
+                "Zero-based byte offset in the retained result; defaults to 0. For read source lines use offset instead."
+              ),
+            "output_limit" =>
+              integer_schema(
+                "Requested result byte range length, 1..400000; UTF-8 boundaries are preserved. Use narrow reads and retrieve omitted ranges with tool_output."
+              )
+          }),
         "required" => required,
         "additionalProperties" => false
       },
@@ -117,6 +144,7 @@ defmodule Kogen.Tooling.Codec do
   defp tool_name("search"), do: {:ok, "search"}
   defp tool_name("edit"), do: {:ok, "edit"}
   defp tool_name("write"), do: {:ok, "write"}
+  defp tool_name("tool_output"), do: {:ok, "tool_output"}
   defp tool_name("shell"), do: {:ok, "shell"}
   defp tool_name(_unknown), do: {:error, :invalid_arguments}
 
@@ -153,6 +181,20 @@ defmodule Kogen.Tooling.Codec do
   defp decode_arguments("shell", arguments) do
     with {:ok, cmd} <- required_string(arguments, "cmd") do
       {:ok, %ToolArgs{name: "shell", cmd: cmd}}
+    end
+  end
+
+  defp decode_arguments("tool_output", arguments) do
+    with {:ok, handle} <- required_string(arguments, "handle") do
+      {:ok, %ToolArgs{name: "tool_output", handle: handle}}
+    end
+  end
+
+  defp optional_range(arguments, key, minimum, maximum) do
+    case optional_integer(arguments, key) do
+      {:ok, nil} -> {:ok, nil}
+      {:ok, value} when value >= minimum and value <= maximum -> {:ok, value}
+      _invalid -> {:error, :invalid_arguments}
     end
   end
 

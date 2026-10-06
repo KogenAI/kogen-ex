@@ -23,10 +23,16 @@ defmodule Kogen.Project.BuildSettings do
     unknown =
       unknown_keys(
         value,
-        ~w(recipe roles wall_minutes edge_tests model_fallback context_bytes luna_provider_mode),
+        ~w(recipe roles wall_minutes edge_tests model_fallback context_bytes luna_provider_mode tool_result_tokens model_generation_tokens),
         "build"
       )
 
+    parse_values(value, unknown)
+  end
+
+  def parse(_value), do: error("`build` must be a map")
+
+  defp parse_values(value, unknown) do
     {recipe, recipe_errors} = recipe(value)
     {roles, role_errors} = roles(value)
     {wall_minutes, wall_errors} = wall_minutes(value)
@@ -34,17 +40,19 @@ defmodule Kogen.Project.BuildSettings do
     {model_fallback, fallback_errors} = model_fallback(value)
     {context_bytes, context_errors} = context_bytes(value)
     {luna_mode, luna_errors} = luna_provider_mode(value)
+    {budgets, budget_errors} = budgets(value)
 
     errors =
       unknown ++
         recipe_errors ++
         role_errors ++
-        wall_errors ++ edge_errors ++ fallback_errors ++ context_errors ++ luna_errors
+        wall_errors ++
+        edge_errors ++ fallback_errors ++ context_errors ++ luna_errors ++ budget_errors
 
     if errors == [],
       do:
         {:ok,
-         %{
+         Map.merge(budgets, %{
            recipe: recipe,
            roles: roles,
            wall_minutes: wall_minutes,
@@ -52,11 +60,9 @@ defmodule Kogen.Project.BuildSettings do
            model_fallback: model_fallback,
            context_bytes: context_bytes,
            luna_provider_mode: luna_mode
-         }},
+         })},
       else: {:error, errors}
   end
-
-  def parse(_value), do: error("`build` must be a map")
 
   @spec load_machine(Path.t()) :: {:ok, map() | nil} | {:error, [map()]}
   def load_machine(home) do
@@ -76,7 +82,9 @@ defmodule Kogen.Project.BuildSettings do
           edge_tests: boolean(),
           model_fallback: boolean(),
           context_bytes: pos_integer() | nil,
-          luna_provider_mode: :responses | :lite
+          luna_provider_mode: :responses | :lite,
+          tool_result_tokens: pos_integer(),
+          model_generation_tokens: pos_integer() | nil
         }
   def effective(machine, project) do
     machine = machine || %{}
@@ -98,7 +106,11 @@ defmodule Kogen.Project.BuildSettings do
       context_bytes: Map.get(project, :context_bytes) || Map.get(machine, :context_bytes),
       luna_provider_mode:
         Map.get(project, :luna_provider_mode) || Map.get(machine, :luna_provider_mode) ||
-          :responses
+          :responses,
+      tool_result_tokens:
+        Map.get(project, :tool_result_tokens) || Map.get(machine, :tool_result_tokens) || 2_000,
+      model_generation_tokens:
+        Map.get(project, :model_generation_tokens) || Map.get(machine, :model_generation_tokens)
     }
   end
 
@@ -136,6 +148,20 @@ defmodule Kogen.Project.BuildSettings do
 
       :error ->
         {nil, []}
+    end
+  end
+
+  defp budgets(value) do
+    {tool, tool_errors} = budget(value, "tool_result_tokens", 128)
+    {model, model_errors} = budget(value, "model_generation_tokens", 1)
+    {%{tool_result_tokens: tool, model_generation_tokens: model}, tool_errors ++ model_errors}
+  end
+
+  defp budget(value, key, minimum) do
+    case Map.fetch(value, key) do
+      :error -> {nil, []}
+      {:ok, count} when is_integer(count) and count >= minimum and count <= 100_000 -> {count, []}
+      _invalid -> {nil, [issue("build.#{key} must be an integer between #{minimum} and 100000")]}
     end
   end
 

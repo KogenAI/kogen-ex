@@ -7,22 +7,41 @@ defmodule Kogen.Tooling.Tools do
   alias Kogen.Tooling.Context
   alias Kogen.Tooling.Error
   alias Kogen.Tooling.Mutations
+  alias Kogen.Tooling.OutputBudget
   alias Kogen.Tooling.ReadSearch
+  alias Kogen.Tooling.ToolArgs
   alias Kogen.Tooling.ToolResult
 
   @tool_deadline_ms 120_000
 
   @spec run(Context.t(), ToolCall.t(), [Codec.tool_name()]) :: ToolResult.t()
   def run(%Context{} = opts, %ToolCall{} = call, allowed_tools) do
-    if tool_atom(call.name) in allowed_tools do
-      call |> dispatch(opts) |> cap_result()
-    else
-      tool_error(:tool_not_allowed, "This stage does not allow the requested tool.")
+    result =
+      if tool_atom(call.name) in allowed_tools,
+        do: execute(opts, call),
+        else: tool_error(:tool_not_allowed, "This stage does not allow the requested tool.")
+
+    result
+  end
+
+  defp execute(opts, call) do
+    case Codec.decode_tool_call(call) do
+      {:ok, args} ->
+        OutputBudget.apply(opts, args, call.id, dispatch(call, opts))
+
+      {:error, _reason} ->
+        result =
+          tool_error(
+            :invalid_arguments,
+            "Tool arguments or output budgets do not match the schema."
+          )
+
+        OutputBudget.apply(opts, %ToolArgs{name: call.name}, call.id, result)
     end
   end
 
   @spec run_read_only(Context.t(), ToolCall.t()) :: ToolResult.t()
-  def run_read_only(opts, %ToolCall{} = call), do: run(opts, call, [:read, :search])
+  def run_read_only(opts, %ToolCall{} = call), do: run(opts, call, [:read, :search, :tool_output])
 
   defp dispatch(%ToolCall{name: "read"} = call, opts), do: ReadSearch.run(opts, call)
   defp dispatch(%ToolCall{name: "search"} = call, opts), do: ReadSearch.run(opts, call)
@@ -31,9 +50,12 @@ defmodule Kogen.Tooling.Tools do
 
   defp dispatch(%ToolCall{name: "shell"} = call, opts), do: run_shell(opts, call)
 
-  defp dispatch(_call, _opts), do: tool_error(:unknown_tool, "Unknown tool name.")
+  defp dispatch(%ToolCall{name: "tool_output"} = call, opts) do
+    {:ok, args} = Codec.decode_tool_call(call)
+    OutputBudget.retrieve(opts, args.handle)
+  end
 
-  defp cap_result(%ToolResult{} = result), do: %{result | output: clip_tail(result.output)}
+  defp dispatch(_call, _opts), do: tool_error(:unknown_tool, "Unknown tool name.")
 
   defp run_shell(opts, %ToolCall{} = call) do
     case Codec.decode_tool_call(call) do
@@ -50,7 +72,7 @@ defmodule Kogen.Tooling.Tools do
   end
 
   defp shell_result(result) do
-    output = clip_tail(result.output_tail)
+    output = result |> Command.output() |> OutputBudget.text()
 
     status =
       if result.timed_out, do: "timed out after 120 seconds", else: "exit #{result.exit_status}"
@@ -84,7 +106,7 @@ defmodule Kogen.Tooling.Tools do
   end
 
   defp diagnostic_output(result) do
-    output = clip_tail(result.output_tail)
+    output = result |> Command.output() |> OutputBudget.text()
 
     cond do
       result.timed_out -> ["Syntax check timed out after 120 seconds.\n" <> output]
@@ -104,21 +126,9 @@ defmodule Kogen.Tooling.Tools do
   defp tool_atom("search"), do: :search
   defp tool_atom("edit"), do: :edit
   defp tool_atom("write"), do: :write
+  defp tool_atom("tool_output"), do: :tool_output
   defp tool_atom("shell"), do: :shell
   defp tool_atom(_unknown), do: nil
-
-  defp clip_tail(text) when is_binary(text) do
-    if String.valid?(text) do
-      if String.length(text) > 10_000,
-        do: String.slice(text, String.length(text) - 10_000, 10_000),
-        else: text
-    else
-      tail = binary_part(text, max(byte_size(text) - 7_400, 0), min(byte_size(text), 7_400))
-      "[non-UTF-8 output tail, base64 encoded]\n" <> Base.encode64(tail)
-    end
-  end
-
-  defp clip_tail(text), do: inspect(text)
 
   defp tool_result(output, is_error, paths),
     do: %ToolResult{output: output, is_error: is_error, paths: paths}

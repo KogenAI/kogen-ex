@@ -201,10 +201,10 @@ defmodule Kogen.E2e.ScriptedProvider do
       String.contains?(instructions, "advisory code reviewer") ->
         {:ok, :review}
 
-      tool_names == ["shell"] ->
+      tool_names == ["shell", "tool_output"] ->
         {:ok, :develop}
 
-      tool_names == ["read", "search", "edit", "write", "shell"] ->
+      tool_names == ["read", "search", "edit", "write", "shell", "tool_output"] ->
         {:ok, :develop}
 
       true ->

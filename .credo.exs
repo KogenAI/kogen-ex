@@ -204,7 +204,7 @@
                Kogen.Conversation => [],
                Kogen.Resilience => [],
                Kogen.Build => [Kogen.Resilience],
-               Kogen.Tooling => [Kogen.Proc],
+               Kogen.Tooling => [Kogen.Proc, Kogen.Resilience],
                Kogen.Queue => [Kogen.Intent, Kogen.Proc, Kogen.State, Kogen.Workspace],
                Kogen.Runner => [
                  Kogen.Build,

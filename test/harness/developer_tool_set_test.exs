@@ -24,9 +24,10 @@ defmodule Kogen.Harness.DeveloperToolSetTest do
   - A1: test
   """
 
-  test "shell builder exposes only shell and receives concise shell workflow guidance", %{
-    tmp_dir: tmp_dir
-  } do
+  test "shell builder exposes shell and output retrieval and receives concise shell workflow guidance",
+       %{
+         tmp_dir: tmp_dir
+       } do
     provider =
       ScriptedProvider.start([
         tool_call("shell", %{"cmd" => "printf 'shell-built\\n' > README.md"}, "shell-edit"),
@@ -40,7 +41,7 @@ defmodule Kogen.Harness.DeveloperToolSetTest do
     assert File.read!(Path.join(opts.workdir, "README.md")) == "shell-built\n"
 
     [request, _done_request] = ScriptedProvider.requests(provider)
-    assert Enum.map(request.tools, & &1["name"]) == ["shell"]
+    assert Enum.map(request.tools, & &1["name"]) == ["shell", "tool_output"]
     assert request.instructions =~ "sed -n"
     assert request.instructions =~ "python3"
   end

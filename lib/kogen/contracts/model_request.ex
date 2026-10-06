@@ -16,7 +16,8 @@ defmodule Kogen.Contracts.ModelRequest do
                 reasoning_context: nil,
                 tool_choice: :auto,
                 parallel_tool_calls: false,
-                session_id: nil
+                session_id: nil,
+                model_generation_tokens: nil
               ]
 
   @type t :: %__MODULE__{
@@ -34,6 +35,7 @@ defmodule Kogen.Contracts.ModelRequest do
           tool_choice: :auto | :none | :required,
           parallel_tool_calls: boolean(),
           session_id: String.t() | nil,
+          model_generation_tokens: pos_integer() | nil,
           on_progress: (-> :ok) | nil
         }
 end

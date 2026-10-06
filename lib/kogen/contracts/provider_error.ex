@@ -5,7 +5,7 @@ defmodule Kogen.Contracts.ProviderError do
   """
 
   @enforce_keys [:class, :message]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [usage: nil, response_id: nil, incomplete_reason: nil]
 
   @type class ::
           :login
@@ -16,5 +16,12 @@ defmodule Kogen.Contracts.ProviderError do
           | :malformed
           | :transport
           | :unsupported
-  @type t :: %__MODULE__{class: class(), message: String.t()}
+          | :incomplete
+  @type t :: %__MODULE__{
+          class: class(),
+          message: String.t(),
+          usage: map() | nil,
+          response_id: String.t() | nil,
+          incomplete_reason: String.t() | nil
+        }
 end

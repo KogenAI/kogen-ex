@@ -21,7 +21,7 @@ defmodule Kogen.Provider.ChatGPT.Codec do
         {:codex, :responses} ->
           request |> request_body() |> encode_json()
 
-        {:codex, :lite} ->
+        {:codex, :lite} when is_nil(request.model_generation_tokens) ->
           RequestCodec.encode_lite(request)
 
         {:siwc, :responses} ->
@@ -29,7 +29,10 @@ defmodule Kogen.Provider.ChatGPT.Codec do
 
         _unsupported ->
           {:error,
-           %ProviderError{class: :unsupported, message: "Lite requires the Codex backend."}}
+           %ProviderError{
+             class: :unsupported,
+             message: "Unsupported adapter or model-generation cap for this backend."
+           }}
       end
     else
       Errors.malformed()
@@ -163,7 +166,7 @@ defmodule Kogen.Provider.ChatGPT.Codec do
         put_failure(stream, classify_event_error(event))
 
       {:ok, %{"type" => "response.incomplete"} = event} ->
-        put_failure(stream, classify_event_error(event))
+        put_failure(stream, RequestCodec.incomplete_error(Map.get(event, "response", %{})))
 
       {:ok, %{"error" => error} = event} when not is_nil(error) ->
         put_failure(stream, classify_event_error(event))
@@ -225,6 +228,9 @@ defmodule Kogen.Provider.ChatGPT.Codec do
   defp completed_response(%{"status" => "completed", "id" => id} = completed)
        when is_binary(id) and id != "", do: {:ok, completed, id}
 
+  defp completed_response(%{"status" => "incomplete"} = response),
+    do: {:error, RequestCodec.incomplete_error(response)}
+
   defp completed_response(_completed), do: Errors.malformed()
 
   defp output_items(%{"output" => []}, streamed) when streamed != [],
@@ -265,9 +271,11 @@ defmodule Kogen.Provider.ChatGPT.Codec do
 
   defp tool_call(%{"type" => "function_call", "call_id" => id, "name" => name} = item)
        when is_binary(id) and id != "" and is_binary(name) and name != "" do
-    case arguments(item["arguments"]) do
-      {:ok, arguments} -> {:ok, %ToolCall{id: id, name: name, arguments: arguments}}
-      _ -> :error
+    with true <- Map.get(item, "status") in [nil, "completed"],
+         {:ok, arguments} <- arguments(item["arguments"]) do
+      {:ok, %ToolCall{id: id, name: name, arguments: arguments}}
+    else
+      _invalid -> :error
     end
   end
 

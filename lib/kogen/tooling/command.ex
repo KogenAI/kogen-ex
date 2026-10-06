@@ -38,6 +38,14 @@ defmodule Kogen.Tooling.Command do
     end
   end
 
+  @spec output(ProcResult.t()) :: binary()
+  def output(%ProcResult{log_path: path, output_tail: tail}) do
+    case if(is_binary(path), do: File.read(path), else: {:error, :missing_log}) do
+      {:ok, full} -> full
+      {:error, _reason} -> "[process log unavailable; captured tail may be incomplete]\n" <> tail
+    end
+  end
+
   defp safe_label(label), do: Regex.replace(~r/[^A-Za-z0-9_-]/, label, "-")
   defp unique_id, do: System.unique_integer([:positive, :monotonic])
   defp error(reason, detail), do: {:error, %Error{reason: reason, detail: detail}}

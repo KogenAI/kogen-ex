@@ -31,7 +31,8 @@ defmodule Kogen.Provider.ChatGPT do
               backend: nil,
               access_token: nil,
               account_id: nil,
-              proxy_env: %{}
+              proxy_env: %{},
+              model_generation_cap_supported: false
 
     @type t :: %__MODULE__{
             source: :kogen_owned | :custom,
@@ -45,7 +46,8 @@ defmodule Kogen.Provider.ChatGPT do
             backend: :file | :keychain | nil,
             access_token: String.t() | nil,
             account_id: String.t() | nil,
-            proxy_env: %{String.t() => String.t()}
+            proxy_env: %{String.t() => String.t()},
+            model_generation_cap_supported: boolean()
           }
   end
 
@@ -93,7 +95,7 @@ defmodule Kogen.Provider.ChatGPT do
           {:ok, ModelResponse.t()} | {:error, ProviderError.t()}
   def respond(%Config{} = config, %ModelRequest{} = request) do
     if valid_config?(config) do
-      case Codec.encode_request(request, encoding_mode(config)) do
+      case preflight(config, request) do
         {:ok, _body} -> respond_with_refresh(config, request)
         {:error, error} -> {:error, error}
       end
@@ -109,7 +111,7 @@ defmodule Kogen.Provider.ChatGPT do
   @spec respond_with_transcript(Config.t(), ModelRequest.t()) ::
           {:ok, ModelResponse.t(), binary()} | {:error, ProviderError.t()}
   def respond_with_transcript(%Config{} = config, %ModelRequest{} = request) do
-    with {:ok, _body} <- Codec.encode_request(request, encoding_mode(config)),
+    with {:ok, _body} <- preflight(config, request),
          {:ok, token, account_id} <- credential_for_request(config) do
       execute(config, request, token, account_id)
     end
@@ -210,6 +212,20 @@ defmodule Kogen.Provider.ChatGPT do
       {:error, %ProviderError{} = error} ->
         {:error, error}
     end
+  end
+
+  defp preflight(config, request) do
+    supported =
+      request.adapter == :responses and
+        (config.endpoint == @responses_endpoint or config.model_generation_cap_supported)
+
+    if is_nil(request.model_generation_tokens) or supported,
+      do: Codec.encode_request(request, encoding_mode(config)),
+      else:
+        provider_error(
+          :unsupported,
+          "Model-generation cap is unsupported on this endpoint/adapter."
+        )
   end
 
   defp encoding_mode(%Config{source: :kogen_owned}), do: :siwc

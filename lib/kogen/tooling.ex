@@ -1,7 +1,7 @@
 defmodule Kogen.Tooling do
   @moduledoc "Executes the bounded file and shell tools exposed to Builder stages."
   use Boundary,
-    deps: [Kogen.Contracts, Kogen.Proc],
+    deps: [Kogen.Contracts, Kogen.Proc, Kogen.Resilience],
     exports: [
       Codec,
       Command,

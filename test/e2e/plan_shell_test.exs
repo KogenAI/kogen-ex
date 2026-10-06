@@ -77,7 +77,7 @@ defmodule Kogen.E2e.PlanShellTest do
            ) == 1
 
     assert {builder_edit.model, builder_edit.effort} == {"gpt-6-luna", "max"}
-    assert Enum.map(builder_edit.tools, & &1["name"]) == ["shell"]
+    assert Enum.map(builder_edit.tools, & &1["name"]) == ["shell", "tool_output"]
 
     builder_text = user_text(builder_edit)
     assert builder_text =~ "Approved Intent:\n#{intent}"

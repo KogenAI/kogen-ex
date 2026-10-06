@@ -59,6 +59,8 @@ defmodule Kogen.ResponseProtocol.Codec do
       request.tool_choice in [:auto, :none, :required] and
       is_boolean(request.parallel_tool_calls) and
       (is_nil(request.session_id) or is_binary(request.session_id)) and
+      (is_nil(request.model_generation_tokens) or
+         (is_integer(request.model_generation_tokens) and request.model_generation_tokens > 0)) and
       valid_lite?(request)
   end
 
@@ -89,6 +91,11 @@ defmodule Kogen.ResponseProtocol.Codec do
       |> Map.put("reasoning", reasoning)
       |> Map.put("tool_choice", to_string(request.tool_choice))
       |> Map.put("parallel_tool_calls", request.parallel_tool_calls)
+
+    body =
+      if is_nil(request.model_generation_tokens),
+        do: body,
+        else: Map.put(body, "max_output_tokens", request.model_generation_tokens)
 
     if is_nil(request.text_verbosity),
       do: body,
@@ -132,6 +139,59 @@ defmodule Kogen.ResponseProtocol.Codec do
     ErlangError ->
       {:error, %ProviderError{class: :malformed, message: "Invalid model request controls."}}
   end
+
+  @spec incomplete_error(term()) :: ProviderError.t()
+  def incomplete_error(response) do
+    response = if is_map(response), do: response, else: %{}
+
+    reason =
+      case detail(response, "incomplete_details", "reason") do
+        reason when reason in ["max_output_tokens", "content_filter"] -> reason
+        _unknown -> "unknown"
+      end
+
+    id =
+      case Map.get(response, "id") do
+        value when is_binary(value) -> value
+        _unknown -> nil
+      end
+
+    %ProviderError{
+      class: :incomplete,
+      message: "Model response incomplete (#{reason}); no tool calls were executed.",
+      response_id: id,
+      incomplete_reason: reason,
+      usage: partial_usage(response["usage"])
+    }
+  end
+
+  defp partial_usage(usage) when is_map(usage) do
+    total_input = count(usage["input_tokens"])
+    cached = count(detail(usage, "input_tokens_details", "cached_tokens"))
+
+    input =
+      if is_integer(total_input) and is_integer(cached) and cached <= total_input,
+        do: total_input - cached
+
+    %{
+      input: input,
+      cached_input: cached,
+      output: count(usage["output_tokens"]),
+      reasoning: count(detail(usage, "output_tokens_details", "reasoning_tokens"))
+    }
+  end
+
+  defp partial_usage(_unknown), do: nil
+
+  defp detail(value, key, field) do
+    case Map.get(value, key) do
+      details when is_map(details) -> Map.get(details, field)
+      _unknown -> nil
+    end
+  end
+
+  defp count(value) when is_integer(value) and value >= 0, do: value
+  defp count(_unknown), do: nil
 
   defp item_id(prefix, session, payload) do
     namespace = uuid5(<<0x6BA7B8129DAD11D180B400C04FD430C8::128>>, session)

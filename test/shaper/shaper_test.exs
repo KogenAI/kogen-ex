@@ -105,7 +105,8 @@ defmodule Kogen.Shaper.Tests do
       assert format_repair =~ "TokenMissingError"
 
       assert Enum.all?(requests, fn request ->
-               Enum.map(request.tools, &Map.get(&1, "name")) == ["read", "search", "write"]
+               Enum.map(request.tools, &Map.get(&1, "name")) ==
+                 ["read", "search", "write", "tool_output"]
              end)
     after
       GenServer.stop(server, :normal)

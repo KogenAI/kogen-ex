@@ -234,7 +234,7 @@ defmodule Kogen.Harness.Tests do
 
     assert context_request.model == "gpt-6-luna"
     assert context_request.effort == "low"
-    assert Enum.map(context_request.tools, & &1["name"]) == ["read", "search"]
+    assert Enum.map(context_request.tools, & &1["name"]) == ["read", "search", "tool_output"]
     assert summary_request.model == "gpt-6-luna"
     assert plan_request.model == "gpt-6.1-sol"
     assert plan_request.effort == "high"
@@ -245,7 +245,8 @@ defmodule Kogen.Harness.Tests do
              "search",
              "edit",
              "write",
-             "shell"
+             "shell",
+             "tool_output"
            ]
 
     assert done_request.model == "gpt-6-luna"

@@ -87,5 +87,6 @@ defmodule Kogen.E2e.ProviderStallTest do
     |> File.read!()
     |> String.split("\n", trim: true)
     |> Enum.map(&:json.decode/1)
+    |> Enum.filter(&(&1["record_kind"] == "model_request"))
   end
 end

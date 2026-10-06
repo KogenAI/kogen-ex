@@ -53,6 +53,37 @@ defmodule Kogen.Provider.RequestModesTest do
     end
   end
 
+  test "generation caps serialize independently on public shapes and fail explicitly for Lite" do
+    request = %{request(:responses) | model_generation_tokens: 12_000}
+
+    for mode <- [:codex, :siwc] do
+      assert {:ok, encoded} = Codec.encode_request(request, mode)
+      body = :json.decode(encoded)
+      assert body["max_output_tokens"] == 12_000
+      assert body["reasoning"]["effort"] == "max"
+      refute Map.has_key?(body, "tool_result_tokens")
+    end
+
+    assert {:error, %ProviderError{class: :unsupported}} =
+             Codec.encode_request(%{request(:lite) | model_generation_tokens: 12_000})
+  end
+
+  test "an unsupported endpoint rejects a generation cap before credential access", %{
+    tmp_dir: tmp
+  } do
+    config = %Kogen.Provider.ChatGPT.Config{
+      endpoint: "https://chatgpt.com/backend-api/codex/responses",
+      timeout_ms: 30_000,
+      credential_path: Path.join(tmp, "missing-test-credential")
+    }
+
+    assert {:error, %ProviderError{class: :unsupported}} =
+             Kogen.Provider.ChatGPT.respond(config, %{
+               request(:responses)
+               | model_generation_tokens: 12_000
+             })
+  end
+
   defp body(request) do
     {:ok, encoded} = Codec.encode_request(request)
     :json.decode(encoded)

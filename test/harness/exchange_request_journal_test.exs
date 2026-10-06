@@ -44,6 +44,8 @@ defmodule Kogen.Harness.ExchangeRequestJournalTest do
              "reasoning_context" => :null,
              "tool_choice" => "auto",
              "parallel_tool_calls" => false,
+             "model_generation_tokens" => :null,
+             "tool_result_tokens" => 2_000,
              "session_id" => record["request_settings"]["session_id"]
            }
 

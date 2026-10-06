@@ -253,6 +253,10 @@ defmodule Kogen.Harness.Exchange do
       )
       | prompt_cache_key: PromptCacheKey.for_run_stage(opts.run_dir, request.stage),
         session_id: PromptCacheKey.for_run_stage(opts.run_dir, :session),
+        model_generation_tokens:
+          if(request.stage == :develop,
+            do: Map.get(opts.project.build || %{}, :model_generation_tokens)
+          ),
         text_verbosity: if(request.model == "gpt-6-luna", do: :low),
         reasoning_summary: if(request.model == "gpt-6-luna", do: :none, else: :auto),
         adapter: luna_mode(opts, request.model),
@@ -266,24 +270,11 @@ defmodule Kogen.Harness.Exchange do
   defp luna_mode(_opts, _model), do: :responses
 
   defp request_settings(opts, request) do
-    adapter =
-      if request.adapter == :responses and
-           is_map(opts.provider_config) and Map.get(opts.provider_config, :source) == :kogen_owned,
-         do: :siwc,
-         else: request.adapter
-
-    Map.new(
-      %{
-        adapter: adapter,
-        adapter_version: "codex-0.160.0/kogen-1",
-        text_verbosity: request.text_verbosity,
-        reasoning_summary: request.reasoning_summary,
-        reasoning_context: request.reasoning_context,
-        tool_choice: request.tool_choice,
-        parallel_tool_calls: request.parallel_tool_calls,
-        session_id: request.session_id
-      },
-      fn {key, value} -> {key, if(is_nil(value), do: :null, else: value)} end
+    request
+    |> RequestLog.settings(opts.provider_config)
+    |> Map.put(
+      :tool_result_tokens,
+      Map.get(opts.project.build || %{}, :tool_result_tokens) || 2_000
     )
   end
 

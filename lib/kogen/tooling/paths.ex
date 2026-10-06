@@ -38,6 +38,21 @@ defmodule Kogen.Tooling.Paths do
     end
   end
 
+  @spec log_file(Context.t(), String.t()) :: {:ok, Path.t()} | {:error, Error.t()}
+  def log_file(opts, name) do
+    with true <- Path.basename(name) == name,
+         {:ok, run} <- run_dir(opts),
+         {:ok, logs} <- canonical(Path.join(run, "logs"), 0),
+         :ok <- inside_root(run, logs),
+         {:ok, path} <- canonical(Path.join(logs, name), 0),
+         :ok <- inside_root(logs, path) do
+      {:ok, path}
+    else
+      false -> error(:invalid_log_handle, "Log handle must name a retained result.")
+      {:error, error} -> {:error, error}
+    end
+  end
+
   defp canonical(_path, depth) when depth > @max_links,
     do: error(:symlink_loop, "Path contains too many symbolic links.")
 

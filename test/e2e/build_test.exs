@@ -86,7 +86,7 @@ defmodule Kogen.E2e.BuildTest do
     assert develop.stage == "develop"
 
     [request, _done_request] = result.provider_requests
-    assert Enum.map(request.tools, & &1["name"]) == ["shell"]
+    assert Enum.map(request.tools, & &1["name"]) == ["shell", "tool_output"]
     assert request.instructions =~ "sed -n"
     landed_source = Git.git!(result.fixture.origin, ["show", "#{landed_sha}:lib/tiny_app.ex"])
     assert landed_source =~ "def value, do: :ready"

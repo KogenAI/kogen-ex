@@ -104,7 +104,8 @@ defmodule Kogen.State.Json do
   @spec decode_request(binary()) :: {:ok, Event.t()} | :skip
   def decode_request(binary) when is_binary(binary) do
     case decode_object(binary) do
-      {:ok, %{"outcome" => "ok", "tokens" => %{}} = json} ->
+      {:ok, %{"outcome" => outcome, "tokens" => %{}} = json}
+      when outcome in ["ok", "incomplete"] ->
         case event_from_json(Map.put(json, "event", "model_stage")) do
           {:ok, event} -> {:ok, event}
           {:error, :invalid_event} -> :skip

@@ -226,7 +226,7 @@ defmodule Kogen.E2e.DirectEscalationTest do
 
     assert Enum.all?(
              result.provider_requests,
-             &(Enum.map(&1.tools, fn tool -> tool["name"] end) == ["shell"])
+             &(Enum.map(&1.tools, fn tool -> tool["name"] end) == ["shell", "tool_output"])
            )
 
     assert [escalation] = Enum.filter(result.events, &(&1.event == "escalation_started"))

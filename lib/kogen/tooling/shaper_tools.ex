@@ -5,7 +5,9 @@ defmodule Kogen.Tooling.ShaperTools do
   alias Kogen.Tooling.Codec
   alias Kogen.Tooling.Context
   alias Kogen.Tooling.Error
+  alias Kogen.Tooling.OutputBudget
   alias Kogen.Tooling.Paths
+  alias Kogen.Tooling.ToolArgs
   alias Kogen.Tooling.ToolResult
   alias Kogen.Tooling.Tools
 
@@ -14,20 +16,35 @@ defmodule Kogen.Tooling.ShaperTools do
   @spec run(Context.t(), ToolCall.t(), [String.t()]) :: ToolResult.t()
   def run(%Context{} = opts, %ToolCall{name: name} = call, allowed_paths) do
     case name do
-      "read" -> Tools.run_read_only(opts, call)
-      "search" -> Tools.run_read_only(opts, call)
-      "write" -> write(opts, call, allowed_paths)
-      _other -> tool_error(:tool_not_allowed, "The shaper only allows read, search, and write.")
+      "read" ->
+        Tools.run_read_only(opts, call)
+
+      "search" ->
+        Tools.run_read_only(opts, call)
+
+      "tool_output" ->
+        Tools.run_read_only(opts, call)
+
+      "write" ->
+        write(opts, call, allowed_paths)
+
+      _other ->
+        tool_error(
+          :tool_not_allowed,
+          "The shaper only allows read, search, write, and tool_output."
+        )
     end
   end
 
   defp write(opts, %ToolCall{} = call, allowed_paths) do
     case Codec.decode_tool_call(call) do
-      {:ok, %{path: requested, content: content, name: "write"}} ->
-        requested_write(opts, requested, content, allowed_paths)
+      {:ok, %{name: "write"} = args} ->
+        result = requested_write(opts, args.path, args.content, allowed_paths)
+        OutputBudget.apply(opts, args, call.id, result)
 
       {:error, :invalid_arguments} ->
-        result("ERROR: Tool arguments do not match the write schema.", true, [])
+        error = result("ERROR: Tool arguments do not match the write schema.", true, [])
+        OutputBudget.apply(opts, %ToolArgs{name: "write"}, call.id, error)
     end
   end
 

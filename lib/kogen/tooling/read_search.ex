@@ -11,7 +11,6 @@ defmodule Kogen.Tooling.ReadSearch do
   alias Kogen.Tooling.ToolResult
 
   @max_lines 400
-  @max_results 200
 
   @spec run(Context.t(), ToolCall.t()) :: ToolResult.t()
   def run(opts, %ToolCall{name: name} = call) when name in ["read", "search"] do
@@ -131,29 +130,33 @@ defmodule Kogen.Tooling.ReadSearch do
   defp search_result({:ok, command}) do
     cond do
       command.timed_out ->
-        result("ERROR: Search timed out.\n" <> command.output_tail, true, [])
+        result("ERROR: Search timed out.\n" <> Command.output(command), true, [])
 
       command.exit_status == 1 ->
         result("No matches.", false, [])
 
       command.exit_status != 0 ->
-        result("ERROR: Search exited #{command.exit_status}.\n" <> command.output_tail, true, [])
+        result(
+          "ERROR: Search exited #{command.exit_status}.\n" <> Command.output(command),
+          true,
+          []
+        )
 
       true ->
-        search_output(command.output_tail)
+        search_output(Command.output(command))
     end
   end
 
   defp search_result({:error, %Error{} = error}), do: result("ERROR: " <> error.detail, true, [])
 
   defp search_output(output) do
-    output = if String.valid?(output), do: output, else: "[binary search output omitted]"
-    lines = String.split(output, "\n", trim: true)
-    shown = Enum.take(lines, @max_results)
-    omitted = length(lines) - length(shown)
-    suffix = if omitted > 0, do: "\n[#{omitted} more results omitted]", else: ""
-    paths = shown |> Enum.map(&line_path/1) |> Enum.reject(&is_nil/1) |> Enum.uniq()
-    result(Enum.join(shown, "\n") <> suffix, false, paths)
+    if String.valid?(output) do
+      lines = String.split(output, "\n", trim: true)
+      paths = lines |> Enum.map(&line_path/1) |> Enum.reject(&is_nil/1) |> Enum.uniq()
+      result(Enum.join(lines, "\n"), false, paths)
+    else
+      result(output, false, [])
+    end
   end
 
   defp line_path(line) do

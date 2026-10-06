@@ -32,7 +32,7 @@ defmodule Kogen.Tooling.ToolsTest do
   alias Kogen.Tooling.ToolsTest.ProcSpy
 
   test "schemas and decoded calls share the Builder tool contract" do
-    assert Codec.tool_names(:developer) == [:read, :search, :edit, :write, :shell]
+    assert Codec.tool_names(:developer) == [:read, :search, :edit, :write, :shell, :tool_output]
     assert Enum.map(Codec.tool_specs([:read, :shell]), & &1["name"]) == ["read", "shell"]
 
     assert {:ok, %ToolArgs{name: "read", path: "README.md", offset: 3, limit: nil}} =
