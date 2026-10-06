@@ -14,7 +14,7 @@ defmodule Kogen.E2e.ShapingRecheckTest do
 
   test "a changed product boundary stops before Build and is explained in status", %{tmp_dir: dir} do
     {fixture, request, server} = prepare!(dir, "")
-    on_exit(fn -> if Process.alive?(server), do: GenServer.stop(server) end)
+    on_exit(fn -> Process.exit(server, :kill) end)
     advance!(fixture, "Members only.\n")
 
     assert {:ok, result} = Kogen.Kernel.build(request)
@@ -33,7 +33,7 @@ defmodule Kogen.E2e.ShapingRecheckTest do
     tmp_dir: dir
   } do
     {fixture, request, server} = prepare!(dir, "blocks_on: [browse-access]\n")
-    on_exit(fn -> if Process.alive?(server), do: GenServer.stop(server) end)
+    on_exit(fn -> Process.exit(server, :kill) end)
     advance!(fixture, "Guests may browse.\nUnrelated help copy.\n")
 
     assert {:started, session, _effects} = Kogen.Engine.start(request)
@@ -47,7 +47,7 @@ defmodule Kogen.E2e.ShapingRecheckTest do
 
   test "an unlanded dependency requires caller attention before Build", %{tmp_dir: dir} do
     {fixture, request, server} = prepare!(dir, "blocks_on: [browse-access]\n")
-    on_exit(fn -> if Process.alive?(server), do: GenServer.stop(server) end)
+    on_exit(fn -> Process.exit(server, :kill) end)
 
     assert {:ok, result} = Kogen.Kernel.build(request)
     assert result.reason == :shaping_stale

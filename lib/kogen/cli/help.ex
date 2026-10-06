@@ -33,11 +33,12 @@ defmodule Kogen.Cli.Help do
     Usage: kogen status [<slug>] [options]
 
     Shows the queue, then Intents by state. With <slug>, shows that Intent and its latest Build.
-    Builds whose process died are marked crashed first.
+    Builds whose process died are marked crashed first. Agent roles, activity and elapsed
+    time are shown for this project (with <slug>: its latest Build).
 
     Options:
       --watch               Print again on every change; return when the queue is idle
-      --json                JSON Lines, one object per Intent (with <slug>: the Build report)
+      --json                JSON Lines for Intents and agents (with <slug>: the Build report)
     #{@project_options}\
     """
   end

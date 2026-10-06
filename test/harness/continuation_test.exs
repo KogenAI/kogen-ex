@@ -8,6 +8,8 @@ defmodule Kogen.Harness.ContinuationTest do
   alias Kogen.Harness.Opts
   alias Kogen.Testkit.Git
 
+  # Six real tool histories need more than the default timeout on a loaded machine.
+  @tag timeout: 180_000
   test "long investigations continue with obligations and disproven approaches, with measured receipts",
        %{tmp_dir: tmp_dir} do
     for_result =

@@ -273,6 +273,7 @@ defmodule Kogen.Engine.Build.GateSupport do
     recipe = session.request.recipe
 
     %Opts{
+      owner_project: session.request.project_root,
       workdir: session.workdir,
       run_dir: session.run_dir,
       project: session.project,

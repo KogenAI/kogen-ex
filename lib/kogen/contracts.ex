@@ -30,6 +30,7 @@ defmodule Kogen.Contracts do
       ShapeWarningCodec,
       Stack,
       ToolCall,
+      WorkerGuard,
       Yaml
     ]
 end

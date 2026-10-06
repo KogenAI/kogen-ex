@@ -137,6 +137,7 @@
                Kogen.Provider.ChatGPT.Refresh.Codec,
                Kogen.Provider.ChatGPT.SIWC.TokenResponse,
                Kogen.Provider.ChatGPT.SIWCCCodec,
+               Kogen.Agents.Codec,
                Kogen.Harness.Codec,
                Kogen.Conversation,
                Kogen.Tooling.Codec,
@@ -186,7 +187,9 @@
                  Kogen.Project
                ],
                Kogen.Flakes => [Kogen.Checks, Kogen.Workspace],
+               Kogen.Agents => [],
                Kogen.Harness => [
+                 Kogen.Agents,
                  Kogen.Flakes,
                  Kogen.Conversation,
                  Kogen.Quality,
@@ -224,6 +227,7 @@
                  Kogen.Resilience
                ],
                Kogen.Kernel => [
+                 Kogen.Agents,
                  Kogen.CheckLearning,
                  Kogen.Shaping,
                  Kogen.Proc,

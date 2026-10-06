@@ -44,6 +44,9 @@ defmodule Kogen.Harness.Exchange do
 
   @spec respond(Opts.t(), Request.t()) :: {:ok, ModelResponse.t()} | {:error, term()}
   def respond(%Opts{} = opts, %Request{} = exchange_request) do
+    :ok =
+      Kogen.Agents.activity("#{exchange_request.stage} turn #{exchange_request.turn}", :waiting)
+
     request = build_request(opts, exchange_request)
 
     with :ok <-
@@ -70,6 +73,9 @@ defmodule Kogen.Harness.Exchange do
   defp attempt(opts, exchange_request, request, deadline, retry) do
     probe = RequestLog.start()
     result = provider_call(opts, request, attempt_budget(opts, deadline), probe)
+
+    :ok =
+      Kogen.Agents.activity("#{exchange_request.stage} turn #{exchange_request.turn}", :running)
 
     with :ok <- log_request(opts, exchange_request, retry, probe, result) do
       case result do

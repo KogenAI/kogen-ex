@@ -31,6 +31,7 @@ defmodule Kogen.E2e.RequestJournalTest do
     result = Build.run!(parent, script, %Options{seed_project: context.seed_project})
 
     assert %Result{build: %{status: :failed}, run_status: :failed} = result
+    assert_agents(result)
     records = requests(result)
 
     assert Enum.map(records, &{&1["stage"], &1["outcome"], &1["retries"]}) == [
@@ -60,6 +61,19 @@ defmodule Kogen.E2e.RequestJournalTest do
 
     assert {:ok, %{tokens: %{"input" => 600, "output" => 60}}} =
              Kogen.State.attempt_usage(run, "builder")
+  end
+
+  defp assert_agents(result) do
+    records =
+      result.build.run_dir
+      |> Path.join("**/agents/*/agent.json")
+      |> Path.wildcard()
+      |> Enum.map(&(&1 |> File.read!() |> :json.decode()))
+
+    assert Enum.sort(Enum.map(records, & &1["role"])) == ["builder", "context", "planner"]
+    assert Enum.all?(records, &(&1["project"] == result.fixture.project_root))
+    assert Enum.all?(records, &(&1["build"] == result.build.run_id))
+    assert Enum.all?(records, &(&1["status"] == "finished"))
   end
 
   defp usage(step, input, output),

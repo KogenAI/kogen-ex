@@ -1,6 +1,7 @@
 defmodule Kogen.Kernel.CLI.StatusCommand do
   @moduledoc false
 
+  alias Kogen.Agents.Output, as: AgentOutput
   alias Kogen.Cli.Args
   alias Kogen.Contracts.Redact
   alias Kogen.Kernel.CLI.ErrorOutput
@@ -47,7 +48,9 @@ defmodule Kogen.Kernel.CLI.StatusCommand do
   end
 
   defp idle?(%{overview: overview}),
-    do: overview.queue == :stopped and not Enum.any?(overview.statuses, &(&1.status == :building))
+    do:
+      overview.queue == :stopped and not Enum.any?(overview.statuses, &(&1.status == :building)) and
+        not Enum.any?(overview.agents, &(&1.status in ["running", "waiting"]))
 
   defp watch_code(%{intent: %{status: :landed}}), do: 0
   defp watch_code(%{intent: _status}), do: 1
@@ -64,7 +67,10 @@ defmodule Kogen.Kernel.CLI.StatusCommand do
          {:ok, intent} <- find(overview.statuses, slug),
          {:ok, report} <- report(slug, args) do
       position = Enum.find_index(Status.queued(overview.statuses), &(&1.slug == slug))
-      {:ok, %{overview: overview, intent: intent, position: position, report: report}}
+      agents = Enum.filter(overview.agents, &(&1.build == intent.run_id))
+
+      {:ok,
+       %{overview: overview, intent: intent, position: position, report: report, agents: agents}}
     end
   end
 
@@ -87,20 +93,21 @@ defmodule Kogen.Kernel.CLI.StatusCommand do
   defp report(slug, args),
     do: Kogen.Kernel.build_summary(slug, args.project, args.origin, args.base)
 
-  defp render(%{intent: intent, report: report}, %Args{json: true}),
-    do: (report || StatusOutput.intent_json(intent)) <> "\n"
+  defp render(%{intent: intent, report: report, agents: agents}, %Args{json: true}),
+    do: AgentOutput.report(report || StatusOutput.intent_json(intent), agents) <> "\n"
 
   defp render(%{overview: overview}, %Args{positionals: [], json: true}),
-    do: StatusOutput.json(overview.statuses)
+    do: StatusOutput.json(overview.statuses) <> AgentOutput.json(overview.agents)
 
   defp render(%{intent: intent} = view, _args) do
     queued = length(Status.queued(view.overview.statuses))
 
     StatusOutput.intent_text(intent, view.position, queued, now()) <>
-      StatusOutput.build_text(view.report)
+      StatusOutput.build_text(view.report) <> AgentOutput.text(view.agents)
   end
 
-  defp render(%{overview: overview}, _args), do: StatusOutput.text(overview, now())
+  defp render(%{overview: overview}, _args),
+    do: StatusOutput.text(overview, now()) <> AgentOutput.text(overview.agents)
 
   defp now, do: System.os_time(:second)
 end

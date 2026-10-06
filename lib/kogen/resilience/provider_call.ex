@@ -29,6 +29,8 @@ defmodule Kogen.Resilience.ProviderCall do
 
     {worker, monitor} =
       spawn_monitor(fn ->
+        Kogen.Contracts.WorkerGuard.watch(caller, self())
+
         send(
           caller,
           {result_ref, provider_mod.respond(config, %{request | on_progress: on_progress})}

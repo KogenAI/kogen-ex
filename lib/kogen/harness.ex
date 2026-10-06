@@ -2,6 +2,7 @@ defmodule Kogen.Harness do
   @moduledoc "Runs Kogen's provider-backed shaping, Developer, context, plan, and review stages."
   use Boundary,
     deps: [
+      Kogen.Agents,
       Kogen.Flakes,
       Kogen.Quality,
       Kogen.Conversation,
@@ -29,11 +30,12 @@ defmodule Kogen.Harness do
   alias Kogen.Tooling.Error
 
   @spec context_pack(Opts.t(), String.t()) :: {:ok, Pack.t()} | {:error, term()}
-  def context_pack(%Opts{} = opts, intent_text), do: Stages.context_pack(opts, intent_text)
+  def context_pack(%Opts{} = opts, intent_text),
+    do: Kogen.Agents.run(opts, :context, fn -> Stages.context_pack(opts, intent_text) end)
 
   @spec plan(Opts.t(), Pack.t() | nil, String.t()) :: {:ok, Plan.t()} | {:error, term()}
   def plan(%Opts{} = opts, pack, intent_text) when is_nil(pack) or is_struct(pack, Pack),
-    do: Stages.plan(opts, pack, intent_text)
+    do: Kogen.Agents.run(opts, :planner, fn -> Stages.plan(opts, pack, intent_text) end)
 
   @spec develop(Opts.t(), String.t(), Plan.t() | nil, map() | nil) ::
           {:ok, Result.t()} | {:error, term()}
@@ -44,7 +46,9 @@ defmodule Kogen.Harness do
           {:ok, Result.t()} | {:error, term()}
   def develop(%Opts{} = opts, intent_text, plan, resume, repairs_left)
       when is_integer(repairs_left) and repairs_left >= 0 do
-    Developer.run(%{opts | repairs_left: repairs_left}, intent_text, plan, resume)
+    Kogen.Agents.run(opts, :builder, fn ->
+      Developer.run(%{opts | repairs_left: repairs_left}, intent_text, plan, resume)
+    end)
   end
 
   def develop(%Opts{}, _intent_text, _plan, _resume, _repairs_left),
@@ -55,15 +59,22 @@ defmodule Kogen.Harness do
   @spec review(Opts.t(), String.t(), String.t(), map()) ::
           {:ok, Review.t()} | {:error, term()}
   def review(%Opts{} = opts, intent_text, diff, check_summary),
-    do: Stages.review(opts, intent_text, diff, check_summary)
+    do:
+      Kogen.Agents.run(opts, :reviewer, fn ->
+        Stages.review(opts, intent_text, diff, check_summary)
+      end)
 
   @doc "One no-tool request on the requested model role."
   @spec ask(Opts.t(), RolePrompt.t()) ::
           {:ok, %{text: String.t(), usage: map()}} | {:error, term()}
-  def ask(%Opts{} = opts, %RolePrompt{} = request), do: OneShot.ask(opts, request)
+  def ask(%Opts{} = opts, %RolePrompt{} = request),
+    do: Kogen.Agents.run(opts, request.role, fn -> OneShot.ask(opts, request) end)
 
   @spec shape(Opts.t(), String.t(), String.t(), [map()], String.t() | nil, non_neg_integer()) ::
           {:ok, ShapePass.t()} | {:error, term()}
   def shape(%Opts{} = opts, slug, task, history, failure_text, turn_offset),
-    do: Shaping.run(opts, slug, task, history, failure_text, turn_offset)
+    do:
+      Kogen.Agents.run(opts, :shaper, fn ->
+        Shaping.run(opts, slug, task, history, failure_text, turn_offset)
+      end)
 end

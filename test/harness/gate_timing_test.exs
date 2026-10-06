@@ -146,6 +146,11 @@ defmodule Kogen.Harness.GateTimingTest do
       },
       provider_mod: __MODULE__,
       provider_config: nil,
+      env: %{
+        "TEST_GATE_RESULT" =>
+          :timed_gate_result |> Process.get() |> Tuple.to_list() |> Jason.encode!(),
+        "TEST_GATE_OUTPUT" => Process.get(:timed_gate_output, "measured command output")
+      },
       proc_mod: __MODULE__.MeasuredProc
     }
   end
@@ -158,7 +163,8 @@ defmodule Kogen.Harness.GateTimingTest.MeasuredProc do
   alias Kogen.Contracts.ProcResult
 
   def run(argv, opts) do
-    {status, timed_out, duration} = Process.get(:timed_gate_result)
+    env = Keyword.fetch!(opts, :env)
+    [status, timed_out, duration] = env |> Map.fetch!("TEST_GATE_RESULT") |> Jason.decode!()
 
     {:ok,
      %ProcResult{
@@ -166,7 +172,7 @@ defmodule Kogen.Harness.GateTimingTest.MeasuredProc do
        exit_status: status,
        timed_out: timed_out,
        duration_ms: duration,
-       output_tail: Process.get(:timed_gate_output, "measured command output"),
+       output_tail: Map.fetch!(env, "TEST_GATE_OUTPUT"),
        log_path: Keyword.get(opts, :log_path)
      }}
   end

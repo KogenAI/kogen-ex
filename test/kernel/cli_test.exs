@@ -127,6 +127,23 @@ defmodule Kogen.Kernel.CLITest do
     end
   end
 
+  test "agent and provider test commands and their help topics are unavailable" do
+    for argv <- [
+          ["agents"],
+          ["agents", "list"],
+          ["agents", "message", "id", "message"],
+          ["agents", "cancel", "id"],
+          ["provider", "test", "chatgpt"],
+          ["help", "agents"],
+          ["help", "provider", "test"]
+        ] do
+      assert {2, _output} = CLI.execute(argv)
+    end
+
+    refute golden([]) =~ "agents"
+    refute golden(["provider"]) =~ "test chatgpt"
+  end
+
   test "version names the source commit and its date" do
     assert {0, output} = CLI.execute(["version"])
     assert output =~ ~r/\Akogen [0-9a-f]{8} \(\d{4}-\d{2}-\d{2}(, uncommitted changes)?\)\n\z/

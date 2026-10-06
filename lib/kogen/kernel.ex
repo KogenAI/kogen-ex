@@ -2,6 +2,7 @@ defmodule Kogen.Kernel do
   @moduledoc "Coordinates Kogen domains and exposes the command-line entry point."
   use Boundary,
     deps: [
+      Kogen.Agents,
       Kogen.Contracts,
       Kogen.Proc,
       Kogen.Project,

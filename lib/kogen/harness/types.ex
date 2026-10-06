@@ -5,6 +5,7 @@ defmodule Kogen.Harness.Opts do
 
   @enforce_keys [:workdir, :run_dir, :project, :provider_mod, :provider_config, :proc_mod]
   defstruct [
+    :owner_project,
     :workdir,
     :run_dir,
     :project,
@@ -37,6 +38,7 @@ defmodule Kogen.Harness.Opts do
 
   @type model :: {String.t(), String.t()}
   @type t :: %__MODULE__{
+          owner_project: Path.t() | nil,
           workdir: Path.t(),
           run_dir: Path.t(),
           project: Kogen.Contracts.Project.t(),

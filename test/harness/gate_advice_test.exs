@@ -52,6 +52,8 @@ defmodule Kogen.Harness.GateAdviceTest do
     assert {:ok, %{status: :pass}} = Gate.run(opts, deadline())
   end
 
+  # Runs the external quality tools twice against an isolated project.
+  @tag timeout: 180_000
   test "real tools advise on uncommitted clones and strictness changes without changing the candidate",
        %{tmp_dir: tmp} do
     repo = fixture(tmp, [:ex_dna, :reach, :ex_ast, :sourceror, :libgraph, :jason])

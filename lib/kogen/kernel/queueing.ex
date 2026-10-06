@@ -62,7 +62,7 @@ defmodule Kogen.Kernel.Queueing do
          {:ok, statuses} <- statuses(target) do
       case Lock.state(target.state_root) do
         {:error, reason} -> {:error, reason}
-        queue -> {:ok, %{statuses: statuses, queue: queue}}
+        queue -> {:ok, %{statuses: statuses, queue: queue, agents: agents(target)}}
       end
     end
   end
@@ -198,6 +198,20 @@ defmodule Kogen.Kernel.Queueing do
   defp recover(target),
     do:
       Recovery.recover(target.root, target.state_root, target.origin, target.base, target.git_env)
+
+  defp agents(target) do
+    roots = [
+      Path.join([target.state_root, "runs", "*"]),
+      Path.join([target.root, ".kogen", "runs", "*"]),
+      Path.join([Runtime.temporary_directory(System.get_env()), "kogen-shaper", "*", "*"])
+    ]
+
+    project = Workspaces.canonical(target.root)
+
+    roots
+    |> Kogen.Agents.list()
+    |> Enum.filter(&(Workspaces.canonical(&1.project) == project))
+  end
 
   defp statuses(target),
     do: Status.list(target.root, target.state_root, target.origin, target.base, target.git_env)
