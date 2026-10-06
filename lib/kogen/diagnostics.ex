@@ -7,6 +7,7 @@ defmodule Kogen.Diagnostics do
   alias Kogen.Contracts.Finding
   alias Kogen.Diagnostics.Parser, as: Parser
   alias Kogen.Diagnostics.Parser.Common
+  alias Kogen.Diagnostics.Parser.CredoFailures
   alias Kogen.Diagnostics.Renderer
 
   @failed_test_location ~r/(?:\A|\n)\s*\d+\)\s+test\b[^\n]*\n\s*([^\s]+\.exs:\d+)/
@@ -55,7 +56,10 @@ defmodule Kogen.Diagnostics do
       }) do
     output = Common.clean(full_output(output, log_path))
     tool = tool(argv, output)
-    findings = Parser.findings(output, tool, workdir)
+
+    findings =
+      Parser.findings(output, tool, workdir) ++ CredoFailures.findings(output, log_path, workdir)
+
     findings = if findings == [], do: fallback_findings(tool, exit_status, output), else: findings
     findings = findings |> Enum.map(&Finding.record/1) |> deduplicate()
     summaries = Parser.dialyzer_summaries(output)
@@ -155,9 +159,16 @@ defmodule Kogen.Diagnostics do
   defp exit_level(%{timed_out: true}), do: 3
   defp exit_level(%{exit_status: nil}), do: 3
 
-  defp exit_level(%{output: output} = result) do
+  defp exit_level(result) do
     cond do
       CommandExit.tool_missing?(result.exit_status) -> 3
+      Enum.any?(result.findings, &(&1.rule in ["parse_timeout", "parse_failure"])) -> 1
+      true -> command_exit_level(result)
+    end
+  end
+
+  defp command_exit_level(%{output: output} = result) do
+    cond do
       result.exit_status != 0 and genuine_findings?(result.findings) -> 1
       environment_output?(output) -> 3
       usage_output?(output) -> 2

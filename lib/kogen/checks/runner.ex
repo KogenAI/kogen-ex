@@ -187,7 +187,7 @@ defmodule Kogen.Checks.Runner do
              run
            ),
          {:ok, receipt} <-
-           ReceiptBuilder.build(state.tree, spec, result.exit_status || 1, log_path) do
+           ReceiptBuilder.build(state.tree, spec, result.exit_status || 1, log_path, assessment) do
       record_result(state, spec, assessment, receipt)
     else
       {:error, reason} -> {:error, failure(:controller, :check_record_failed, inspect(reason))}

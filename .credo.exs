@@ -3,7 +3,7 @@
     %{
       name: "default",
       strict: true,
-      parse_timeout: 5000,
+      parse_timeout: 30_000,
       files: %{included: ["lib/", "test/"], excluded: [~r"/_build/", ~r"/deps/"]},
       checks: %{
         enabled: [
