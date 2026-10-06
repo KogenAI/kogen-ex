@@ -21,6 +21,22 @@ defmodule Kogen.Provider.ChatGPT.LockTest do
              Lock.with_lock(root, "login", fn -> :done end, timeout_ms: 60)
   end
 
+  for contents <- ["", "1 incomplete token", "incomplete"] do
+    test "waits on a fresh incomplete owner record #{inspect(contents)}", %{tmp_dir: root} do
+      write_owner!(root, unquote(contents))
+
+      assert {:error, :lock_timeout} =
+               Lock.with_lock(root, "login", fn -> :done end, timeout_ms: 60)
+    end
+  end
+
+  test "reclaims an incomplete owner record only after its directory is stale", %{tmp_dir: root} do
+    owner = write_owner!(root, "")
+    File.touch!(Path.dirname(owner), 0)
+
+    assert {:ok, :done} = Lock.with_lock(root, "login", fn -> :done end, timeout_ms: 2_000)
+  end
+
   test "reports an unreadable owner record instead of assuming the lock is live", %{tmp_dir: root} do
     owner = write_owner!(root, "1 #{System.system_time(:millisecond)} token")
     File.chmod!(owner, 0o000)

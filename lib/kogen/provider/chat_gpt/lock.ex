@@ -69,22 +69,23 @@ defmodule Kogen.Provider.ChatGPT.Lock do
 
   defp stale?(path) do
     case File.read(Path.join(path, "owner")) do
-      {:ok, contents} -> {:ok, owner_stale?(contents)}
+      {:ok, contents} -> owner_stale?(contents, path)
       {:error, :enoent} -> old_directory?(path)
       {:error, reason} -> {:error, reason}
     end
   end
 
-  defp owner_stale?(contents) do
+  # A newly opened owner file can still be empty while its writer holds the lock.
+  defp owner_stale?(contents, path) do
     case String.split(String.trim(contents), " ", parts: 3) do
       [_pid, created_at, _token] ->
         case Integer.parse(created_at) do
-          {timestamp, ""} -> System.system_time(:millisecond) - timestamp > @stale_ms
-          _invalid -> true
+          {timestamp, ""} -> {:ok, System.system_time(:millisecond) - timestamp > @stale_ms}
+          _invalid -> old_directory?(path)
         end
 
       _invalid ->
-        true
+        old_directory?(path)
     end
   end
 
