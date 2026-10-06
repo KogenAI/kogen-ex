@@ -8,6 +8,7 @@ defmodule Kogen.Contracts do
       CheckBaseline,
       CheckOutput,
       CommandExit,
+      ExchangeRequest,
       Failure,
       Finding,
       GateTiming,

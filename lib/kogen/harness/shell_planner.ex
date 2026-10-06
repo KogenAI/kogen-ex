@@ -1,13 +1,13 @@
 defmodule Kogen.Harness.ShellPlanner do
   @moduledoc false
 
+  alias Kogen.Contracts.ExchangeRequest, as: Request
   alias Kogen.Contracts.ModelResponse
   alias Kogen.Contracts.ProcResult
   alias Kogen.Conversation.PlanPolicy
   alias Kogen.Conversation.PlanShellPrompts
   alias Kogen.Harness.Codec
   alias Kogen.Harness.Exchange
-  alias Kogen.Harness.Exchange.Request
   alias Kogen.Harness.Opts
   alias Kogen.Harness.Plan
   alias Kogen.Harness.Usage

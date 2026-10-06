@@ -9,7 +9,7 @@ defmodule Kogen.Harness.Codec do
   alias Kogen.Tooling.Codec, as: ToolingCodec
   alias Kogen.Tooling.ToolArgs
 
-  @type tool_name :: ToolingCodec.tool_name() | :finish
+  @type tool_name :: Kogen.Contracts.ExchangeRequest.tool_name()
   @type builder_tool_set :: ToolingCodec.builder_tool_set()
 
   @spec request(String.t(), String.t(), String.t(), [map()], [tool_name()]) :: ModelRequest.t()

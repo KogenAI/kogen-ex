@@ -1,41 +1,13 @@
-defmodule Kogen.Harness.Exchange.Request do
-  @moduledoc false
-
-  @enforce_keys [
-    :stage,
-    :turn,
-    :model,
-    :effort,
-    :instructions,
-    :items,
-    :tool_names,
-    :remaining_ms
-  ]
-  defstruct @enforce_keys ++ [measurements: %{}]
-
-  @type t :: %__MODULE__{
-          stage: atom(),
-          turn: non_neg_integer(),
-          model: String.t(),
-          effort: String.t(),
-          instructions: String.t(),
-          measurements: map(),
-          items: [map()],
-          tool_names: [Kogen.Harness.Codec.tool_name()],
-          remaining_ms: non_neg_integer() | :infinity
-        }
-end
-
 defmodule Kogen.Harness.Exchange do
   @moduledoc false
 
+  alias Kogen.Contracts.ExchangeRequest, as: Request
   alias Kogen.Contracts.ModelRequest
   alias Kogen.Contracts.ModelResponse
   alias Kogen.Contracts.ProviderError
   alias Kogen.Conversation
   alias Kogen.Conversation.PromptCacheKey
   alias Kogen.Harness.Codec
-  alias Kogen.Harness.Exchange.Request
   alias Kogen.Harness.Opts
   alias Kogen.Harness.Recording
   alias Kogen.Resilience.Policy

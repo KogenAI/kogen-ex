@@ -1,8 +1,8 @@
 defmodule Kogen.Harness.MutationAdvice do
   @moduledoc false
+  alias Kogen.Contracts.ExchangeRequest, as: ExchangeRequest
   alias Kogen.Harness.Codec
   alias Kogen.Harness.Exchange
-  alias Kogen.Harness.Exchange.Request, as: ExchangeRequest
 
   @spec deliver(struct(), struct(), struct()) :: struct()
   def deliver(opts, gate, state) do

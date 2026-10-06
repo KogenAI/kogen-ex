@@ -1,10 +1,10 @@
 defmodule Kogen.Harness.ExchangeResilienceTest do
   use Kogen.Testkit.Case, async: true
 
+  alias Kogen.Contracts.ExchangeRequest, as: Request
   alias Kogen.Contracts.Project
   alias Kogen.Contracts.ProviderError
   alias Kogen.Harness.Exchange
-  alias Kogen.Harness.Exchange.Request
   alias Kogen.Harness.Opts
   alias Kogen.Provider.ChatGPT
   alias Kogen.Resilience.Policy

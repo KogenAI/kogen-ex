@@ -1,9 +1,9 @@
 defmodule Kogen.Harness.Continuation do
   @moduledoc false
+  alias Kogen.Contracts.ExchangeRequest, as: Request
   alias Kogen.Conversation
   alias Kogen.Harness.Codec
   alias Kogen.Harness.Exchange
-  alias Kogen.Harness.Exchange.Request
   alias Kogen.Harness.Recording
   alias Kogen.Tooling.Error
 

@@ -18,12 +18,12 @@ end
 defmodule Kogen.Harness.Context do
   @moduledoc false
 
+  alias Kogen.Contracts.ExchangeRequest, as: ExchangeRequest
   alias Kogen.Contracts.ModelResponse
   alias Kogen.Contracts.ToolCall
   alias Kogen.Harness.Codec
   alias Kogen.Harness.ContextState
   alias Kogen.Harness.Exchange
-  alias Kogen.Harness.Exchange.Request, as: ExchangeRequest
   alias Kogen.Harness.Opts
   alias Kogen.Harness.Pack
   alias Kogen.Harness.Recording

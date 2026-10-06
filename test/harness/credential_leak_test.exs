@@ -49,12 +49,12 @@ defmodule Kogen.Harness.CredentialLeakTest do
   import ExUnit.CaptureIO
   import ExUnit.CaptureLog
 
+  alias Kogen.Contracts.ExchangeRequest, as: Request
   alias Kogen.Contracts.Project
   alias Kogen.Contracts.ProviderError
   alias Kogen.Contracts.Redact
   alias Kogen.Harness.CredentialLeakTest.CrashingProvider
   alias Kogen.Harness.Exchange
-  alias Kogen.Harness.Exchange.Request
   alias Kogen.Harness.Opts
   alias Kogen.Provider.ChatGPT
   alias Kogen.Resilience.Policy

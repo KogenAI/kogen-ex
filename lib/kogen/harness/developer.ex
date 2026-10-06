@@ -1,6 +1,7 @@
 defmodule Kogen.Harness.Developer do
   @moduledoc false
 
+  alias Kogen.Contracts.ExchangeRequest, as: ExchangeRequest
   alias Kogen.Contracts.ModelResponse
   alias Kogen.Contracts.ProviderError
   alias Kogen.Contracts.ToolCall
@@ -11,7 +12,6 @@ defmodule Kogen.Harness.Developer do
   alias Kogen.Harness.Continuation
   alias Kogen.Harness.DeveloperState
   alias Kogen.Harness.Exchange
-  alias Kogen.Harness.Exchange.Request, as: ExchangeRequest
   alias Kogen.Harness.Gate
   alias Kogen.Harness.Opts
   alias Kogen.Harness.PhaseTiming
