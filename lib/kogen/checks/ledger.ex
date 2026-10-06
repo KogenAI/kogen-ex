@@ -4,6 +4,7 @@ defmodule Kogen.Checks.Ledger do
   alias Kogen.Checks.Ledger.Report
   alias Kogen.Checks.Ledger.Validation
   alias Kogen.Checks.LedgerRow
+  alias Kogen.Checks.Timing
   alias Kogen.Contracts.CommandExit
   alias Kogen.Contracts.Failure
   alias Kogen.Contracts.Intent
@@ -18,7 +19,7 @@ defmodule Kogen.Checks.Ledger do
   @formatter File.read!(@formatter_source)
 
   @spec acceptance(Path.t(), Intent.t(), Path.t()) ::
-          {:ok, %{status: :pass | {:fail, [String.t()]}, ledger: [LedgerRow.t()]}}
+          {:ok, Kogen.Checks.acceptance_result()}
           | {:error, Failure.t()}
   def acceptance(workdir, intent, run_dir), do: acceptance(workdir, intent, run_dir, %{}, %{})
 
@@ -29,7 +30,7 @@ defmodule Kogen.Checks.Ledger do
           %{String.t() => String.t()},
           %{String.t() => String.t()}
         ) ::
-          {:ok, %{status: :pass | {:fail, [String.t()]}, ledger: [LedgerRow.t()]}}
+          {:ok, Kogen.Checks.acceptance_result()}
           | {:error, Failure.t()}
   def acceptance(workdir, %Intent{} = intent, run_dir, env, git_env) do
     acceptance(workdir, intent, run_dir, env, git_env, nil)
@@ -43,7 +44,7 @@ defmodule Kogen.Checks.Ledger do
           %{String.t() => String.t()},
           Sandbox.t() | nil
         ) ::
-          {:ok, %{status: :pass | {:fail, [String.t()]}, ledger: [LedgerRow.t()]}}
+          {:ok, Kogen.Checks.acceptance_result()}
           | {:error, Failure.t()}
   def acceptance(workdir, %Intent{} = intent, run_dir, env, git_env, sandbox) do
     with {:ok, items} <- test_items(intent),
@@ -55,7 +56,7 @@ defmodule Kogen.Checks.Ledger do
            {:ok, rows, exit_status} <- result do
         failures = Validation.candidate(items, rows, exit_status, intent.slug)
         status = if failures == [], do: :pass, else: {:fail, failures}
-        {:ok, %{status: status, ledger: rows}}
+        {:ok, %{status: status, ledger: rows, timing: Timing.latest(run_dir)}}
       end
     else
       {:error, %Failure{} = failure} -> {:error, failure}
@@ -295,6 +296,7 @@ defmodule Kogen.Checks.Ledger do
     workdir
     |> test_argv(test_path, run_dir, env)
     |> Proc.run(options)
+    |> Timing.process(run_dir, "acceptance", ["mix", "test"])
     |> process_result()
   end
 

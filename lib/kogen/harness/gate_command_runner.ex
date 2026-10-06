@@ -24,6 +24,8 @@ defmodule Kogen.Harness.Gate.CommandRunner do
         {:ok, result} ->
           %GateCommand{
             name: spec.name,
+            duration_ms: result.duration_ms,
+            argv: argv,
             exit_status: result.exit_status,
             timed_out: result.timed_out,
             output: clip_tail(result.output_tail),

@@ -8,15 +8,22 @@ defmodule Kogen.Testkit.BudgetFormatter do
   def init(_opts), do: {:ok, nil}
 
   @impl GenServer
+  def handle_cast({:test_finished, %ExUnit.Test{time: time} = test}, slowest) do
+    if is_nil(slowest) or time > slowest.time, do: {:noreply, test}, else: {:noreply, slowest}
+  end
+
   def handle_cast({:suite_finished, %{run: run_us}}, state) when run_us >= @warning_us do
     IO.puts(
       :stderr,
-      "WARNING: ExUnit suite took #{div(run_us, 1_000)} ms (10 s warning threshold)"
+      "WARNING: ExUnit suite took #{div(run_us, 1_000)} ms (10 s advisory budget); " <>
+        "slowest stage: tests; slowest test: #{slowest(state)}. Correctness is unchanged."
     )
 
     {:noreply, state}
   end
 
-  @impl GenServer
   def handle_cast(_event, state), do: {:noreply, state}
+
+  defp slowest(nil), do: "unavailable"
+  defp slowest(test), do: "#{inspect(test.module)} #{test.name} #{div(test.time, 1_000)} ms"
 end

@@ -4,13 +4,21 @@ defmodule Kogen.Queue.BuildSummary do
   reason, model time per stage, the last candidate diff and the journal directory.
   """
 
+  alias Kogen.Contracts.GateTiming.Codec
   alias Kogen.Queue.StateView
   alias Kogen.State.Event
   alias Kogen.State.Run
 
   @enforce_keys [:build_id, :run_status, :journal]
   defstruct @enforce_keys ++
-              [reason: nil, stages: [], candidate_diff: nil, continuations: 0, progress: nil]
+              [
+                reason: nil,
+                stages: [],
+                candidate_diff: nil,
+                continuations: 0,
+                progress: nil,
+                gate_timing: nil
+              ]
 
   @type t :: %__MODULE__{
           build_id: String.t(),
@@ -18,6 +26,7 @@ defmodule Kogen.Queue.BuildSummary do
           journal: Path.t(),
           reason: String.t() | nil,
           stages: [{String.t(), non_neg_integer()}],
+          gate_timing: Kogen.Contracts.GateTiming.t() | nil,
           progress: map() | nil,
           candidate_diff: Path.t() | nil,
           continuations: non_neg_integer()
@@ -44,6 +53,7 @@ defmodule Kogen.Queue.BuildSummary do
          reason: reason(events),
          stages: stages(events),
          continuations: Enum.count(events, &(&1.event == "context_continued")),
+         gate_timing: Codec.latest(events),
          progress: Kogen.Queue.Progress.from_events(events),
          candidate_diff: candidate_diff(run, events)
        }}

@@ -10,6 +10,8 @@ defmodule Kogen.Contracts do
       CommandExit,
       Failure,
       Finding,
+      GateTiming,
+      GateTiming.Codec,
       Intent,
       JSON,
       ModelRequest,

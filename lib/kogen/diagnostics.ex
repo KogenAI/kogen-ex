@@ -22,6 +22,7 @@ defmodule Kogen.Diagnostics do
   @type finding :: Finding.t()
 
   @type result :: %{
+          required(:duration_ms) => non_neg_integer(),
           required(:name) => String.t(),
           required(:argv) => [String.t()],
           required(:exit_status) => integer() | nil,
@@ -52,7 +53,8 @@ defmodule Kogen.Diagnostics do
         timed_out: timed_out,
         output: output,
         log_path: log_path,
-        workdir: workdir
+        workdir: workdir,
+        duration_ms: duration_ms
       }) do
     output = Common.clean(full_output(output, log_path))
     tool = tool(argv, output)
@@ -65,6 +67,7 @@ defmodule Kogen.Diagnostics do
     summaries = Parser.dialyzer_summaries(output)
 
     base = %{
+      duration_ms: duration_ms,
       name: name,
       argv: argv,
       exit_status: exit_status,

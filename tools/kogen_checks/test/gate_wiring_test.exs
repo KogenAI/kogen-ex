@@ -205,6 +205,17 @@ defmodule KogenChecks.GateWiringTest do
     assert configured(enabled, StringKeyAccess, [codec]) == []
   end
 
+  test "the gate timing codec can read recorded JSON evidence", %{enabled: enabled} do
+    codec =
+      source(
+        ~s{def run(data), do: Map.get(data, "total_ms")},
+        "lib/kogen/contracts/gate_timing.ex",
+        "Kogen.Contracts.GateTiming.Codec"
+      )
+
+    assert configured(enabled, StringKeyAccess, [codec]) == []
+  end
+
   defp configured(enabled, check, files) do
     case Map.fetch(enabled, check) do
       {:ok, params} -> run_check(files, check, params)

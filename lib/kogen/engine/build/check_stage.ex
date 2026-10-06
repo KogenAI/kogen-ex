@@ -157,15 +157,22 @@ defmodule Kogen.Engine.Build.CheckStage do
   end
 
   defp record(session, checks, acceptance) do
+    timing =
+      Kogen.Contracts.GateTiming.combine([Map.get(checks, :timing), Map.get(acceptance, :timing)])
+
+    Kogen.Checks.Timing.record(session.run_dir, timing)
+
     with :ok <-
            State.record(session.run, %{
              event: :check_result,
              result: checks.status,
+             timing: Map.get(checks, :timing),
              receipts: checks.receipts
            }) do
       State.record(session.run, %{
         event: :acceptance_result,
         result: acceptance_status(acceptance.status),
+        timing: timing,
         ledger: acceptance.ledger
       })
     end

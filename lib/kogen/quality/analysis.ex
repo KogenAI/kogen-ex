@@ -32,8 +32,8 @@ defmodule Kogen.Quality.Analysis do
       sources = Enum.filter(paths, &(Path.extname(&1) in [".ex", ".exs"]))
 
       [
-        Suppressions.run(request, sources),
-        Kogen.Quality.Mutation.run(request, paths),
+        Report.measure(fn -> Suppressions.run(request, sources) end),
+        Report.measure(fn -> Kogen.Quality.Mutation.run(request, paths) end),
         optional(:ex_dna, dependencies, fn -> Clones.run(request, sources) end),
         optional(:reach, dependencies, fn -> Reach.run(request, paths) end)
       ]
@@ -44,7 +44,7 @@ defmodule Kogen.Quality.Analysis do
 
   defp optional(tool, dependencies, run) do
     if tool in dependencies,
-      do: run.(),
+      do: Report.measure(run),
       else: Report.skip(to_string(tool), "dependency missing from mix.exs")
   end
 

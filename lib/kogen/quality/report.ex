@@ -43,6 +43,13 @@ defmodule Kogen.Quality.Report do
     }
   end
 
+  @spec measure((-> map())) :: map()
+  def measure(operation) do
+    started = System.monotonic_time(:millisecond)
+    command = operation.()
+    Map.put(command, :duration_ms, max(System.monotonic_time(:millisecond) - started, 0))
+  end
+
   @spec skip(String.t(), term()) :: map()
   def skip(tool, reason) do
     command(tool, [finding(tool, "skipped", nil, nil, "Skipped: #{reason}.", :note)])

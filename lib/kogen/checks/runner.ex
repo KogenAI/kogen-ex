@@ -8,6 +8,7 @@ defmodule Kogen.Checks.Runner do
   alias Kogen.Contracts.CheckOutput
   alias Kogen.Contracts.CheckSpec
   alias Kogen.Contracts.Failure
+  alias Kogen.Contracts.GateTiming
   alias Kogen.Contracts.ProcResult
   alias Kogen.Contracts.Project
   alias Kogen.Contracts.Receipt
@@ -30,7 +31,8 @@ defmodule Kogen.Checks.Runner do
              feedback: String.t(),
              exit_levels: [{String.t(), 0..3}],
              checks: [map()],
-             warnings: [String.t()]
+             warnings: [String.t()],
+             timing: GateTiming.t()
            }}
           | {:error, Failure.t()}
   def run_all(workdir, project, run_dir, env, git_env),
@@ -52,15 +54,18 @@ defmodule Kogen.Checks.Runner do
              feedback: String.t(),
              exit_levels: [{String.t(), 0..3}],
              checks: [map()],
-             warnings: [String.t()]
+             warnings: [String.t()],
+             timing: GateTiming.t()
            }}
           | {:error, Failure.t()}
   def run_all(workdir, %Project{} = project, run_dir, env, git_env, options) do
     options = options(options)
+    started = System.monotonic_time(:millisecond)
 
     workdir
     |> run_all_with_project(project, run_dir, env, git_env, options)
     |> Kogen.Quality.augment(workdir, run_dir, Map.merge(env, git_env), options)
+    |> Kogen.Checks.Timing.finish(started, run_dir)
     |> final_feedback(options.changed_ranges)
   end
 
@@ -188,7 +193,7 @@ defmodule Kogen.Checks.Runner do
            ),
          {:ok, receipt} <-
            ReceiptBuilder.build(state.tree, spec, result.exit_status || 1, log_path, assessment) do
-      record_result(state, spec, assessment, receipt)
+      record_result(state, spec, assessment, %{receipt | duration_ms: result.duration_ms})
     else
       {:error, reason} -> {:error, failure(:controller, :check_record_failed, inspect(reason))}
     end
@@ -235,6 +240,7 @@ defmodule Kogen.Checks.Runner do
       exit_status: result.exit_status,
       timed_out: result.timed_out,
       output: result.output_tail,
+      duration_ms: result.duration_ms,
       log_path: log_path,
       workdir: workdir
     })

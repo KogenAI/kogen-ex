@@ -1,6 +1,7 @@
 defmodule Kogen.Queue.Report do
   @moduledoc "The latest Build of an Intent as one JSON document: outcome, stages, checks and timings."
 
+  alias Kogen.Contracts.GateTiming.Codec
   alias Kogen.Queue.LadderReport
   alias Kogen.Queue.StateView
   alias Kogen.State
@@ -91,6 +92,14 @@ defmodule Kogen.Queue.Report do
       {"red_checks", latest_candidate_value(events, :red_checks, [])},
       {"acceptance_items", latest_candidate_value(events, :acceptance_items, [])},
       {"model_stages", model_stages(events)},
+      {"gate_timing", gate_timing(events)},
+      {"gate_timings",
+       Enum.flat_map(events, fn event ->
+         case Codec.event_timing(event) do
+           nil -> []
+           timing -> [Map.from_struct(timing)]
+         end
+       end)},
       {"phase_timings", phase_timings(events)},
       {"findings", findings(events)},
       {"landing_retries", landing_retries(events)},
@@ -98,6 +107,13 @@ defmodule Kogen.Queue.Report do
       {"last_gate", last_gate(events)},
       {"stop", stop(events)}
     ] ++ LadderReport.sections(events)
+  end
+
+  defp gate_timing(events) do
+    case Codec.latest(events) do
+      nil -> nil
+      timing -> Map.from_struct(timing)
+    end
   end
 
   defp model_stages(events) do

@@ -18,6 +18,7 @@ defmodule Kogen.Checks.Shaping do
   alias Kogen.Checks.ShapeValidation
   alias Kogen.Checks.Shaping.Reclassifier
   alias Kogen.Checks.Shaping.StageFile
+  alias Kogen.Checks.Timing
   alias Kogen.Contracts.CommandExit
   alias Kogen.Contracts.Failure
   alias Kogen.Contracts.MiseEnvironment
@@ -32,7 +33,7 @@ defmodule Kogen.Checks.Shaping do
     with :ok <- declared_gate_changes(request),
          {:ok, %StageFile{} = staged} <-
            stage_test(request.workdir, request.intent.slug, request.acceptance_bytes) do
-      result = verify(request)
+      result = Timing.shape(request.run_dir, fn -> verify(request) end)
       cleanup_result(result, cleanup(staged))
     end
   end
@@ -108,13 +109,15 @@ defmodule Kogen.Checks.Shaping do
     log_path =
       Path.join([request.run_dir, "logs", "shape-acceptance-#{index}-#{spec.name}.log"])
 
-    case Proc.run(argv,
+    case argv
+         |> Proc.run(
            cd: request.workdir,
            env: env,
            timeout_ms: spec.timeout_ms,
            log_path: log_path,
            sandbox: request.sandbox
-         ) do
+         )
+         |> Timing.process(request.run_dir, spec.name, argv) do
       {:ok, %ProcResult{exit_status: 0, timed_out: false}} ->
         :ok
 

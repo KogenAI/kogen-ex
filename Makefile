@@ -2,6 +2,7 @@ SHELL := /bin/sh
 .SHELLFLAGS := -eu -c
 # Respect the caller's parallelism, including -j1 for full verification.
 M := mise exec --
+G = python3 tools/gate_timing.py stage $@ -- $(M)
 KOGEN_PLT_DIR ?= $(HOME)/.kogen/plt
 KOGEN_INSTALL_HOME ?= $(HOME)
 export KOGEN_PLT_DIR
@@ -18,24 +19,24 @@ CHECK_TASKS := guard fmt compile-dev compile-test xref credo test acceptance dia
 FULL_CHECK_TASKS := $(CHECK_TASKS) e2e
 
 check:
-	+$(MAKE) --no-print-directory $(CHECK_TASKS)
+	+python3 tools/gate_timing.py full check -- $(MAKE) --no-print-directory $(CHECK_TASKS)
 	@echo "check OK"
 
 check-full:
-	+$(MAKE) --no-print-directory $(FULL_CHECK_TASKS)
+	+python3 tools/gate_timing.py full check-full -- $(MAKE) --no-print-directory $(FULL_CHECK_TASKS)
 	@echo "check-full OK"
 
 guard:
-	$(M) mix kogen.guard
+	$(G) mix kogen.guard
 
 fmt:
-	$(M) mix format --check-formatted
+	$(G) mix format --check-formatted
 
 compile-dev:
-	$(M) mix compile --force --warnings-as-errors
+	$(G) mix compile --force --warnings-as-errors
 
 compile-test:
-	$(M) mix compile --force --warnings-as-errors
+	$(G) mix compile --force --warnings-as-errors
 
 compile-test test: export MIX_ENV = test
 compile-test test: export GIT_CONFIG_GLOBAL = /dev/null
@@ -48,19 +49,19 @@ compile-test test: export TZ = Europe/Sarajevo
 compile-test test: export LC_ALL = C
 
 xref: compile-dev
-	$(M) mix xref graph --format cycles --label compile-connected --fail-above 0
+	$(G) mix xref graph --format cycles --label compile-connected --fail-above 0
 
 credo: compile-dev
-	$(M) mix credo --strict
+	$(G) mix credo --strict
 
 test: compile-test kogen-checks-test
-	$(TEST_ENV) MIX_ENV=test $(M) mix test --warnings-as-errors --no-compile --exclude fixture --exclude acceptance --exclude e2e $(SEATBELT_EXCLUDE) $(KEYCHAIN_EXCLUDE)
+	$(TEST_ENV) MIX_ENV=test $(G) mix test --warnings-as-errors --no-compile --exclude fixture --exclude acceptance --exclude e2e $(SEATBELT_EXCLUDE) $(KEYCHAIN_EXCLUDE)
 
 acceptance: compile-test
-	$(TEST_ENV) MIX_ENV=test $(M) mix test --warnings-as-errors --no-compile --only acceptance test/acceptance
+	$(TEST_ENV) MIX_ENV=test $(G) mix test --warnings-as-errors --no-compile --only acceptance test/acceptance
 
 e2e: compile-test
-	$(TEST_ENV) MIX_ENV=test $(M) mix test --warnings-as-errors --no-compile --only e2e test/e2e
+	$(TEST_ENV) MIX_ENV=test $(G) mix test --warnings-as-errors --no-compile --only e2e test/e2e
 
 integration: check-full
 	$(TEST_ENV) MIX_ENV=test $(M) mix test --warnings-as-errors --include fixture test/fixtures_test.exs
@@ -100,11 +101,11 @@ demo-fixture:
 	printf 'origin=%s\nseed=%s\n' "$$origin" "$$seed"
 
 kogen-checks-test: compile-test
-	$(TEST_ENV) MIX_ENV=test $(M) mix test --warnings-as-errors --no-compile tools/kogen_checks/test
+	$(TEST_ENV) MIX_ENV=test $(G) mix test --warnings-as-errors --no-compile tools/kogen_checks/test
 
 dialyzer: compile-dev
 	mkdir -p "$(KOGEN_PLT_DIR)"
-	$(M) mix dialyzer --quiet-with-result
+	$(G) mix dialyzer --quiet-with-result
 
 check-fast:
 	@if [ -z "$(D)" ]; then echo "usage: make check-fast D=<domain>" >&2; exit 2; fi

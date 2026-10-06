@@ -115,6 +115,7 @@
                Kogen.Quality.Codec,
                Kogen.Quality.Request,
                Kogen.Contracts.Yaml,
+               Kogen.Contracts.GateTiming.Codec,
                Kogen.Intent.Parser.Scheduling,
                Kogen.Contracts.ShapeWarningCodec,
                Kogen.Proc.Request,

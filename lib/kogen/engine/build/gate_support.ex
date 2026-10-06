@@ -335,13 +335,15 @@ defmodule Kogen.Engine.Build.GateSupport do
           nil -> nil
         end
 
-      Kogen.Proc.run(argv,
+      argv
+      |> Kogen.Proc.run(
         cd: path,
         env: session.process_env,
         timeout_ms: timeout_ms,
         log_path: log_path,
         sandbox: sandbox
       )
+      |> Kogen.Checks.Timing.process(session.run_dir, log_name, argv)
     end
   end
 

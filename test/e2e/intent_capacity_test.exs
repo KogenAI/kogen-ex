@@ -24,6 +24,12 @@ defmodule Kogen.E2e.IntentCapacityTest do
     assert Enum.all?(decoded["acceptance_results"], &(&1["status"] == "passed"))
     assert decoded["progress"] == %{"verified" => ids(12), "remaining" => []}
 
+    assert {:ok, summary} =
+             Kogen.Queue.BuildSummary.latest(result.fixture.workspace_root, "build-engine")
+
+    assert decoded["gate_timing"]["duration_ms"] == summary.gate_timing.duration_ms
+    assert Enum.all?(decoded["check_receipts"], &is_integer(&1["duration_ms"]))
+
     assert Git.git!(result.fixture.origin, [
              "rev-list",
              "--count",

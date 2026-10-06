@@ -2,6 +2,7 @@ defmodule Kogen.Kernel.ApprovalChecks do
   @moduledoc false
 
   alias Kogen.Checks
+  alias Kogen.Checks.Timing
   alias Kogen.Contracts.CheckBaseline
   alias Kogen.Contracts.CommandExit
   alias Kogen.Contracts.Failure
@@ -41,15 +42,22 @@ defmodule Kogen.Kernel.ApprovalChecks do
              sandbox: sandbox,
              baseline_run?: true
            }),
-         :ok <- acceptance_checks(request, project, acceptance_files, env, sandbox) do
+         :ok <- acceptance_checks(request, project, acceptance_files, env, sandbox, run_dir) do
+      Timing.complete(run_dir)
       {:ok, CheckBaseline.from_assessments(check_result.checks)}
     end
   end
 
-  defp acceptance_checks(_request, %ProjectData{acceptance_checks: []}, _files, _env, _sandbox),
-    do: :ok
+  defp acceptance_checks(
+         _request,
+         %ProjectData{acceptance_checks: []},
+         _files,
+         _env,
+         _sandbox,
+         _run_dir
+       ), do: :ok
 
-  defp acceptance_checks(request, project, files, env, sandbox) do
+  defp acceptance_checks(request, project, files, env, sandbox, run_dir) do
     relative = "test/acceptance/#{request.slug}_test.exs"
     bytes = Map.fetch!(files, ".kogen/acceptance/#{request.slug}_test.exs")
     path = Path.join(request.project_root, relative)
@@ -61,7 +69,8 @@ defmodule Kogen.Kernel.ApprovalChecks do
           request.project_root,
           relative,
           env,
-          sandbox
+          sandbox,
+          run_dir
         )
 
       if created?, do: cleanup_candidate(path, relative, result), else: result
@@ -87,11 +96,17 @@ defmodule Kogen.Kernel.ApprovalChecks do
     end
   end
 
-  defp run_acceptance_checks(specs, root, relative, env, _sandbox) do
+  defp run_acceptance_checks(specs, root, relative, env, _sandbox, run_dir) do
     Enum.reduce_while(specs, :ok, fn spec, :ok ->
       argv = Enum.map(spec.argv, &if(&1 == "{path}", do: relative, else: &1))
 
-      case Proc.run(argv, cd: root, env: env, timeout_ms: spec.timeout_ms) do
+      case argv
+           |> Proc.run(cd: root, env: env, timeout_ms: spec.timeout_ms)
+           |> Timing.process(
+             run_dir,
+             spec.name,
+             argv
+           ) do
         {:ok, %ProcResult{exit_status: 0, timed_out: false}} ->
           {:cont, :ok}
 

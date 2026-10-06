@@ -58,8 +58,16 @@ defmodule Kogen.Kernel.CLI.StatusOutput do
     "Build #{short(build.build_id)}: #{outcome}\n" <>
       stages <>
       continuations(build.continuations) <>
+      timing_text(build.gate_timing) <>
       progress_text(build.progress) <> diff <> "  journal: #{build.journal}\n"
   end
+
+  defp timing_text(nil), do: ""
+
+  defp timing_text(timing),
+    do:
+      "  gate: #{Kogen.Contracts.GateTiming.text(timing)}\n" <>
+        Enum.map_join(timing.warnings, "", &"  #{&1}\n")
 
   defp progress_text(nil), do: ""
 

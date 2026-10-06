@@ -197,6 +197,8 @@ defmodule Kogen.Harness.GateCommand do
   defstruct @enforce_keys ++
               [
                 :log_path,
+                duration_ms: 0,
+                argv: [],
                 base_red?: false,
                 reason: nil,
                 tool: "check",
@@ -211,6 +213,8 @@ defmodule Kogen.Harness.GateCommand do
           timed_out: boolean(),
           output: String.t(),
           log_path: Path.t() | nil,
+          duration_ms: non_neg_integer(),
+          argv: [String.t()],
           base_red?: boolean(),
           reason: String.t() | nil,
           tool: String.t(),
@@ -226,7 +230,8 @@ defmodule Kogen.Harness.GateResult do
   alias Kogen.Harness.GateCommand
 
   @enforce_keys [:status, :fixes, :checks, :failures, :flake_excused, :failed_test_count]
-  defstruct @enforce_keys ++ [warnings: [], findings_path: nil, dialyzer_summary: nil]
+  defstruct @enforce_keys ++
+              [warnings: [], findings_path: nil, dialyzer_summary: nil, timing: nil]
 
   @type t :: %__MODULE__{
           status: :pass | :fail | :environment,
@@ -236,6 +241,7 @@ defmodule Kogen.Harness.GateResult do
           warnings: [String.t()],
           findings_path: Path.t() | nil,
           dialyzer_summary: map() | nil,
+          timing: Kogen.Contracts.GateTiming.t() | nil,
           flake_excused: [%{test_ids: [String.t()], seed: non_neg_integer()}],
           failed_test_count: non_neg_integer() | nil
         }

@@ -5,6 +5,7 @@ defmodule Kogen.Harness.Gate do
   alias Kogen.Contracts.CheckBaseline
   alias Kogen.Contracts.CheckOutput
   alias Kogen.Contracts.CheckSpec
+  alias Kogen.Contracts.GateTiming
   alias Kogen.Harness.Gate.Arguments
   alias Kogen.Harness.Gate.CommandRunner
   alias Kogen.Harness.Gate.TestCount
@@ -15,6 +16,8 @@ defmodule Kogen.Harness.Gate do
 
   @spec run(Opts.t(), integer()) :: {:ok, GateResult.t()} | {:error, term()}
   def run(%Opts{} = opts, deadline) do
+    started = System.monotonic_time(:millisecond)
+
     with :ok <- before_gate(opts.before_gate),
          {:ok, _transcript_path} <- Recording.path(opts),
          {:ok, fixes} <- final_pass(opts, deadline),
@@ -25,9 +28,11 @@ defmodule Kogen.Harness.Gate do
 
       summary = Feedback.dialyzer_summary(commands, changed_paths(opts))
 
+      timing = record_timing(opts.run_dir, fixes ++ checks, started)
+
       warnings =
         Enum.flat_map(fixes ++ checks, &CheckBaseline.warning/1) ++
-          Enum.flat_map(checks, &Map.get(&1, :warnings, []))
+          Enum.flat_map(checks, &Map.get(&1, :warnings, [])) ++ timing.warnings
 
       with {:ok, findings_path} <- Feedback.write_report(fixes ++ checks, opts.run_dir) do
         {:ok,
@@ -39,11 +44,18 @@ defmodule Kogen.Harness.Gate do
            dialyzer_summary: summary,
            failures: failures(status, commands, summary, findings_path, opts.changed_ranges),
            warnings: warnings,
+           timing: timing,
            flake_excused: flake_excused,
            failed_test_count: TestCount.failed_test_count(checks, opts.project.checks)
          }}
       end
     end
+  end
+
+  defp record_timing(run_dir, commands, started) do
+    timing = GateTiming.summarize(commands, max(System.monotonic_time(:millisecond) - started, 0))
+    Kogen.Checks.Timing.record(run_dir, timing)
+    timing
   end
 
   defp failures(:pass, _commands, _summary, _path, _ranges), do: []
@@ -199,7 +211,8 @@ defmodule Kogen.Harness.Gate do
         timed_out: command.timed_out,
         output: command.output,
         log_path: command.log_path,
-        workdir: workdir
+        workdir: workdir,
+        duration_ms: command.duration_ms
       })
 
     %{

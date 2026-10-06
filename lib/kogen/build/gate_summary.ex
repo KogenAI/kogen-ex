@@ -19,6 +19,7 @@ defmodule Kogen.Build.GateSummary do
       status: Map.get(gate, :status),
       failed_test_count: Map.get(gate, :failed_test_count),
       warnings: Map.get(gate, :warnings, []),
+      timing: Map.get(gate, :timing),
       checks: Enum.map(commands, &elem(&1, 0)),
       findings_path: Map.get(gate, :findings_path),
       dialyzer_summary: dialyzer_summary(Map.get(gate, :dialyzer_summary)),
@@ -100,6 +101,7 @@ defmodule Kogen.Build.GateSummary do
     summary = %{
       kind: if(Map.get(command, :advisory?, false), do: :advisory, else: kind),
       name: Map.get(command, :name),
+      duration_ms: Map.get(command, :duration_ms),
       exit_level: Map.get(command, :exit_level),
       exit_status: Map.get(command, :exit_status),
       timed_out: Map.get(command, :timed_out),

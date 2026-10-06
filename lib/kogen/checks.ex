@@ -44,7 +44,7 @@ defmodule Kogen.Checks do
       Kogen.Workspace,
       Kogen.Project
     ],
-    exports: [Feedback, LedgerRow, ShapeValidation, ShapeFormatRequest]
+    exports: [Timing, Feedback, LedgerRow, ShapeValidation, ShapeFormatRequest]
 
   alias Kogen.Checks.FinalPass
   alias Kogen.Checks.Fixer
@@ -56,10 +56,17 @@ defmodule Kogen.Checks do
   alias Kogen.Checks.ShapeValidation
   alias Kogen.Checks.Shaping
   alias Kogen.Contracts.Failure
+  alias Kogen.Contracts.GateTiming
   alias Kogen.Contracts.Intent
   alias Kogen.Contracts.ProcResult
   alias Kogen.Contracts.Project
   alias Kogen.Proc.Sandbox
+
+  @type acceptance_result :: %{
+          status: :pass | {:fail, [String.t()]},
+          ledger: [LedgerRow.t()],
+          timing: GateTiming.t() | nil
+        }
 
   @type run_result ::
           {:ok,
@@ -70,7 +77,8 @@ defmodule Kogen.Checks do
              feedback: String.t(),
              exit_levels: [{String.t(), 0..3}],
              checks: [map()],
-             warnings: [String.t()]
+             warnings: [String.t()],
+             timing: GateTiming.t()
            }}
           | {:error, Failure.t()}
 
@@ -135,7 +143,7 @@ defmodule Kogen.Checks do
     do: Runner.run_all(workdir, project, run_dir, env, git_env, options)
 
   @spec acceptance(Path.t(), Intent.t(), Path.t()) ::
-          {:ok, %{status: :pass | {:fail, [String.t()]}, ledger: [LedgerRow.t()]}}
+          {:ok, acceptance_result()}
           | {:error, Failure.t()}
   def acceptance(workdir, intent, run_dir), do: acceptance(workdir, intent, run_dir, %{}, %{})
 
@@ -146,7 +154,7 @@ defmodule Kogen.Checks do
           %{String.t() => String.t()},
           %{String.t() => String.t()}
         ) ::
-          {:ok, %{status: :pass | {:fail, [String.t()]}, ledger: [LedgerRow.t()]}}
+          {:ok, acceptance_result()}
           | {:error, Failure.t()}
   def acceptance(workdir, intent, run_dir, env, git_env),
     do: Ledger.acceptance(workdir, intent, run_dir, env, git_env)
@@ -159,7 +167,7 @@ defmodule Kogen.Checks do
           %{String.t() => String.t()},
           Sandbox.t() | nil
         ) ::
-          {:ok, %{status: :pass | {:fail, [String.t()]}, ledger: [LedgerRow.t()]}}
+          {:ok, acceptance_result()}
           | {:error, Failure.t()}
   def acceptance(workdir, intent, run_dir, env, git_env, sandbox),
     do: Ledger.acceptance(workdir, intent, run_dir, env, git_env, sandbox)

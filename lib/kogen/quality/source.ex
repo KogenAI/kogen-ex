@@ -8,6 +8,7 @@ defmodule Kogen.Quality.Source do
   @spec run(Request.t()) :: [map()]
   def run(request) do
     if File.regular?(Path.join(request.workdir, "mix.exs")) do
+      started = System.monotonic_time(:millisecond)
       {sources, notes} = sources(request.workdir)
       resources = Enum.flat_map(sources, &resource_findings(&1, request.workdir))
 
@@ -15,12 +16,13 @@ defmodule Kogen.Quality.Source do
         for {file, line, message} <- MapShapes.analyze(sources),
             do: Report.finding("kogen_checks", "RepeatedMapShape", file, line, message)
 
-      [
+      command =
         Report.command(
           "source_checks",
           resources ++ maps ++ Kogen.Quality.TestIntegrity.findings(sources) ++ notes
         )
-      ]
+
+      [Map.put(command, :duration_ms, max(System.monotonic_time(:millisecond) - started, 0))]
     else
       []
     end
