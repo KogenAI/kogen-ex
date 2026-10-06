@@ -2,6 +2,7 @@ defmodule Kogen.Harness.OneShot do
   @moduledoc false
 
   alias Kogen.Contracts.ModelResponse
+  alias Kogen.Contracts.RolePrompt
   alias Kogen.Harness.Codec
   alias Kogen.Harness.Exchange
   alias Kogen.Harness.Exchange.Request, as: ExchangeRequest
@@ -11,9 +12,14 @@ defmodule Kogen.Harness.OneShot do
   @request_cap_ms 600_000
 
   # One no-tool model call on the `role` model of `opts.models`, through the resilient Exchange.
-  @spec ask(Opts.t(), %{stage: atom(), role: atom(), instructions: String.t(), text: String.t()}) ::
+  @spec ask(Opts.t(), RolePrompt.t()) ::
           {:ok, %{text: String.t(), usage: map()}} | {:error, term()}
-  def ask(%Opts{} = opts, %{stage: stage, role: role, instructions: instructions, text: text}) do
+  def ask(%Opts{} = opts, %RolePrompt{
+        stage: stage,
+        role: role,
+        instructions: instructions,
+        text: text
+      }) do
     {model, effort} = Map.get(opts.models, role, opts.models.strong)
 
     request = %ExchangeRequest{

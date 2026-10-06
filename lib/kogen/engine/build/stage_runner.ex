@@ -9,7 +9,6 @@ defmodule Kogen.Engine.Build.StageRunner do
   alias Kogen.Engine.Build.Commit
   alias Kogen.Engine.Build.GateSupport
   alias Kogen.Engine.Build.Guard
-  alias Kogen.Engine.Build.PhaseTiming, as: Timing
   alias Kogen.Engine.Build.Reviewer
   alias Kogen.Engine.Build.Session
   alias Kogen.Harness
@@ -25,7 +24,7 @@ defmodule Kogen.Engine.Build.StageRunner do
   def run(:plan, _args, session), do: plan(session)
   def run(:develop, args, session), do: develop(args, session)
 
-  def run(:fix, _args, s), do: Timing.measure(s, "build", "fix-loop", fn -> fix(s) end)
+  def run(:fix, _args, s), do: State.measure_phase(s.run, "build", "fix-loop", fn -> fix(s) end)
 
   def run(:check, _args, session), do: checks(session)
   def run(:review, _args, session), do: Reviewer.run(session)

@@ -1,5 +1,7 @@
 defmodule Kogen.Feedback.Parser.Common do
   @moduledoc false
+  alias Kogen.Contracts.Finding
+
   @message_chars 200
   @location ~r{(?<path>(?:\$WORKDIR/|/)?[A-Za-z0-9_.$-]+(?:/[A-Za-z0-9_.$-]+)*\.exs?):(?<line>\d+)(?::(?<col>\d+))?(?::(?<tail>.*))?}
 
@@ -108,7 +110,7 @@ defmodule Kogen.Feedback.Parser.Common do
   end
 
   def finding(tool, rule, {path, line, col}, symbol, message) do
-    %{
+    %Finding{
       tool: tool,
       rule: rule,
       severity: :error,

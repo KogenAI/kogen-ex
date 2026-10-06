@@ -13,6 +13,7 @@ defmodule Kogen.Harness do
     ],
     exports: [Opts, Pack, Plan, Review, Result, ShapePass, ShapeCall, PhaseTiming]
 
+  alias Kogen.Contracts.RolePrompt
   alias Kogen.Harness.Developer
   alias Kogen.Harness.OneShot
   alias Kogen.Harness.Opts
@@ -54,9 +55,10 @@ defmodule Kogen.Harness do
   def review(%Opts{} = opts, intent_text, diff, check_summary),
     do: Stages.review(opts, intent_text, diff, check_summary)
 
-  @doc "One no-tool request on the `role` model: `%{stage, role, instructions, text}`."
-  @spec ask(Opts.t(), map()) :: {:ok, %{text: String.t(), usage: map()}} | {:error, term()}
-  def ask(%Opts{} = opts, request), do: OneShot.ask(opts, request)
+  @doc "One no-tool request on the requested model role."
+  @spec ask(Opts.t(), RolePrompt.t()) ::
+          {:ok, %{text: String.t(), usage: map()}} | {:error, term()}
+  def ask(%Opts{} = opts, %RolePrompt{} = request), do: OneShot.ask(opts, request)
 
   @spec shape(Opts.t(), String.t(), String.t(), [map()], String.t() | nil, non_neg_integer()) ::
           {:ok, ShapePass.t()} | {:error, term()}

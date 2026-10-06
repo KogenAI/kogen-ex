@@ -5,7 +5,6 @@ defmodule Kogen.Engine.Build.GateSupport do
   alias Kogen.Contracts.Failure
   alias Kogen.Contracts.ProcResult
   alias Kogen.Engine.Build.Guard
-  alias Kogen.Engine.Build.PhaseTiming
   alias Kogen.Engine.Build.Session
   alias Kogen.Harness.Opts
   alias Kogen.Harness.Result, as: HarnessResult
@@ -120,14 +119,7 @@ defmodule Kogen.Engine.Build.GateSupport do
 
   defp phase_recorder(session) do
     fn phase, name, wall_ms, started_at, finished_at ->
-      State.record(session.run, %{
-        event: :phase_timing,
-        phase: phase,
-        name: name,
-        wall_ms: wall_ms,
-        started_at: started_at,
-        finished_at: finished_at
-      })
+      State.record_phase_timing(session.run, phase, name, wall_ms, started_at, finished_at)
     end
   end
 
@@ -154,7 +146,7 @@ defmodule Kogen.Engine.Build.GateSupport do
   @spec base_test(Session.t(), [String.t()], pos_integer()) ::
           {:ok, ProcResult.t()} | {:error, term()}
   def base_test(%Session{} = session, argv, timeout_ms) do
-    PhaseTiming.measure(session, "build", "gate_base_check", fn ->
+    State.measure_phase(session.run, "build", "gate_base_check", fn ->
       run_base_test(session, argv, timeout_ms)
     end)
   end
@@ -217,7 +209,7 @@ defmodule Kogen.Engine.Build.GateSupport do
   def red_on_base(%Session{intent: %{source: :raw, acceptance: []}}), do: :ok
 
   def red_on_base(%Session{} = session) do
-    PhaseTiming.measure(session, "build", "red-on-base", fn ->
+    State.measure_phase(session.run, "build", "red-on-base", fn ->
       Kogen.Checks.red_on_base(
         session.workdir,
         session.intent,

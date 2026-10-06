@@ -2,6 +2,7 @@ defmodule Kogen.Checks.FailureContextTest do
   use Kogen.Testkit.Case, async: true
 
   alias Kogen.Checks.Feedback
+  alias Kogen.Contracts.CheckOutput
 
   test "the finding retains the test, assertion, multiline error and values, and first project frame",
        %{tmp_dir: tmp_dir} do
@@ -99,7 +100,7 @@ defmodule Kogen.Checks.FailureContextTest do
     refute changed =~ "file-31.ex"
 
     green =
-      Feedback.analyze(%{
+      Feedback.analyze(%CheckOutput{
         name: "tests",
         argv: ["mix", "test"],
         exit_status: 0,
@@ -118,7 +119,7 @@ defmodule Kogen.Checks.FailureContextTest do
   end
 
   defp analyze(output, workdir) do
-    Feedback.analyze(%{
+    Feedback.analyze(%CheckOutput{
       name: "tests",
       argv: ["mix", "test"],
       exit_status: 1,

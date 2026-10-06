@@ -21,6 +21,7 @@ defmodule Kogen.Checks.Fixer do
   alias Kogen.Checks.Feedback
   alias Kogen.Checks.Fixer.State
   alias Kogen.Contracts.CheckBaseline
+  alias Kogen.Contracts.CheckOutput
   alias Kogen.Contracts.Failure
   alias Kogen.Contracts.ProcResult
   alias Kogen.Contracts.Project
@@ -94,7 +95,7 @@ defmodule Kogen.Checks.Fixer do
 
   defp assess({:ok, result}, spec, log_path, state) do
     assessment =
-      %{
+      %CheckOutput{
         name: spec.name,
         argv: spec.argv,
         exit_status: result.exit_status,

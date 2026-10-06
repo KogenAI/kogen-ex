@@ -9,6 +9,7 @@ defmodule Kogen.State do
   alias Kogen.State.Event
   alias Kogen.State.Json
   alias Kogen.State.Operations
+  alias Kogen.State.PhaseTiming
   alias Kogen.State.RequestUsage
   alias Kogen.State.Run
   alias Kogen.State.Usage
@@ -42,6 +43,22 @@ defmodule Kogen.State do
 
   @spec record(Run.t(), map()) :: :ok | {:error, term()}
   defdelegate record(run, event), to: Operations
+
+  @doc "Measures an operation and records its phase timing, including when it raises."
+  @spec measure_phase(Run.t(), String.t(), String.t(), (-> result)) :: result when result: term()
+  defdelegate measure_phase(run, phase, name, operation), to: PhaseTiming, as: :measure
+
+  @spec record_phase_timing(
+          Run.t(),
+          String.t(),
+          String.t(),
+          non_neg_integer(),
+          integer(),
+          integer()
+        ) :: :ok | {:error, term()}
+  defdelegate record_phase_timing(run, phase, name, wall_ms, started_at, finished_at),
+    to: PhaseTiming,
+    as: :record
 
   @spec decode_event(binary()) :: {:ok, Event.t()} | {:error, :invalid_event}
   defdelegate decode_event(binary), to: Json

@@ -3,6 +3,7 @@ defmodule Kogen.Harness.Gate do
 
   alias Kogen.Checks.Feedback
   alias Kogen.Contracts.CheckBaseline
+  alias Kogen.Contracts.CheckOutput
   alias Kogen.Contracts.CheckSpec
   alias Kogen.Contracts.ProcResult
   alias Kogen.Harness.Gate.Arguments
@@ -330,7 +331,7 @@ defmodule Kogen.Harness.Gate do
 
   defp assess_result(%GateCommand{} = command, %CheckSpec{} = spec, workdir) do
     assessment =
-      Feedback.analyze(%{
+      Feedback.analyze(%CheckOutput{
         name: spec.name,
         argv: spec.argv,
         exit_status: command.exit_status,

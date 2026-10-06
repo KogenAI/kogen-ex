@@ -8,6 +8,7 @@ defmodule Kogen.Runner.Audit do
   alias Kogen.Build.Demotion
   alias Kogen.Build.Recipe
   alias Kogen.Contracts.ProviderError
+  alias Kogen.Contracts.RolePrompt
   alias Kogen.Engine.Build.CandidateSnapshot
   alias Kogen.Engine.Build.CheckStage
   alias Kogen.Engine.Build.GateSupport
@@ -48,7 +49,7 @@ defmodule Kogen.Runner.Audit do
   defp judge(session, ids) do
     started_at = System.monotonic_time(:millisecond)
 
-    request = %{
+    request = %RolePrompt{
       stage: :audit,
       role: :auditor,
       instructions: Auditor.instructions(),

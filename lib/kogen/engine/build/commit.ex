@@ -4,7 +4,6 @@ defmodule Kogen.Engine.Build.Commit do
   alias Kogen.Contracts.Failure
   alias Kogen.Engine.Build.CheckStage
   alias Kogen.Engine.Build.Guard
-  alias Kogen.Engine.Build.PhaseTiming
   alias Kogen.Engine.Build.Session
   alias Kogen.State
   alias Kogen.Workspace
@@ -14,12 +13,12 @@ defmodule Kogen.Engine.Build.Commit do
           | {:error, Session.t(), Failure.t()}
           | {:base_moved, Session.t()}
   def run(%Session{} = session, force_check \\ false) do
-    PhaseTiming.measure(session, "build", "commit", fn -> do_run(session, force_check) end)
+    State.measure_phase(session.run, "build", "commit", fn -> do_run(session, force_check) end)
   end
 
   @spec land(map(), Session.t()) :: {:ok, [map()]} | {:error, term()}
   def land(identity, session) do
-    PhaseTiming.measure(session, "build", "land", fn ->
+    State.measure_phase(session.run, "build", "land", fn ->
       Workspace.land(
         session.workdir,
         session.request.origin,

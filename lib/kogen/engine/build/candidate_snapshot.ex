@@ -88,7 +88,7 @@ defmodule Kogen.Engine.Build.CandidateSnapshot do
   @spec metrics(Session.t(), binary()) :: map()
   def metrics(%Session{} = session, diff) do
     gate = session.last_harness && session.last_harness.gate
-    metrics = GateSummary.metrics(gate, acceptance_path(session))
+    metrics = gate |> GateSummary.metrics(acceptance_path(session)) |> Map.from_struct()
     lines = diff |> String.split("\n") |> Enum.count(&changed_line?/1)
     metrics = Map.put(metrics, :diff_lines, lines)
 

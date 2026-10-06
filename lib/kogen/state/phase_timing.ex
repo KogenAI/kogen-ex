@@ -1,11 +1,11 @@
-defmodule Kogen.Engine.Build.PhaseTiming do
+defmodule Kogen.State.PhaseTiming do
   @moduledoc false
 
-  alias Kogen.Engine.Build.Session
   alias Kogen.State
+  alias Kogen.State.Run
 
-  @spec measure(Session.t(), String.t(), String.t(), (-> result)) :: result when result: term()
-  def measure(%Session{} = session, phase, name, operation)
+  @spec measure(Run.t(), String.t(), String.t(), (-> result)) :: result when result: term()
+  def measure(%Run{} = run, phase, name, operation)
       when is_binary(phase) and is_binary(name) and is_function(operation, 0) do
     started_wall = System.system_time(:millisecond)
     started_mono = System.monotonic_time(:millisecond)
@@ -14,7 +14,7 @@ defmodule Kogen.Engine.Build.PhaseTiming do
       operation.()
     after
       record(
-        session.run,
+        run,
         phase,
         name,
         elapsed(started_mono),
@@ -25,7 +25,7 @@ defmodule Kogen.Engine.Build.PhaseTiming do
   end
 
   @spec record(
-          Kogen.State.Run.t(),
+          Run.t(),
           String.t(),
           String.t(),
           non_neg_integer(),

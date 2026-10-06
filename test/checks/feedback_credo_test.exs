@@ -2,6 +2,7 @@ defmodule Kogen.Checks.FeedbackCredoTest do
   use ExUnit.Case, async: true
 
   alias Kogen.Checks.Feedback
+  alias Kogen.Contracts.CheckOutput
 
   @workdir "$WORKDIR"
 
@@ -24,7 +25,7 @@ defmodule Kogen.Checks.FeedbackCredoTest do
     """
 
     result =
-      Feedback.analyze(%{
+      Feedback.analyze(%CheckOutput{
         name: "full",
         argv: ["make", "check-full"],
         exit_status: 2,

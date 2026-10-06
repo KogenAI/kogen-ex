@@ -2,7 +2,9 @@ defmodule Kogen.Feedback do
   @moduledoc "Parses verification output and renders compact Builder feedback."
   use Boundary, deps: [Kogen.Contracts], exports: []
 
+  alias Kogen.Contracts.CheckOutput
   alias Kogen.Contracts.CommandExit
+  alias Kogen.Contracts.Finding
   alias Kogen.Feedback.Parser, as: Parser
   alias Kogen.Feedback.Parser.Common
   alias Kogen.Feedback.Renderer
@@ -16,16 +18,7 @@ defmodule Kogen.Feedback do
     ~r/No Mix.Project was found|could not find mix\.exs/i
   ]
 
-  @type finding :: %{
-          required(:tool) => String.t(),
-          required(:rule) => String.t(),
-          required(:severity) => :error | :warning | :note,
-          required(:message) => String.t(),
-          optional(:path) => String.t() | nil,
-          optional(:line) => pos_integer() | nil,
-          optional(:col) => pos_integer() | nil,
-          optional(:symbol) => String.t() | nil
-        }
+  @type finding :: Finding.t()
 
   @type result :: %{
           required(:name) => String.t(),
@@ -50,16 +43,8 @@ defmodule Kogen.Feedback do
     |> Enum.uniq()
   end
 
-  @spec analyze(%{
-          required(:name) => String.t(),
-          required(:argv) => [String.t()],
-          required(:exit_status) => integer() | nil,
-          required(:timed_out) => boolean(),
-          required(:output) => String.t(),
-          required(:log_path) => Path.t() | nil,
-          required(:workdir) => Path.t()
-        }) :: result()
-  def analyze(%{
+  @spec analyze(CheckOutput.t()) :: result()
+  def analyze(%CheckOutput{
         name: name,
         argv: argv,
         exit_status: exit_status,

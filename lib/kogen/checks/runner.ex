@@ -5,6 +5,7 @@ defmodule Kogen.Checks.Runner do
   alias Kogen.Checks.ReceiptBuilder
   alias Kogen.Checks.RunState
   alias Kogen.Contracts.CheckBaseline
+  alias Kogen.Contracts.CheckOutput
   alias Kogen.Contracts.CheckSpec
   alias Kogen.Contracts.Failure
   alias Kogen.Contracts.ProcResult
@@ -228,7 +229,7 @@ defmodule Kogen.Checks.Runner do
   end
 
   defp analyze_result(spec, result, log_path, workdir) do
-    Feedback.analyze(%{
+    Feedback.analyze(%CheckOutput{
       name: spec.name,
       argv: spec.argv,
       exit_status: result.exit_status,

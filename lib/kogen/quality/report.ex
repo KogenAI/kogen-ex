@@ -1,10 +1,12 @@
 defmodule Kogen.Quality.Report do
   @moduledoc false
 
+  alias Kogen.Contracts.Finding
+
   @spec finding(String.t(), String.t(), String.t() | nil, integer() | nil, String.t(), atom()) ::
-          map()
+          Finding.t()
   def finding(tool, rule, path, line, message, severity \\ :warning) do
-    %{
+    %Finding{
       tool: tool,
       rule: rule,
       path: path,
@@ -16,7 +18,7 @@ defmodule Kogen.Quality.Report do
     }
   end
 
-  @spec command(String.t(), [map()]) :: map()
+  @spec command(String.t(), [Finding.t()]) :: map()
   def command(tool, findings) do
     findings = Enum.sort_by(findings, &{&1.path, &1.line, &1.rule, &1.message})
     level = if Enum.any?(findings, &(&1.severity == :error)), do: 1, else: 0

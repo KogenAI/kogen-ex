@@ -1,6 +1,8 @@
 defmodule Kogen.Build.GateSummary do
   @moduledoc "Compact, JSON-ready summaries of one done-gate result."
 
+  alias Kogen.Build.GateMetrics
+
   @max_findings 20
   @message_limit 240
 
@@ -39,16 +41,8 @@ defmodule Kogen.Build.GateSummary do
   on tests in `acceptance_path`; `checks_green` adds a fully green gate. `failure_count` is
   the progress measure for repairs: failing tests (or findings) plus red commands without any.
   """
-  @spec metrics(map() | nil, String.t()) :: map()
-  def metrics(nil, _acceptance_path) do
-    %{
-      checks_green: false,
-      acceptance_only: false,
-      failing_acceptance: nil,
-      failing_tests: nil,
-      failure_count: nil
-    }
-  end
+  @spec metrics(map() | nil, String.t()) :: GateMetrics.t()
+  def metrics(nil, _acceptance_path), do: %GateMetrics{}
 
   def metrics(gate, acceptance_path) when is_map(gate) do
     red =
@@ -74,7 +68,7 @@ defmodule Kogen.Build.GateSummary do
 
     tests = Map.get(gate, :failed_test_count) || length(findings)
 
-    %{
+    %GateMetrics{
       checks_green: red == [] or only,
       acceptance_only: only,
       failing_acceptance: length(acceptance),

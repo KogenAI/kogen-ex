@@ -15,6 +15,7 @@ defmodule Kogen.Runner.EdgeProbe do
   alias Kogen.Build.Selector
   alias Kogen.Contracts.ProcResult
   alias Kogen.Contracts.ProviderError
+  alias Kogen.Contracts.RolePrompt
   alias Kogen.Engine.Build.GateSupport
   alias Kogen.Engine.Build.Session
   alias Kogen.Harness
@@ -77,7 +78,13 @@ defmodule Kogen.Runner.EdgeProbe do
     opts = %{opts | models: Map.put(opts.models, :edge_writer, {model, effort})}
 
     text = EdgeTests.input(request, EdgeTests.module_names(session.workdir))
-    call = %{stage: :edge, role: :edge_writer, instructions: EdgeTests.instructions(), text: text}
+
+    call = %RolePrompt{
+      stage: :edge,
+      role: :edge_writer,
+      instructions: EdgeTests.instructions(),
+      text: text
+    }
 
     case Harness.ask(opts, call) do
       {:ok, %{text: reply, usage: usage}} ->

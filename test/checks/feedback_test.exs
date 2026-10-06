@@ -2,6 +2,7 @@ defmodule Kogen.Checks.FeedbackTest do
   use ExUnit.Case, async: true
 
   alias Kogen.Checks.Feedback
+  alias Kogen.Contracts.CheckOutput
 
   @fixtures Path.expand("../fixtures/gate_feedback", __DIR__)
   @workdir "$WORKDIR"
@@ -88,7 +89,7 @@ defmodule Kogen.Checks.FeedbackTest do
       "  2) test installed launcher" <> block <> "\n\nResult: 298/299 passed\nFailed: 1 test\n"
 
     result =
-      Feedback.analyze(%{
+      Feedback.analyze(%CheckOutput{
         name: "tests",
         argv: ["mix", "test"],
         exit_status: 2,
@@ -106,7 +107,7 @@ defmodule Kogen.Checks.FeedbackTest do
 
   test "environment output with no failure location is level 3" do
     result =
-      Feedback.analyze(%{
+      Feedback.analyze(%CheckOutput{
         name: "full",
         argv: ["make", "check-full"],
         exit_status: 2,
@@ -137,7 +138,7 @@ defmodule Kogen.Checks.FeedbackTest do
 
   test "classifies syntax errors from mix test as actionable compile findings" do
     result =
-      Feedback.analyze(%{
+      Feedback.analyze(%CheckOutput{
         name: "tests",
         argv: ["mix", "test"],
         exit_status: 1,
@@ -162,7 +163,7 @@ defmodule Kogen.Checks.FeedbackTest do
       ("Total errors:" <> output) |> String.split("make[1]: *** [dialyzer]", parts: 2) |> hd()
 
     result =
-      Feedback.analyze(%{
+      Feedback.analyze(%CheckOutput{
         name: "dialyzer",
         argv: ["mix", "dialyzer"],
         exit_status: 2,
@@ -183,7 +184,7 @@ defmodule Kogen.Checks.FeedbackTest do
     output = fixture("gate-format-42.log")
 
     result =
-      Feedback.analyze(%{
+      Feedback.analyze(%CheckOutput{
         name: "format",
         argv: ["mix", "format", "--check-formatted"],
         exit_status: 1,
@@ -207,7 +208,7 @@ defmodule Kogen.Checks.FeedbackTest do
     format_output = "mix format failed, but no files were formatted\n" <> paths
 
     format =
-      Feedback.analyze(%{
+      Feedback.analyze(%CheckOutput{
         name: "format",
         argv: ["mix", "format", "--check-formatted"],
         exit_status: 1,
@@ -248,7 +249,7 @@ defmodule Kogen.Checks.FeedbackTest do
 
   test "classifies clean, usage, and unavailable checks with distinct exit levels" do
     clean =
-      Feedback.analyze(%{
+      Feedback.analyze(%CheckOutput{
         name: "tests",
         argv: ["mix", "test"],
         exit_status: 0,
@@ -259,7 +260,7 @@ defmodule Kogen.Checks.FeedbackTest do
       })
 
     usage =
-      Feedback.analyze(%{
+      Feedback.analyze(%CheckOutput{
         name: "format",
         argv: ["mix", "format"],
         exit_status: 2,
@@ -270,7 +271,7 @@ defmodule Kogen.Checks.FeedbackTest do
       })
 
     unavailable =
-      Feedback.analyze(%{
+      Feedback.analyze(%CheckOutput{
         name: "tests",
         argv: ["mix", "test"],
         exit_status: nil,
@@ -281,7 +282,7 @@ defmodule Kogen.Checks.FeedbackTest do
       })
 
     swallowed_environment_error =
-      Feedback.analyze(%{
+      Feedback.analyze(%CheckOutput{
         name: "tests",
         argv: ["mix", "test"],
         exit_status: 0,
@@ -300,7 +301,7 @@ defmodule Kogen.Checks.FeedbackTest do
     assert Feedback.render_model_feedback([swallowed_environment_error]) == ""
 
     excused_test_flake =
-      Feedback.analyze(%{
+      Feedback.analyze(%CheckOutput{
         name: "tests",
         argv: ["mix", "test"],
         exit_status: 0,
@@ -316,7 +317,7 @@ defmodule Kogen.Checks.FeedbackTest do
 
   test "ignores lock and progress noise from a clean benchmark test run" do
     result =
-      Feedback.analyze(%{
+      Feedback.analyze(%CheckOutput{
         name: "tests",
         argv: ["mix", "test"],
         exit_status: 0,
@@ -345,7 +346,7 @@ defmodule Kogen.Checks.FeedbackTest do
         output = file |> fixture() |> gate_tail()
 
         result =
-          Feedback.analyze(%{
+          Feedback.analyze(%CheckOutput{
             name: name,
             argv: argv,
             exit_status: status,
@@ -368,7 +369,7 @@ defmodule Kogen.Checks.FeedbackTest do
   end
 
   defp analyze(name, argv, status, file) do
-    Feedback.analyze(%{
+    Feedback.analyze(%CheckOutput{
       name: name,
       argv: argv,
       exit_status: status,

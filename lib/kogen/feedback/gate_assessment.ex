@@ -2,6 +2,7 @@ defmodule Kogen.Feedback.GateAssessment do
   @moduledoc false
 
   alias Kogen.Contracts.CommandExit
+  alias Kogen.Contracts.Finding
 
   def gate(result, spec, paths) do
     findings = command_findings(result, spec) ++ tree_findings(paths)
@@ -54,7 +55,7 @@ defmodule Kogen.Feedback.GateAssessment do
     do: Enum.map(paths, &finding("tree_mutated", &1, "check changed the verified tree: #{&1}"))
 
   defp finding(rule, path, message) do
-    %{
+    %Finding{
       tool: "check",
       rule: rule,
       severity: :error,
