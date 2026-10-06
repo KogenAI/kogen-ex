@@ -101,16 +101,7 @@ defmodule Kogen.Queue.Report do
            timing -> [Map.from_struct(timing)]
          end
        end)},
-      {"setup",
-       for(
-         event <- events,
-         event.event in ["setup_prepared", "setup_reused"],
-         do: %{
-           event: event.event,
-           wall_ms: event.wall_ms || 0,
-           saved_wall_ms: event.saved_wall_ms || 0
-         }
-       )},
+      {"setup", setup(events)},
       {"phase_timings", phase_timings(events)},
       {"findings", findings(events)},
       {"landing_retries", landing_retries(events)},
@@ -118,6 +109,16 @@ defmodule Kogen.Queue.Report do
       {"last_gate", last_gate(events)},
       {"stop", stop(events)}
     ] ++ LadderReport.sections(events)
+  end
+
+  defp setup(events) do
+    for event <- events, event.event in ["setup_prepared", "setup_reused"] do
+      %{
+        event: event.event,
+        wall_ms: event.wall_ms || 0,
+        saved_wall_ms: event.saved_wall_ms || 0
+      }
+    end
   end
 
   defp gate_timing(events) do

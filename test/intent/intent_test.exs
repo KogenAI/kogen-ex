@@ -47,6 +47,49 @@ defmodule Kogen.Intent.IntentTest do
     assert intent.path == "strip-accents/intent.md"
   end
 
+  test "retains scheduling preferences alongside shaping assumptions and shared contracts" do
+    metadata = """
+    size: small
+    priority: 12
+    blocks_on: [foundation]
+    assumptions:
+      - name: readable slugs
+        path: docs/slugs.md
+        contains: Slugs remain readable.
+    shared_contracts:
+      - name: normalization result
+        path: lib/normalize.ex
+        contains: def normalize
+    """
+
+    source = String.replace(@source, "size: small\n", metadata)
+    assert {:ok, intent} = Kogen.Intent.parse_binary(source, "strip-accents/intent.md")
+    assert intent.priority == 12
+    assert intent.blocks_on == ["foundation"]
+
+    assert Enum.map(intent.shaping_checks, &{&1.kind, &1.name}) == [
+             {"assumption", "readable slugs"},
+             {"shared contract", "normalization result"}
+           ]
+
+    assert {:error, [%{message: message}]} =
+             source
+             |> String.replace("priority: 12", "priority: high")
+             |> Kogen.Intent.parse_binary("strip-accents/intent.md")
+
+    assert message == "frontmatter `priority` must be an integer"
+  end
+
+  test "invalid shaping dependencies retain the offending slug in parser feedback" do
+    source = String.replace(@source, "size: small", "size: small\nblocks_on: [../escape]")
+
+    assert {:error, [%{message: message}]} =
+             Kogen.Intent.parse_binary(source, "strip-accents/intent.md")
+
+    assert message =~ "invalid dependencies: ../escape"
+    assert message =~ "blocks_on requires Intent slugs"
+  end
+
   test "reads the exact file bytes and retains the supplied path", %{tmp_dir: root} do
     path = Path.join([root, "slug-name", "intent.md"])
     File.mkdir_p!(Path.dirname(path))

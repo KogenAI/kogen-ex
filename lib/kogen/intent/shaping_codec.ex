@@ -9,21 +9,24 @@ defmodule Kogen.Intent.ShapingCodec do
     contracts = Map.get(attrs, "shared_contracts", [])
     dependencies = Map.get(attrs, "blocks_on", [])
 
-    if valid_checks?(assumptions) and valid_checks?(contracts) and
-         is_list(dependencies) and Enum.all?(dependencies, &slug?/1) do
-      checks = tag(assumptions, "assumption") ++ tag(contracts, "shared contract")
-      {:ok, checks, dependencies}
-    else
-      {:error,
-       [
-         %{
-           line: 2,
-           message:
-             "shaping checks require name, path and contains; blocks_on requires Intent slugs"
-         }
-       ]}
+    cond do
+      not (valid_checks?(assumptions) and valid_checks?(contracts) and is_list(dependencies)) ->
+        error("shaping checks require name, path and contains; blocks_on requires Intent slugs")
+
+      Enum.any?(dependencies, &(not slug?(&1))) ->
+        invalid = Enum.reject(dependencies, &slug?/1)
+        names = Enum.map_join(invalid, ", ", &dependency_name/1)
+        error("invalid dependencies: #{names}; blocks_on requires Intent slugs")
+
+      true ->
+        checks = tag(assumptions, "assumption") ++ tag(contracts, "shared contract")
+        {:ok, checks, dependencies}
     end
   end
+
+  defp dependency_name(slug) when is_binary(slug), do: slug
+  defp dependency_name(value), do: inspect(value)
+  defp error(message), do: {:error, [%{line: 2, message: message}]}
 
   defp tag(checks, kind) do
     Enum.map(checks, fn check ->

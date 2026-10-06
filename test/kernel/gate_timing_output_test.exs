@@ -73,6 +73,10 @@ defmodule Kogen.Kernel.GateTimingOutputTest do
                ledger: [%{tag: "timing-probe/A1", status: "passed"}]
              })
 
+    proposal = Path.join(run.dir, "proposal.json")
+    assert :ok = State.record(run, %{event: :setup_reused, saved_wall_ms: 42})
+    assert :ok = State.record(run, %{event: :check_proposal_drafted, path: proposal})
+
     assert {:ok, summary} = BuildSummary.latest(state_root, "timing-probe")
     assert {:ok, bytes} = Report.read("timing-probe", state_root, repo, "main", Git.env())
     report = :json.decode(bytes)
@@ -92,6 +96,16 @@ defmodule Kogen.Kernel.GateTimingOutputTest do
     assert text =~ "acceptance verified: A1"
     assert summary.progress == %{verified: ["A1"], remaining: []}
     assert report["progress"] == %{"verified" => ["A1"], "remaining" => []}
+    assert summary.setup == %{reused?: true, wall_ms: 42}
+    assert summary.check_proposals == [proposal]
+    assert report["check_proposals"] == [proposal]
+
+    assert report["setup"] == [
+             %{"event" => "setup_reused", "wall_ms" => 0, "saved_wall_ms" => 42}
+           ]
+
+    assert text =~ "setup: reused (saved preparation 42 ms)"
+    assert text =~ "candidate checks (caller approval required): #{proposal}"
   end
 
   test "the Make timing wrapper preserves success and writes a measured receipt", %{tmp_dir: root} do
