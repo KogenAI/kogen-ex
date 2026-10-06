@@ -375,14 +375,25 @@ if rails:
     if patch_setup:
         if not os.path.isfile(patch_path):
             raise SystemExit("Rails setup references environment.patch but the public task file is missing")
-        if subprocess.run(["git", "apply", "--check", "--reverse", patch_path], cwd=project_root, capture_output=True).returncode == 0:
-            pass
+        patch_noop_reason = None
+        if os.path.getsize(patch_path) == 0:
+            patch_noop_reason = "empty environment.patch is not applicable; no-op"
+        elif subprocess.run(["git", "apply", "--check", "--reverse", patch_path], cwd=project_root, capture_output=True).returncode == 0:
+            patch_noop_reason = "environment.patch is already applied; no-op"
         elif subprocess.run(["git", "apply", "--check", patch_path], cwd=project_root, capture_output=True).returncode == 0:
             subprocess.run(["git", "apply", patch_path], cwd=project_root, check=True)
         else:
             raise SystemExit("Rails environment.patch does not apply to the task base")
         shutil.copyfile(patch_path, os.path.join(os.path.dirname(event_path), "environment.patch"))
         raw_setup = re.sub(patch_command, ":", raw_setup) if isinstance(raw_setup, str) else []
+        if patch_noop_reason:
+            task_tmpdir = env.get("TMPDIR") or os.environ.get("TMPDIR", "/tmp")
+            scratch_name = os.path.basename(os.path.dirname(os.path.dirname(os.path.dirname(target_path))))
+            task_slug = os.path.basename(os.path.dirname(source_path))
+            setup_log_path = os.path.join(task_tmpdir, f"{scratch_name}-{task_slug}-setup.log")
+            os.makedirs(os.path.dirname(setup_log_path), exist_ok=True)
+            with open(setup_log_path, "a", encoding="utf-8") as setup_log:
+                setup_log.write(patch_noop_reason + "\n")
 quote = lambda value: json.dumps(str(value), ensure_ascii=False)
 array = lambda values: "[" + ", ".join(quote(value) for value in values) + "]"
 timer_prefix = [sys.executable, timer_path, phase_path, event_path]

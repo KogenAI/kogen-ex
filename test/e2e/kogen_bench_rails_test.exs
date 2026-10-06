@@ -14,15 +14,25 @@ defmodule Kogen.E2e.KogenBenchRailsTest do
   test "Rails benchmark setup preserves the public patch and installs its bundle without deps", %{
     tmp_dir: root
   } do
-    assert_setup(root, false)
+    assert_setup(root, :unapplied)
   end
 
   test "Rails benchmark setup skips an option=value environment patch already applied by the runner",
        %{tmp_dir: root} do
-    assert_setup(root, true)
+    assert_setup(root, :already_applied)
   end
 
-  defp assert_setup(root, already_applied?) do
+  test "Rails benchmark setup treats an empty environment patch as a no-op", %{tmp_dir: root} do
+    assert_setup(root, :empty)
+  end
+
+  test "Rails benchmark setup preserves the guard around an empty environment patch", %{
+    tmp_dir: root
+  } do
+    assert_setup(root, :guarded_empty)
+  end
+
+  defp assert_setup(root, patch_mode) do
     work = RailsFixture.project!(Path.join(root, "work"))
     task = Path.join(root, "rails-task")
     capture = Path.join(root, "capture")
@@ -30,45 +40,66 @@ defmodule Kogen.E2e.KogenBenchRailsTest do
     File.mkdir_p!(task)
     File.mkdir_p!(capture)
     File.write!(Path.join(task, "prompt.md"), "Change the greeting.\n")
-    prepare_patch(work, task, already_applied?)
-    write_task(root, task)
+    prepare_patch(work, task, patch_mode)
+    write_task(root, task, patch_mode)
     run_bench(root, work, task, capture, out)
-    assert_capture(root, capture)
+    assert_capture(root, capture, patch_mode)
     assert Git.git!(work, ["status", "--porcelain"]) == ""
 
     assert File.read!(Path.join(work, "config/fixture.txt")) ==
-             if(already_applied?, do: "patched\n", else: "before\n")
+             if(patch_mode == :already_applied, do: "patched\n", else: "before\n")
+
+    if patch_mode in [:already_applied, :empty, :guarded_empty] do
+      assert File.read!(Path.join(out, "task-setup.log")) =~
+               if(patch_mode == :already_applied,
+                 do: "environment.patch is already applied; no-op",
+                 else: "empty environment.patch is not applicable; no-op"
+               )
+    end
   end
 
-  defp prepare_patch(work, task, already_applied?) do
+  defp prepare_patch(work, task, patch_mode) do
     File.write!(Path.join(work, "config/fixture.txt"), "before\n")
     Git.git!(work, ["add", "--all"])
     Git.git!(work, ["commit", "--quiet", "-m", "Add patch target"])
 
-    patch = """
-    diff --git a/config/fixture.txt b/config/fixture.txt
-    --- a/config/fixture.txt
-    +++ b/config/fixture.txt
-    @@ -1 +1 @@
-    -before
-    +patched
-    """
+    patch =
+      if patch_mode in [:empty, :guarded_empty] do
+        ""
+      else
+        """
+        diff --git a/config/fixture.txt b/config/fixture.txt
+        --- a/config/fixture.txt
+        +++ b/config/fixture.txt
+        @@ -1 +1 @@
+        -before
+        +patched
+        """
+      end
 
     File.write!(Path.join(task, "environment.patch"), patch)
 
-    if already_applied? do
+    if patch_mode == :already_applied do
       Git.git!(work, ["apply", Path.join(task, "environment.patch")])
       Git.git!(work, ["add", "--all"])
       Git.git!(work, ["commit", "--quiet", "-m", "Apply runner environment patch"])
     end
   end
 
-  defp write_task(root, task) do
+  defp write_task(root, task, patch_mode) do
+    patch_path = Path.join(task, "environment.patch")
+
+    setup =
+      if patch_mode == :guarded_empty do
+        ~s([ ! -s "#{patch_path}" ] || git apply --whitespace=nowarn "#{patch_path}" && touch config/setup-ran)
+      else
+        ~s(git apply --whitespace=nowarn "#{patch_path}" && touch config/setup-ran)
+      end
+
     File.write!(
       Path.join(task, "task.json"),
       :json.encode(%{
-        "setup" =>
-          ~s(git apply --whitespace=nowarn "#{Path.join(task, "environment.patch")}" && touch config/setup-ran),
+        "setup" => setup,
         "env" => %{
           "GEM_HOME" => Path.join(root, "gem-home"),
           "GEM_PATH" => Path.join(root, "gem-home")
@@ -111,8 +142,11 @@ defmodule Kogen.E2e.KogenBenchRailsTest do
              )
   end
 
-  defp assert_capture(root, capture) do
-    assert File.read!(Path.join(capture, "config/fixture.txt")) == "patched\n"
+  defp assert_capture(root, capture, patch_mode) do
+    expected_fixture =
+      if patch_mode in [:empty, :guarded_empty], do: "before\n", else: "patched\n"
+
+    assert File.read!(Path.join(capture, "config/fixture.txt")) == expected_fixture
     assert File.exists?(Path.join(capture, "config/setup-ran"))
     assert {:ok, project} = Project.load(capture)
     assert Enum.map(project.checks, & &1.name) == ["tests"]
