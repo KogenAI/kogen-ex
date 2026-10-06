@@ -56,7 +56,8 @@ Intents use `acceptance_test.rb`. On a shaping provider outage, the configured r
 uses the documented project-check-only Intent mode, without inventing a smoke acceptance test.
 
 The offline fixture in `fixtures/rails_app` is a real Rails application with a greeting route,
-an integration test and locked gem archives. Tests use an installed Ruby 3.4.8 and the vendored
+an integration test and locked gem archives. Tests use an installed Ruby 3.4.8, its bundled
+Bundler 2.6.9, and the vendored
 arm64-darwin Nokogiri archive; they print an explicit skip reason when that runtime/platform is
 unavailable. The scripted shape/build test proves a changed response red on the base, an HTTP
 status preserved on the base, green gate receipts and a landed commit. Additional tests cover
