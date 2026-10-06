@@ -10,8 +10,9 @@ defmodule Kogen.Resilience.Policy do
   wall budget lasts.
 
   A request whose stream started but then sends nothing for `stream_idle_ms` is a stall: it is
-  aborted and retried. Live Responses streams send a reasoning item every 9–20 s while the
-  model thinks, so 90 s of silence is far beyond a legitimate pause. Hard turns reason for over
+  aborted and retried. Any received bytes count, including reasoning events and keepalives.
+  Reasoning summaries are requested, but the provider does not guarantee an event cadence;
+  a genuinely silent reasoning stream can still reach the idle cap. Hard turns reason for over
   10 minutes, so `request_cap_ms` (20 minutes) is only a last-resort cap on one attempt.
   Timeouts, stalls and transport failures are retried for as long as the wall budget lasts;
   `max_attempts` bounds the other retried classes, and every class when there is no budget.

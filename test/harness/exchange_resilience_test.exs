@@ -69,13 +69,58 @@ defmodule Kogen.Harness.ExchangeResilienceTest do
       FakeResponsesServer.stop(server)
     end
 
-    test "keepalive comments do not keep a silent stream alive", %{tmp_dir: tmp_dir} do
-      {url, server} = FakeResponsesServer.start([:keepalive_stall, {:ok, "recovered"}])
-      opts = opts(tmp_dir, url, %{timeout_ms: 30_000}, %{@fast | stream_idle_ms: 2_000})
+    for {name, bytes} <- [
+          {"comments", ": still thinking\r\n\r\n"},
+          {"keepalives", ~s(event: keepalive\r\ndata: {"type":"keepalive"}\r\n\r\n)},
+          {"blank lines", "\r\n"},
+          {"partial comments", ":"},
+          {"reasoning deltas",
+           ~s(data: {"type":"response.reasoning_summary_text.delta","delta":"thinking"}\n\n)},
+          {"reasoning items",
+           ~s(data: {"type":"response.output_item.added","item":{"type":"reasoning"}}\n\n)}
+        ] do
+      test "raw #{name} keep the stream alive without output items", %{tmp_dir: tmp_dir} do
+        chunks = List.duplicate(unquote(bytes), 8)
+        {url, server} = FakeResponsesServer.start([{:events, "alive", chunks, 300}])
+        on_exit(fn -> FakeResponsesServer.stop(server) end)
+        opts = opts(tmp_dir, url, %{timeout_ms: 30_000}, %{@fast | stream_idle_ms: 2_000})
 
-      assert {:ok, %{text: "recovered"}} = Exchange.respond(opts, request())
-      assert_receive {:recorded, %{event: :provider_retry, reason: :stall}}
-      FakeResponsesServer.stop(server)
+        assert {:ok, %{text: "alive"}} = Exchange.respond(opts, request())
+        refute_received {:fake_request, 2, _body, _at}
+        refute_received {:recorded, %{event: :provider_retry}}
+      end
+    end
+
+    @tag timeout: 330_000
+    test "five minutes of only reasoning events and keepalives are not a stall", %{
+      tmp_dir: tmp_dir
+    } do
+      chunks = [
+        ~s(data: {"type":"response.output_item.added","item":{"type":"reasoning"}}\n\n),
+        ": still thinking\n\n",
+        ~s(event: keepalive\ndata: {"type":"keepalive"}\n\n),
+        "\n",
+        ": still thinking\n\n",
+        ~s(data: {"type":"response.reasoning_summary_part.added"}\n\n),
+        ~s(data: {"type":"response.reasoning_summary_text.delta","delta":"thinking"}\n\n),
+        ~s(data: {"type":"response.reasoning_summary_text.done","text":"thinking"}\n\n),
+        ~s(data: {"type":"response.reasoning_summary_part.done"}\n\n),
+        ~s(data: {"type":"response.output_item.done","item":{"type":"reasoning","summary":[]}}\n\n)
+      ]
+
+      {url, server} = FakeResponsesServer.start([{:events, "finished thinking", chunks, 30_000}])
+      on_exit(fn -> FakeResponsesServer.stop(server) end)
+      opts = opts(tmp_dir, url, %{timeout_ms: 120_000}, @fast)
+      started = System.monotonic_time(:millisecond)
+
+      assert {:ok, %{text: "finished thinking"}} =
+               Exchange.respond(opts, %{request() | remaining_ms: 320_000})
+
+      assert System.monotonic_time(:millisecond) - started >= 300_000
+      assert_receive {:fake_request, 1, body, _at}
+      assert body["reasoning"] == %{"effort" => "max", "summary" => "auto"}
+      refute_received {:fake_request, 2, _body, _at}
+      refute_received {:recorded, %{event: :provider_retry}}
     end
 
     test "a slow but steadily streaming response is not cut", %{tmp_dir: tmp_dir} do
@@ -203,7 +248,7 @@ defmodule Kogen.Harness.ExchangeResilienceTest do
       assert_receive {:fake_request, 1, %{"model" => "gpt-6-luna"}, _at}
       assert_receive {:fake_request, 2, %{"model" => "gpt-6-luna"}, _at}
       assert_receive {:fake_request, 3, %{"model" => "gpt-6.1-sol"} = body, _at}
-      assert body["reasoning"] == %{"effort" => "medium"}
+      assert body["reasoning"] == %{"effort" => "medium", "summary" => "auto"}
       assert Enum.map(body["input"], & &1["type"]) == [nil]
 
       assert_receive {:recorded,
@@ -224,7 +269,7 @@ defmodule Kogen.Harness.ExchangeResilienceTest do
       assert {:ok, %{text: "plan"}} = Exchange.respond(opts, planner)
 
       assert_receive {:fake_request, 3, %{"model" => "gpt-6.1-sol"} = body, _at}
-      assert body["reasoning"] == %{"effort" => "high"}
+      assert body["reasoning"] == %{"effort" => "high", "summary" => "auto"}
       refute_received {:recorded, %{event: :model_fallback}}
       FakeResponsesServer.stop(server)
     end

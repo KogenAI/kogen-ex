@@ -4,9 +4,9 @@ defmodule Kogen.Resilience.ProviderCall do
   request becomes a classified `ProviderError`, so the retry policy treats it like any other
   transport failure and no raw exit reason ever reaches a journal or the terminal.
 
-  Once the response has made progress (the provider called the request's `on_progress`), it
-  must keep making progress: `idle_ms` without any is a `:stall`. Before the first progress the
-  provider's own first-byte cap applies.
+  Once the response has received bytes (the provider called the request's `on_progress`), it
+  must keep receiving bytes: `idle_ms` without any is a `:stall`. Comments, keepalives and
+  reasoning events all count. Before the first byte the provider's own first-byte cap applies.
   """
 
   alias Kogen.Contracts.ModelRequest

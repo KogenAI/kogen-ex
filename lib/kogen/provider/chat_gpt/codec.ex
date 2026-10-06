@@ -56,11 +56,16 @@ defmodule Kogen.Provider.ChatGPT.Codec do
     end
   end
 
+  # Summary visibility does not change the prompt; keep existing recordings replayable.
   @spec request_fingerprint(ModelRequest.t()) :: {:ok, String.t()} | {:error, ProviderError.t()}
   def request_fingerprint(%ModelRequest{} = request) do
     with true <- valid_request?(request),
          {:ok, encoded} <-
-           request |> Map.put(:prompt_cache_key, nil) |> request_body() |> encode_json() do
+           request
+           |> Map.put(:prompt_cache_key, nil)
+           |> request_body()
+           |> Map.update!("reasoning", &Map.delete(&1, "summary"))
+           |> encode_json() do
       digest = :sha256 |> :crypto.hash(encoded) |> Base.encode16(case: :lower)
       {:ok, digest}
     else
@@ -110,7 +115,7 @@ defmodule Kogen.Provider.ChatGPT.Codec do
       "instructions" => request.instructions,
       "input" => request.input,
       "tools" => request.tools,
-      "reasoning" => %{"effort" => request.effort},
+      "reasoning" => %{"effort" => request.effort, "summary" => "auto"},
       "store" => false,
       "stream" => true,
       "include" => ["reasoning.encrypted_content"]

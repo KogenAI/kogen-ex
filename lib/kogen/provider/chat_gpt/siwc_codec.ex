@@ -19,7 +19,7 @@ defmodule Kogen.Provider.ChatGPT.SIWCCCodec do
       "model" => request.model,
       "instructions" => request.instructions,
       "input" => input,
-      "reasoning" => %{"effort" => request.effort},
+      "reasoning" => %{"effort" => request.effort, "summary" => "auto"},
       "store" => false,
       "stream" => true
     }

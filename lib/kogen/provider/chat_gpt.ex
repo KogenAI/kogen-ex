@@ -10,7 +10,6 @@ defmodule Kogen.Provider.ChatGPT do
   alias Kogen.Provider.ChatGPT.Codec
   alias Kogen.Provider.ChatGPT.CredentialStore
   alias Kogen.Provider.ChatGPT.Refresh
-  alias Kogen.Provider.ChatGPT.SSE
 
   @responses_endpoint "https://api.openai.com/v1/responses"
   @benchmark_endpoint "https://chatgpt.com/backend-api/codex/responses"
@@ -209,10 +208,10 @@ defmodule Kogen.Provider.ChatGPT do
     end
   end
 
-  # Keepalive comments prove the connection, not the response: only other chunks count as
-  # progress, so a stream that sends nothing else still reads as silent.
+  # Any received bytes prove the stream is alive, including comments, keepalives and
+  # partial SSE frames. Progress is independent of which events the codec consumes.
   defp progress(callback) when is_function(callback, 0) do
-    fn chunk -> if SSE.keepalive?(chunk), do: :ok, else: callback.() end
+    fn chunk -> if byte_size(chunk) > 0, do: callback.(), else: :ok end
   end
 
   defp progress(_callback), do: nil

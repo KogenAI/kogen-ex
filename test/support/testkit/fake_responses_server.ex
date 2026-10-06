@@ -5,9 +5,9 @@ defmodule Kogen.Testkit.FakeResponsesServer do
 
   Behaviours: `{:ok, text}`, `{:status, code, body}`, `:hang` (no reply), `:close` (drop the
   connection), `:trickle` (a 200 stream that emits a keepalive comment every 50 ms and never
-  completes), `:stall` (a 200 stream that sends one event and then nothing), `:keepalive_stall`
-  (one event, then only keepalive comments every 50 ms) and `{:steady, text, events, ms}`
-  (`events` progress events `ms` apart, then the completed response).
+  completes), `:stall` (a 200 stream that sends one event and then nothing),
+  `{:events, text, chunks, ms}` (raw body chunks `ms` apart, then the completed response) and
+  `{:steady, text, events, ms}` (`events` progress events `ms` apart, then the completed response).
   """
 
   @read_ms 20_000
@@ -19,7 +19,7 @@ defmodule Kogen.Testkit.FakeResponsesServer do
           | :close
           | :trickle
           | :stall
-          | :keepalive_stall
+          | {:events, String.t(), [binary()], pos_integer()}
           | {:steady, String.t(), pos_integer(), pos_integer()}
 
   @spec start([behaviour()]) :: {String.t(), pid()}
@@ -65,9 +65,16 @@ defmodule Kogen.Testkit.FakeResponsesServer do
     respond(socket, :hang)
   end
 
-  defp respond(socket, :keepalive_stall) do
-    started_stream(socket)
-    trickle(socket, 0)
+  defp respond(socket, {:events, text, chunks, interval_ms}) do
+    :ok = :gen_tcp.send(socket, stream_header())
+    pause(20)
+
+    for bytes <- chunks do
+      :ok = :gen_tcp.send(socket, chunk(bytes))
+      pause(interval_ms)
+    end
+
+    send_completed(socket, text)
   end
 
   defp respond(socket, {:steady, text, events, interval_ms}) do

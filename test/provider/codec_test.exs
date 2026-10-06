@@ -10,7 +10,7 @@ defmodule Kogen.Provider.ChatGPT.CodecTest do
     body = :json.decode(encoded)
 
     assert body["model"] == "gpt-6-luna"
-    assert body["reasoning"] == %{"effort" => "low"}
+    assert body["reasoning"] == %{"effort" => "low", "summary" => "auto"}
     assert body["store"] == false
     assert body["stream"] == true
     assert body["include"] == ["reasoning.encrypted_content"]
@@ -49,6 +49,7 @@ defmodule Kogen.Provider.ChatGPT.CodecTest do
     assert [%{"type" => "additional_tools", "role" => "developer", "tools" => [^tool]} | _rest] =
              body["input"]
 
+    assert body["reasoning"] == %{"effort" => "low", "summary" => "auto"}
     assert body["store"] == false
     assert body["stream"] == true
     refute Map.has_key?(body, "previous_response_id")
