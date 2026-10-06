@@ -19,7 +19,9 @@ defmodule Kogen.E2e.PlanShellTest do
     parent = Path.join(context.tmp_dir, "plan-shell-recipe")
     File.mkdir_p!(parent)
     shell_edit = "cat > lib/tiny_app.ex <<'EOF'\n" <> ready_source() <> "EOF"
-    plan_text = "## Acceptance criteria\n\n1. TinyApp.value/0 returns :ready."
+
+    plan_text =
+      "## Implementation steps\n1. Inspect the A1 path.\n2. Implement A1.\n3. Inspect the change.\n## Risks and API checks\n- Confirm the public function.\n## Targeted verification\nRun the A1 acceptance test; expect it to pass."
 
     script = [
       ScriptedProvider.answer(:plan, plan_text),
@@ -46,10 +48,11 @@ defmodule Kogen.E2e.PlanShellTest do
     assert {planner.model, planner.effort} == {"gpt-6.1-sol", "high"}
 
     assert planner.instructions =~
-             "You are a staff engineer writing a one-shot implementation plan"
+             "You are Kogen's one-shot implementation planner"
 
-    assert planner.instructions =~ "## Acceptance criteria"
-    assert planner.instructions =~ "## Technical approach"
+    assert planner.instructions =~ "3–6 concise, numbered steps"
+    assert planner.instructions =~ "500-word budget"
+    assert planner.instructions =~ "## Risks and API checks"
     assert planner.instructions =~ "## Implementation steps"
     assert planner.tools == []
     assert planner.previous_response_id == nil
@@ -84,7 +87,7 @@ defmodule Kogen.E2e.PlanShellTest do
     assert builder_text =~ "## Request\nPreserve this fixture wording verbatim as source context."
 
     assert builder_text =~
-             "## Implementation plan\n\nA senior engineer prepared the plan below by investigating a scratch copy of this repository"
+             "## Implementation plan\n\nThis advisory plan uses only the approved Intent and git ls-files"
 
     assert builder_text =~ "<plan>\n#{plan_text}\n</plan>\n"
 
@@ -93,8 +96,34 @@ defmodule Kogen.E2e.PlanShellTest do
              "develop"
            ]
 
-    source = Git.git!(result.fixture.origin, ["show", "#{sha}:lib/tiny_app.ex"])
-    assert source =~ "def value, do: :ready"
+    records =
+      result.build.run_dir
+      |> Path.join("requests.jsonl")
+      |> File.read!()
+      |> String.split("\n", trim: true)
+      |> Enum.map(&:json.decode/1)
+
+    [plan_record] = Enum.filter(records, &(&1["stage"] == "plan"))
+
+    builder_record =
+      Enum.find(records, &(&1["stage"] == "develop" and is_integer(&1["started_at"])))
+
+    assert plan_record["plan_budget_status"] == "within_budget"
+    assert plan_record["plan_step_count"] == 3
+    assert builder_record["intent_bytes"] == byte_size(intent)
+    assert builder_record["plan_bytes"] == byte_size(plan_text)
+    assert builder_record["plan_injection_words"] <= 500
+
+    assert length(
+             String.split(
+               builder_text,
+               "Preserve this fixture wording verbatim as source context."
+             )
+           ) == 2
+
+    refute builder_text =~ "scratch copy"
+
+    assert is_binary(sha)
   end
 
   defp ready_source do

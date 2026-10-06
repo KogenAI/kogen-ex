@@ -24,7 +24,8 @@ defmodule Kogen.Project do
           context_bytes: pos_integer() | nil,
           luna_provider_mode: :responses | :lite,
           tool_result_tokens: pos_integer(),
-          model_generation_tokens: pos_integer() | nil
+          model_generation_tokens: pos_integer() | nil,
+          plan_max_words: pos_integer()
         }
   def effective_build_settings(machine, project), do: BuildSettings.effective(machine, project)
 

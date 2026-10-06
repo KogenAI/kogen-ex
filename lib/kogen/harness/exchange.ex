@@ -11,7 +11,7 @@ defmodule Kogen.Harness.Exchange.Request do
     :tool_names,
     :remaining_ms
   ]
-  defstruct @enforce_keys
+  defstruct @enforce_keys ++ [measurements: %{}]
 
   @type t :: %__MODULE__{
           stage: atom(),
@@ -19,6 +19,7 @@ defmodule Kogen.Harness.Exchange.Request do
           model: String.t(),
           effort: String.t(),
           instructions: String.t(),
+          measurements: map(),
           items: [map()],
           tool_names: [Kogen.Harness.Codec.tool_name()],
           remaining_ms: non_neg_integer() | :infinity
@@ -32,6 +33,7 @@ defmodule Kogen.Harness.Exchange do
   alias Kogen.Contracts.ModelResponse
   alias Kogen.Contracts.ProviderError
   alias Kogen.Conversation.BuilderPolicy
+  alias Kogen.Conversation.PlanPolicy
   alias Kogen.Harness.Codec
   alias Kogen.Harness.Exchange.Request
   alias Kogen.Harness.Opts
@@ -101,10 +103,7 @@ defmodule Kogen.Harness.Exchange do
         tags: opts.request_tags,
         settings: request_settings(opts, request)
       })
-      |> Map.put(
-        :request_shape,
-        BuilderPolicy.request_metrics(exchange_request.tool_names, result)
-      )
+      |> Map.put(:request_shape, request_measurements(exchange_request, result))
 
     with {:ok, transcript_path} <- Recording.path(opts) do
       case RequestLog.append(
@@ -115,6 +114,12 @@ defmodule Kogen.Harness.Exchange do
         {:error, reason} -> {:error, request_log_error(reason)}
       end
     end
+  end
+
+  defp request_measurements(request, result) do
+    request.measurements
+    |> Map.merge(BuilderPolicy.request_metrics(request.tool_names, result))
+    |> Map.merge(PlanPolicy.response_metrics(request.stage, request.measurements, result))
   end
 
   defp request_log_error(reason),

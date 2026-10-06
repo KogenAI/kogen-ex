@@ -1,6 +1,8 @@
 defmodule Kogen.Conversation do
   @moduledoc "Approved conversation authority and opt-in continuation checkpoints."
-  use Boundary, deps: [Kogen.Contracts], exports: [Budget, BuilderPolicy]
+  use Boundary,
+    deps: [Kogen.Contracts],
+    exports: [Budget, BuilderPolicy, PlanPolicy, PlanShellPrompts]
 
   alias Kogen.Contracts.JSON
   alias Kogen.Contracts.ModelResponse
@@ -87,6 +89,11 @@ defmodule Kogen.Conversation do
 
   def initial_items(intent_text, plan, _invalid_resume, repairs_left) do
     [user_item(authority(intent_text, plan, repairs_left))]
+  end
+
+  def authority_metrics(intent_text, plan) do
+    injection = if is_nil(plan), do: "", else: plan_content(plan)
+    Kogen.Conversation.PlanPolicy.authority_metrics(intent_text, plan, injection)
   end
 
   def authority(intent_text, plan, repairs_left) do

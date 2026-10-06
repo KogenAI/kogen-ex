@@ -300,7 +300,9 @@ defmodule Kogen.Engine.Build.GateSupport do
           do: :ls_files,
           else: :read_only_tools
         ),
-      planner_difficulty: Recipe.ladder(recipe) != nil
+      planner_difficulty: Recipe.ladder(recipe) != nil,
+      plan_max_words:
+        Map.get(session.project.build || %{}, :plan_max_words) || session.request.plan_max_words
     }
   end
 

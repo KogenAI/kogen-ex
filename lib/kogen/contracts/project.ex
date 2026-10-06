@@ -37,6 +37,12 @@ defmodule Kogen.Contracts.Project do
           sandbox: boolean(),
           base: String.t() | nil,
           account: String.t() | nil,
-          build: %{optional(:recipe) => String.t(), optional(:roles) => map()} | nil
+          build:
+            %{
+              optional(:recipe) => String.t(),
+              optional(:roles) => map(),
+              optional(:plan_max_words) => pos_integer() | nil
+            }
+            | nil
         }
 end

@@ -46,6 +46,7 @@ defmodule Kogen.Harness.Developer do
 
     state = %DeveloperState{
       authority: Conversation.authority(intent_text, plan, opts.repairs_left),
+      measurements: Conversation.authority_metrics(intent_text, plan),
       items: Conversation.initial_items(intent_text, plan, resume, opts.repairs_left),
       usage: Usage.zero(),
       turns: 0,
@@ -95,6 +96,7 @@ defmodule Kogen.Harness.Developer do
       model: model,
       effort: effort,
       instructions: Budget.instructions(prompt, system_note),
+      measurements: state.measurements,
       items: state.items,
       tool_names: Codec.tool_names(:developer, opts.builder_tools),
       remaining_ms: remaining_ms

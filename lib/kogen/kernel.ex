@@ -325,6 +325,7 @@ defmodule Kogen.Kernel do
           wall_ms(build_config)
         ),
       resilience: %Policy{model_fallback: build_config.model_fallback},
+      plan_max_words: build_config.plan_max_words,
       runtime: runtime,
       provider_mod: ChatGPT,
       provider_config: provider_config,

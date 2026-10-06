@@ -23,6 +23,7 @@ defmodule Kogen.Harness.Opts do
     builder_tools: :full,
     planner_mode: :read_only_tools,
     planner_difficulty: false,
+    plan_max_words: 500,
     changed?: nil,
     env: %{},
     before_gate: nil,
@@ -61,6 +62,7 @@ defmodule Kogen.Harness.Opts do
           builder_tools: :full | :shell,
           planner_mode: :read_only_tools | :ls_files,
           planner_difficulty: boolean(),
+          plan_max_words: pos_integer(),
           models: %{
             required(:builder) => model(),
             required(:strong) => model(),
@@ -98,9 +100,14 @@ defmodule Kogen.Harness.Plan do
   @moduledoc "One strong-model implementation plan, scoped to its Intent."
 
   @enforce_keys [:text, :usage]
-  defstruct @enforce_keys ++ [builder_addendum: nil]
+  defstruct @enforce_keys ++ [builder_addendum: nil, measurements: %{}]
 
-  @type t :: %__MODULE__{text: String.t(), usage: map(), builder_addendum: String.t() | nil}
+  @type t :: %__MODULE__{
+          text: String.t(),
+          usage: map(),
+          builder_addendum: String.t() | nil,
+          measurements: map()
+        }
 end
 
 defmodule Kogen.Harness.Review do

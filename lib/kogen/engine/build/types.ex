@@ -37,7 +37,7 @@ defmodule Kogen.Engine.Build.Request do
     :credential_source,
     :credential_label
   ]
-  defstruct @enforce_keys ++ [resilience: %Policy{}]
+  defstruct @enforce_keys ++ [resilience: %Policy{}, plan_max_words: 500]
 
   @type t :: %__MODULE__{
           slug: String.t(),
@@ -54,7 +54,8 @@ defmodule Kogen.Engine.Build.Request do
           provider_config: term(),
           credential_source: :kogen_owned | :custom,
           credential_label: String.t(),
-          resilience: Policy.t()
+          resilience: Policy.t(),
+          plan_max_words: pos_integer()
         }
 end
 

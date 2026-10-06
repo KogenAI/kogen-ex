@@ -23,7 +23,7 @@ defmodule Kogen.Project.BuildSettings do
     unknown =
       unknown_keys(
         value,
-        ~w(recipe roles wall_minutes edge_tests model_fallback context_bytes luna_provider_mode tool_result_tokens model_generation_tokens),
+        ~w(recipe roles wall_minutes edge_tests model_fallback context_bytes luna_provider_mode tool_result_tokens model_generation_tokens plan_max_words),
         "build"
       )
 
@@ -41,13 +41,15 @@ defmodule Kogen.Project.BuildSettings do
     {context_bytes, context_errors} = context_bytes(value)
     {luna_mode, luna_errors} = luna_provider_mode(value)
     {budgets, budget_errors} = budgets(value)
+    {plan_max_words, plan_errors} = plan_max_words(value)
 
     errors =
       unknown ++
         recipe_errors ++
         role_errors ++
         wall_errors ++
-        edge_errors ++ fallback_errors ++ context_errors ++ luna_errors ++ budget_errors
+        edge_errors ++
+        fallback_errors ++ context_errors ++ luna_errors ++ budget_errors ++ plan_errors
 
     if errors == [],
       do:
@@ -59,7 +61,8 @@ defmodule Kogen.Project.BuildSettings do
            edge_tests: edge_tests,
            model_fallback: model_fallback,
            context_bytes: context_bytes,
-           luna_provider_mode: luna_mode
+           luna_provider_mode: luna_mode,
+           plan_max_words: plan_max_words
          })},
       else: {:error, errors}
   end
@@ -84,7 +87,8 @@ defmodule Kogen.Project.BuildSettings do
           context_bytes: pos_integer() | nil,
           luna_provider_mode: :responses | :lite,
           tool_result_tokens: pos_integer(),
-          model_generation_tokens: pos_integer() | nil
+          model_generation_tokens: pos_integer() | nil,
+          plan_max_words: pos_integer()
         }
   def effective(machine, project) do
     machine = machine || %{}
@@ -110,7 +114,9 @@ defmodule Kogen.Project.BuildSettings do
       tool_result_tokens:
         Map.get(project, :tool_result_tokens) || Map.get(machine, :tool_result_tokens) || 2_000,
       model_generation_tokens:
-        Map.get(project, :model_generation_tokens) || Map.get(machine, :model_generation_tokens)
+        Map.get(project, :model_generation_tokens) || Map.get(machine, :model_generation_tokens),
+      plan_max_words:
+        Map.get(project, :plan_max_words) || Map.get(machine, :plan_max_words) || 500
     }
   end
 
@@ -173,6 +179,25 @@ defmodule Kogen.Project.BuildSettings do
       _invalid -> {nil, [issue("build.luna_provider_mode must be responses or lite")]}
     end
   end
+
+  defp plan_max_words(value) do
+    case Map.fetch(value, "plan_max_words") do
+      {:ok, words} -> parse_plan_words(words)
+      :error -> {nil, []}
+    end
+  end
+
+  defp parse_plan_words(words) when is_integer(words) and words in 300..2000, do: {words, []}
+
+  defp parse_plan_words(words) when is_binary(words) do
+    case Integer.parse(words) do
+      {number, ""} -> parse_plan_words(number)
+      _invalid -> parse_plan_words(nil)
+    end
+  end
+
+  defp parse_plan_words(_invalid),
+    do: {nil, [issue("build.plan_max_words must be an integer from 300 to 2000")]}
 
   defp context_bytes(value) do
     case Map.fetch(value, "context_bytes") do
