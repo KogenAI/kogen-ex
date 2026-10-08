@@ -1,5 +1,7 @@
 # Kogen
 
+> **Archived.** Kogen's Elixir code: Codegen, its predecessor from June 2025, and then the Elixir Kogen until 6 October 2026. Kogen moved to Rust because coding agents did worst in Elixir in our language comparisons. Tags mark each era and every commit Kogen Bench used. More at [kogen.dev](https://kogen.dev).
+
 Kogen is an AI-agent software-building system written in Elixir. A human approves a short Markdown Intent; Kogen builds it in an isolated checkout with an LLM Developer loop, verifies the result with deterministic checks, and lands it on the selected base branch.
 
 This repository is the single Mix application that forms Kogen's core. Kogen owns its ChatGPT logins, which belong to the machine: `kogen provider use` picks the default account and, optionally, one per project. Each project's `.kogen/project.yaml` selects its base branch, Build recipe, and role models. Build receipts record the selected account and model settings. Approval records the baseline of red project checks and warns instead of blocking.
